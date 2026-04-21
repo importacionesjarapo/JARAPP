@@ -2,8 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 
 class Database {
   constructor() {
-    this.supabaseUrl = localStorage.getItem('JARAPO_SUPA_URL') || '';
-    this.supabaseKey = localStorage.getItem('JARAPO_SUPA_KEY') || '';
+    // 1. Usar variables de entorno primero (Ej: desde Netlify env vars)
+    // 2. Si no están (desarrollo local sin .env), usar localStorage
+    this.supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL') || '';
+    this.supabaseKey = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY') || '';
     this.client = null;
     
     if (this.supabaseUrl && this.supabaseKey) {
