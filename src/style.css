@@ -2555,6 +2555,253 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
 }
 
 /* ════════════════════════════════════════════════
+   INTELLIGENCE HUB — BI Dashboard
+   ════════════════════════════════════════════════ */
+
+.bi-hub-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+/* ── Header ─────────────────────────────────────── */
+.bi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.bi-main-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 4px 0 0;
+  letter-spacing: -0.3px;
+}
+
+/* ── KPI Strip ──────────────────────────────────── */
+.bi-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
+}
+.bi-kpi-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.bi-kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card);
+}
+.bkc-icon  { font-size: 1.3rem; }
+.bkc-val   { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.3px; margin-top: 2px; }
+.bkc-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; }
+.bkc-sub   { font-size: 0.65rem; opacity: 0.4; }
+
+/* ── Section Title ──────────────────────────────── */
+.bi-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.45;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* ── Category Tabs ──────────────────────────────── */
+.bi-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bi-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.bi-tab:hover {
+  background: var(--glass-hover);
+  color: var(--text-main);
+}
+.bi-tab.active {
+  background: var(--primary-red);
+  border-color: var(--primary-red);
+  color: #fff;
+  box-shadow: 0 4px 12px var(--shadow-glow-red);
+}
+
+/* ── Controls Bar ───────────────────────────────── */
+.bi-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+.bi-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bi-ctrl-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.5;
+}
+.bi-select {
+  background: var(--glass-hover);
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 7px 30px 7px 11px;
+  outline: none;
+  cursor: pointer;
+  min-width: 260px;
+  appearance: auto;
+}
+.bi-select:focus { border-color: var(--primary-red); }
+
+/* ── Chart Type Buttons ─────────────────────────── */
+.bi-chart-type-strip {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.bi-ct-btn {
+  padding: 6px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-hover);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.bi-ct-btn:hover { background: var(--surface-3); color: var(--text-main); }
+.bi-ct-btn.active {
+  background: var(--primary-red);
+  border-color: var(--primary-red);
+  color: #fff;
+}
+
+/* ── Chart Panel ────────────────────────────────── */
+.bi-chart-panel {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  overflow: hidden;
+}
+.bi-chart-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+.bi-chart-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.bi-chart-insight {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.bi-chart-area {
+  position: relative;
+  height: 400px;
+}
+.bi-chart-area canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.bi-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  opacity: 0.4;
+  font-size: 0.9rem;
+}
+
+/* ── Data Table ─────────────────────────────────── */
+.bi-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.bi-data-table thead th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  background: var(--glass-hover);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--glass-border);
+}
+.bi-data-table tbody td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--glass-border);
+  color: var(--text-main);
+  white-space: nowrap;
+}
+.bi-tr-even { background: transparent; }
+.bi-tr-odd  { background: var(--glass-hover); }
+.bi-data-table tbody tr:hover { background: var(--surface-3); }
+.bi-data-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Mobile Responsive — BI Hub ─────────────────── */
+@media (max-width: 768px) {
+  .bi-kpi-strip {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .bi-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .bi-select { min-width: unset; width: 100%; }
+  .bi-chart-area { height: 300px; }
+  .bi-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+
+/* ════════════════════════════════════════════════
    MOBILE RESPONSIVENESS
    ════════════════════════════════════════════════ */
 @media (max-width: 768px) {
