@@ -2685,6 +2685,22 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
 }
 .bi-select:focus { border-color: var(--primary-red); }
 
+/* ── Dark mode fix for native select options ── */
+[data-theme="dark"] .bi-select {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: rgba(255,255,255,0.15);
+}
+[data-theme="dark"] .bi-select option {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+.bi-select option {
+  background: #ffffff;
+  color: #0f172a;
+  padding: 6px;
+}
+
 /* ── Chart Type Buttons ─────────────────────────── */
 .bi-chart-type-strip {
   display: flex;
@@ -2782,6 +2798,32 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
 .bi-tr-odd  { background: var(--glass-hover); }
 .bi-data-table tbody tr:hover { background: var(--surface-3); }
 .bi-data-table tbody tr:last-child td { border-bottom: none; }
+
+/* ── Palette Legend (color per bar) ─────────────── */
+.bi-palette-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 14px 4px 4px;
+  justify-content: center;
+}
+.bi-legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-main);
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.bi-legend-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
 
 /* ── Mobile Responsive — BI Hub ─────────────────── */
 @media (max-width: 768px) {

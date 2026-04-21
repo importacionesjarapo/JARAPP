@@ -16,7 +16,7 @@ let _dashCache        = null;
 let _dashRenderLayout = null;
 let _currentCategory  = 'finanzas';
 let _currentReportId  = 'fin-pnl';
-let _currentChartType = null; // null = usar default del reporte
+let _currentChartType = null;
 
 // ─── Utilitarios de fecha ─────────────────────────────────────────────────────
 const parseDate = (s) => {
@@ -62,19 +62,18 @@ const groupByMonth = (arr, campo, val) => {
 };
 const fmtM = (v) => `$${(Math.abs(v)/1000000).toFixed(1)}M`;
 const fmtK = (v) => Math.abs(v) >= 1000000 ? fmtM(v) : `$${(Math.abs(v)/1000).toFixed(0)}k`;
-const fmtAuto = (v) => typeof v === 'number' && Math.abs(v) >= 100 ? fmtK(v) : String(v);
 
 // ─── Logística fases ──────────────────────────────────────────────────────────
 const FASES       = ['Comprado','En Tránsito','Bodega USA','Aduana','Bodega Colombia','Entregado'];
 const FASE_COLORS = [C.red, C.blue, C.orange, C.violet, C.cyan, C.green];
 const mapFase = (f) => {
     if (!f) return FASES[0];
-    if (f.includes('1.') || f.includes('Comprado'))  return FASES[0];
-    if (f.includes('2.') || f.includes('Tienda'))    return FASES[1];
+    if (f.includes('1.') || f.includes('Comprado'))   return FASES[0];
+    if (f.includes('2.') || f.includes('Tienda'))     return FASES[1];
     if (f.includes('3.') || f.includes('Bodega USA') || f.includes('Miami')) return FASES[2];
     if (f.includes('4.') || f.includes('Internacional') || f.includes('Aduana')) return FASES[3];
     if (f.includes('5.') || f.includes('Bodega Colombia')) return FASES[4];
-    if (f.includes('6.') || f.includes('Entregado')) return FASES[5];
+    if (f.includes('6.') || f.includes('Entregado'))  return FASES[5];
     return FASES[0];
 };
 
@@ -89,7 +88,7 @@ const getThemeColors = () => {
     };
 };
 
-// ─── Metadata de categorías y tipos de gráfico ────────────────────────────────
+// ─── Metadata ────────────────────────────────────────────────────────────────
 const CATEGORIES = [
     { id: 'finanzas',    label: 'Finanzas',    icon: '💹' },
     { id: 'ventas',      label: 'Ventas',       icon: '📈' },
@@ -149,33 +148,20 @@ const computeReports = (filtered, raw) => {
     ])].sort().slice(-12);
     const ML = allMonths.map(monthLabel);
 
-    // helper: group by field
-    const groupBy = (arr, field, valField = null) => {
-        const map = {};
-        arr.forEach(item => {
-            const k = item[field] || 'Sin Especificar';
-            if (!map[k]) map[k] = { count: 0, valor: 0 };
-            map[k].count++;
-            if (valField) map[k].valor += parseFloat(item[valField] || 0);
-        });
-        return Object.entries(map).sort((a, b) => b[1].valor - a[1].valor);
-    };
-
     const clienteName = (cid) => {
         const c = clientes.find(x => x.id?.toString() === cid?.toString());
         return c?.nombre?.split(' ').slice(0, 2).join(' ') || 'Desc.';
     };
 
     return {
-
         // ══ FINANZAS ══════════════════════════════════════════════════════════
         'fin-pnl': {
             labels: ML,
-            insight: `Análisis de rentabilidad mensual`,
+            insight: `Análisis de rentabilidad mensual — Verde: ingresos cobrados · Rojo: gastos operativos · Dorado: compras USA`,
             datasets: [
-                { label: 'Cobrado',     data: allMonths.map(k =>  (cobradoPorMes[k]||0)),  backgroundColor: 'rgba(6,214,160,0.75)',  borderColor: C.green,  borderRadius: 5, stack: 'a' },
-                { label: 'Gastos Op.',  data: allMonths.map(k => -(gastosPorMes[k]||0)),   backgroundColor: 'rgba(230,57,70,0.70)',  borderColor: C.red,    borderRadius: 5, stack: 'b' },
-                { label: 'Compras USA', data: allMonths.map(k => -(comprasPorMes[k]||0)),  backgroundColor: 'rgba(255,183,3,0.70)',  borderColor: C.orange, borderRadius: 5, stack: 'b' },
+                { label: 'Cobrado (Ingresos)',     data: allMonths.map(k =>  (cobradoPorMes[k]||0)),  backgroundColor: 'rgba(6,214,160,0.75)',  borderColor: C.green,  borderRadius: 5, stack: 'a' },
+                { label: 'Gastos Op. (Egresos)',   data: allMonths.map(k => -(gastosPorMes[k]||0)),   backgroundColor: 'rgba(230,57,70,0.70)',  borderColor: C.red,    borderRadius: 5, stack: 'b' },
+                { label: 'Compras USA (Egresos)',  data: allMonths.map(k => -(comprasPorMes[k]||0)),  backgroundColor: 'rgba(255,183,3,0.70)',  borderColor: C.orange, borderRadius: 5, stack: 'b' },
             ],
             tableColumns: ['Mes','Cobrado','Gastos Op.','Compras USA','Balance'],
             tableRows: allMonths.map(k => {
@@ -191,8 +177,8 @@ const computeReports = (filtered, raw) => {
             const bals = allMonths.map(k => { acum += (cobradoPorMes[k]||0)-(gastosPorMes[k]||0)-(comprasPorMes[k]||0); return acum; });
             return {
                 labels: ML,
-                insight: `Balance acumulado: ${formatCOP(acum)}`,
-                datasets: [{ label:'Balance Acumulado', data: bals, borderColor: acum>=0?C.green:C.red, backgroundColor: acum>=0?'rgba(6,214,160,0.15)':'rgba(230,57,70,0.15)', fill:true, tension:0.4, borderWidth:2 }],
+                insight: `Balance acumulado: ${formatCOP(acum)} — Verde: saldo positivo · Rojo: saldo negativo`,
+                datasets: [{ label:'Balance Acumulado COP', data: bals, borderColor: acum>=0?C.green:C.red, backgroundColor: acum>=0?'rgba(6,214,160,0.15)':'rgba(230,57,70,0.15)', fill:true, tension:0.4, borderWidth:2 }],
                 tableColumns: ['Mes','Balance Acumulado'],
                 tableRows: allMonths.map((k,i) => [monthLabel(k), { val: formatCOP(bals[i]), color: bals[i]>=0?C.green:C.red }]),
                 compatibleCharts: ['line','area','bar','table'],
@@ -207,8 +193,8 @@ const computeReports = (filtered, raw) => {
             const total = entries.reduce((a,e)=>a+e[1], 0);
             return {
                 labels: entries.map(e=>e[0]),
-                insight: `${entries.length} tipos de gasto · Total: ${formatCOP(total)}`,
-                datasets: [{ label:'Total COP', data: entries.map(e=>e[1]), backgroundColor: C.palette, borderRadius:6 }],
+                insight: `${entries.length} tipos de gasto · Total: ${formatCOP(total)} — Cada color = un tipo de gasto`,
+                datasets: [{ label:'Total Gastado COP', data: entries.map(e=>e[1]), backgroundColor: C.palette, borderRadius:6 }],
                 tableColumns: ['Tipo de Gasto','Total COP','% del Total'],
                 tableRows: entries.map(e=>[e[0], formatCOP(e[1]), `${total?((e[1]/total)*100).toFixed(1):0}%`]),
                 compatibleCharts: ['doughnut','bar','barH','table'],
@@ -222,8 +208,8 @@ const computeReports = (filtered, raw) => {
             const entries = Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,10);
             return {
                 labels: entries.map(e=>e[0]),
-                insight: `${compras.length} compras a ${Object.keys(map).length} proveedores`,
-                datasets: [{ label:'Costo COP', data: entries.map(e=>e[1]), backgroundColor: C.palette, borderRadius:6 }],
+                insight: `${compras.length} compras a ${Object.keys(map).length} proveedores — Cada barra = un proveedor`,
+                datasets: [{ label:'Costo Total COP', data: entries.map(e=>e[1]), backgroundColor: C.palette, borderRadius:6 }],
                 tableColumns: ['Proveedor','Total COP'],
                 tableRows: entries.map(e=>[e[0], formatCOP(e[1])]),
                 compatibleCharts: ['barH','bar','doughnut','table'],
@@ -238,7 +224,7 @@ const computeReports = (filtered, raw) => {
             const total = entries.reduce((a,e)=>a+e[1],0);
             return {
                 labels: entries.map(e=>e[0]),
-                insight: `${abonos.length} transacciones · ${formatCOP(total)}`,
+                insight: `${abonos.length} transacciones · Total cobrado: ${formatCOP(total)} — Cada color = método de pago`,
                 datasets: [{ label:'Total COP', data: entries.map(e=>e[1]), backgroundColor: C.palette }],
                 tableColumns: ['Método','Total COP','%'],
                 tableRows: entries.map(e=>[e[0], formatCOP(e[1]), `${total?((e[1]/total)*100).toFixed(1):0}%`]),
@@ -250,10 +236,10 @@ const computeReports = (filtered, raw) => {
         // ══ VENTAS ════════════════════════════════════════════════════════════
         'vta-facturado': {
             labels: ML,
-            insight: `Brecha entre facturado y cobrado = cartera pendiente`,
+            insight: `Azul: monto facturado · Verde: monto cobrado — La brecha entre líneas = cartera pendiente`,
             datasets: [
-                { label:'Facturado', data: allMonths.map(k=>facturadoPorMes[k]||0), borderColor:C.blue,  backgroundColor:'rgba(76,201,240,0.15)', fill:true, tension:0.4, borderWidth:2 },
-                { label:'Cobrado',   data: allMonths.map(k=>cobradoPorMes[k]||0),   borderColor:C.green, backgroundColor:'rgba(6,214,160,0.15)',  fill:true, tension:0.4, borderWidth:2 },
+                { label:'Facturado (COP)', data: allMonths.map(k=>facturadoPorMes[k]||0), borderColor:C.blue,  backgroundColor:'rgba(76,201,240,0.15)', fill:true, tension:0.4, borderWidth:2 },
+                { label:'Cobrado (COP)',   data: allMonths.map(k=>cobradoPorMes[k]||0),   borderColor:C.green, backgroundColor:'rgba(6,214,160,0.15)',  fill:true, tension:0.4, borderWidth:2 },
             ],
             tableColumns: ['Mes','Facturado','Cobrado','Diferencia'],
             tableRows: allMonths.map(k => {
@@ -276,10 +262,10 @@ const computeReports = (filtered, raw) => {
                 .map(([id,v]) => ({ nombre: clienteName(id), ...v }));
             return {
                 labels: top.map(t=>t.nombre),
-                insight: `Top ${top.length} clientes por volumen facturado`,
+                insight: `Azul: monto facturado al cliente · Verde: monto ya cobrado`,
                 datasets: [
-                    { label:'Facturado', data:top.map(t=>t.f), backgroundColor:'rgba(76,201,240,0.75)', borderRadius:5 },
-                    { label:'Cobrado',   data:top.map(t=>t.c), backgroundColor:'rgba(6,214,160,0.75)',  borderRadius:5 },
+                    { label:'Facturado COP', data:top.map(t=>t.f), backgroundColor:'rgba(76,201,240,0.75)', borderRadius:5 },
+                    { label:'Cobrado COP',   data:top.map(t=>t.c), backgroundColor:'rgba(6,214,160,0.75)',  borderRadius:5 },
                 ],
                 tableColumns: ['Cliente','Facturado','Cobrado','Pendiente'],
                 tableRows: top.map(t => { const p=t.f-t.c; return [t.nombre, formatCOP(t.f), formatCOP(t.c), { val:formatCOP(p), color:p>1000?C.red:C.green }]; }),
@@ -299,7 +285,7 @@ const computeReports = (filtered, raw) => {
             const total = entries.reduce((a,e)=>a+e[1],0);
             return {
                 labels: entries.map(e=>e[0]),
-                insight: `${Object.keys(map).length} marcas · Revenue total: ${formatCOP(total)}`,
+                insight: `${Object.keys(map).length} marcas · Revenue total: ${formatCOP(total)} — Cada color = una marca`,
                 datasets: [{ label:'Revenue COP', data:entries.map(e=>e[1]), backgroundColor:C.palette, borderRadius:6 }],
                 tableColumns: ['Marca','Revenue COP','%'],
                 tableRows: entries.map(e=>[e[0], formatCOP(e[1]), `${total?((e[1]/total)*100).toFixed(1):0}%`]),
@@ -314,7 +300,7 @@ const computeReports = (filtered, raw) => {
             const entries = Object.entries(map);
             return {
                 labels: entries.map(e=>e[0]),
-                insight: `${ventas.length} ventas en el período`,
+                insight: `${ventas.length} ventas totales — Cada segmento = un tipo de venta`,
                 datasets: [{ label:'# Ventas', data:entries.map(e=>e[1].count), backgroundColor:C.palette }],
                 tableColumns: ['Tipo de Venta','# Ventas','Total Facturado'],
                 tableRows: entries.map(e=>[e[0], e[1].count, formatCOP(e[1].valor)]),
@@ -329,7 +315,7 @@ const computeReports = (filtered, raw) => {
             const entries = Object.entries(map).sort((a,b)=>b[1].count-a[1].count);
             return {
                 labels: entries.map(e=>e[0]),
-                insight: `${ventas.length} órdenes en ${entries.length} estados`,
+                insight: `${ventas.length} órdenes en ${entries.length} estados — Cada barra = un estado de orden`,
                 datasets: [{ label:'# Órdenes', data:entries.map(e=>e[1].count), backgroundColor:C.palette, borderRadius:6 }],
                 tableColumns: ['Estado Orden','# Órdenes','Valor Total'],
                 tableRows: entries.map(e=>[e[0], e[1].count, formatCOP(e[1].valor)]),
@@ -344,10 +330,10 @@ const computeReports = (filtered, raw) => {
             const total  = counts.reduce((a,b)=>a+b, 0);
             return {
                 labels: FASES,
-                insight: `${rawLog.length} envíos registrados`,
-                datasets: [{ label:'Envíos', data:counts, backgroundColor:FASE_COLORS.map(c=>c+'BB'), borderColor:FASE_COLORS, borderWidth:2, borderRadius:8 }],
-                tableColumns: ['Fase','# Envíos','%'],
-                tableRows: FASES.map((f,i)=>[f, counts[i], `${total?((counts[i]/total)*100).toFixed(1):0}%`]),
+                insight: `${rawLog.length} envíos — 🔴 Comprado · 🔵 En Tránsito · 🟠 Bodega USA · 🟣 Aduana · 🩵 Bodega Colombia · 🟢 Entregado`,
+                datasets: [{ label:'Envíos por Fase', data:counts, backgroundColor:FASE_COLORS.map(c=>c+'BB'), borderColor:FASE_COLORS, borderWidth:2, borderRadius:8 }],
+                tableColumns: ['Fase','Color','# Envíos','%'],
+                tableRows: FASES.map((f,i)=>[f, { val:'●', color:FASE_COLORS[i] }, counts[i], `${total?((counts[i]/total)*100).toFixed(1):0}%`]),
                 compatibleCharts: ['bar','doughnut','barH','table'],
                 defaultChart: 'bar',
             };
@@ -357,11 +343,11 @@ const computeReports = (filtered, raw) => {
             const activos    = rawLog.filter(l => !mapFase(l.fase).includes('Entregado'));
             const entregados = rawLog.filter(l =>  mapFase(l.fase).includes('Entregado'));
             return {
-                labels: ['Activos','Entregados'],
-                insight: `${activos.length} en tránsito · ${entregados.length} completados`,
-                datasets: [{ label:'Envíos', data:[activos.length, entregados.length], backgroundColor:[C.orange, C.green] }],
+                labels: ['Activos (En Tránsito)','Entregados'],
+                insight: `Naranja: envíos activos en proceso · Verde: completados y entregados`,
+                datasets: [{ label:'# Envíos', data:[activos.length, entregados.length], backgroundColor:[C.orange, C.green] }],
                 tableColumns: ['Estado','# Envíos'],
-                tableRows: [['Activos (En Tránsito)', activos.length],['Entregados', entregados.length]],
+                tableRows: [['🟠 Activos (En Tránsito)', activos.length],['🟢 Entregados', entregados.length]],
                 compatibleCharts: ['doughnut','bar','table'],
                 defaultChart: 'doughnut',
             };
@@ -374,8 +360,8 @@ const computeReports = (filtered, raw) => {
             const entries = Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([id,val])=>({ nombre:clienteName(id), val }));
             return {
                 labels: entries.map(e=>e.nombre),
-                insight: `${cartera.length} órdenes con saldo · Cartera: ${formatCOP(entries.reduce((a,e)=>a+e.val,0))}`,
-                datasets: [{ label:'Saldo Pendiente', data:entries.map(e=>e.val), backgroundColor:C.palette.map(c=>c+'BB'), borderRadius:6 }],
+                insight: `${cartera.length} órdenes con saldo · Cartera: ${formatCOP(entries.reduce((a,e)=>a+e.val,0))} — Cada barra = deuda de un cliente`,
+                datasets: [{ label:'Saldo Pendiente COP', data:entries.map(e=>e.val), backgroundColor:C.palette.map(c=>c+'BB'), borderRadius:6 }],
                 tableColumns: ['Cliente','Saldo Pendiente'],
                 tableRows: entries.map(e=>[e.nombre, { val:formatCOP(e.val), color:C.red }]),
                 compatibleCharts: ['barH','bar','table'],
@@ -385,8 +371,8 @@ const computeReports = (filtered, raw) => {
 
         'log-abonos-mes': {
             labels: ML,
-            insight: `${abonos.length} abonos en el período`,
-            datasets: [{ label:'Total Abonado', data:allMonths.map(k=>abonosPorMes[k]||0), backgroundColor:'rgba(76,201,240,0.7)', borderColor:C.blue, borderRadius:5 }],
+            insight: `${abonos.length} abonos en el período — Azul: monto total abonado por mes`,
+            datasets: [{ label:'Total Abonado COP', data:allMonths.map(k=>abonosPorMes[k]||0), backgroundColor:'rgba(76,201,240,0.7)', borderColor:C.blue, borderRadius:5 }],
             tableColumns: ['Mes','Total Abonado'],
             tableRows: allMonths.map(k=>[monthLabel(k), formatCOP(abonosPorMes[k]||0)]),
             compatibleCharts: ['bar','line','area','table'],
@@ -407,10 +393,10 @@ const computeReports = (filtered, raw) => {
                 .map(([id,v]) => ({ nombre:clienteName(id), ...v }));
             return {
                 labels: top.map(t=>t.nombre),
-                insight: `${clientes.length} clientes registrados`,
+                insight: `Azul: total facturado · Verde: total cobrado — La diferencia es la cartera pendiente`,
                 datasets: [
-                    { label:'Facturado', data:top.map(t=>t.f), backgroundColor:'rgba(76,201,240,0.75)', borderRadius:5 },
-                    { label:'Cobrado',   data:top.map(t=>t.c), backgroundColor:'rgba(6,214,160,0.75)',  borderRadius:5 },
+                    { label:'Facturado COP', data:top.map(t=>t.f), backgroundColor:'rgba(76,201,240,0.75)', borderRadius:5 },
+                    { label:'Cobrado COP',   data:top.map(t=>t.c), backgroundColor:'rgba(6,214,160,0.75)',  borderRadius:5 },
                 ],
                 tableColumns: ['Cliente','# Órdenes','Facturado','Cobrado','Pendiente'],
                 tableRows: top.map(t => { const p=t.f-t.c; return [t.nombre, t.n, formatCOP(t.f), formatCOP(t.c), { val:formatCOP(p), color:p>1000?C.red:C.green }]; }),
@@ -430,8 +416,8 @@ const computeReports = (filtered, raw) => {
             const total = entries.reduce((a,e)=>a+e.val,0);
             return {
                 labels: entries.map(e=>e.nombre),
-                insight: `Cartera total: ${formatCOP(total)}`,
-                datasets: [{ label:'Cartera COP', data:entries.map(e=>e.val), backgroundColor:C.palette.map(c=>c+'BB'), borderRadius:6 }],
+                insight: `Cartera total: ${formatCOP(total)} — Cada barra/segmento = deuda de un cliente`,
+                datasets: [{ label:'Cartera Pendiente COP', data:entries.map(e=>e.val), backgroundColor:C.palette.map(c=>c+'BB'), borderRadius:6 }],
                 tableColumns: ['Cliente','Cartera Pendiente','%'],
                 tableRows: entries.map(e=>[e.nombre, { val:formatCOP(e.val), color:C.red }, `${total?((e.val/total)*100).toFixed(1):0}%`]),
                 compatibleCharts: ['barH','bar','doughnut','table'],
@@ -446,8 +432,8 @@ const computeReports = (filtered, raw) => {
                 .map(([id,count])=>({ nombre:clienteName(id), count }));
             return {
                 labels: entries.map(e=>e.nombre),
-                insight: `Clientes con más órdenes en el período`,
-                datasets: [{ label:'# Órdenes', data:entries.map(e=>e.count), backgroundColor:C.palette, borderRadius:6 }],
+                insight: `Clientes con más órdenes — Cada barra = número de pedidos del cliente`,
+                datasets: [{ label:'# Órdenes Realizadas', data:entries.map(e=>e.count), backgroundColor:C.palette, borderRadius:6 }],
                 tableColumns: ['Cliente','# Órdenes'],
                 tableRows: entries.map(e=>[e.nombre, e.count]),
                 compatibleCharts: ['barH','bar','table'],
@@ -462,8 +448,8 @@ const computeReports = (filtered, raw) => {
             const entries = Object.entries(map).sort((a,b)=>b[1].count-a[1].count);
             return {
                 labels: entries.map(e=>e[0]),
-                insight: `${productos.length} productos en catálogo`,
-                datasets: [{ label:'# Productos', data:entries.map(e=>e[1].count), backgroundColor:C.palette, borderRadius:6 }],
+                insight: `${productos.length} productos en catálogo — Cada barra/segmento = una categoría`,
+                datasets: [{ label:'# Productos en Catálogo', data:entries.map(e=>e[1].count), backgroundColor:C.palette, borderRadius:6 }],
                 tableColumns: ['Categoría','# Productos','Valor Est.'],
                 tableRows: entries.map(e=>[e[0], e[1].count, formatCOP(e[1].valor)]),
                 compatibleCharts: ['bar','barH','doughnut','table'],
@@ -483,7 +469,7 @@ const computeReports = (filtered, raw) => {
             alerts.forEach(a => urgMap[a.urgencia]++);
             return {
                 labels: Object.keys(urgMap),
-                insight: `${alerts.length} alertas activas que requieren atención`,
+                insight: `${alerts.length} alertas activas — Rojo: urgencia Alta · Naranja: urgencia Media · Azul: urgencia Baja`,
                 datasets: [{ label:'# Alertas', data:Object.values(urgMap), backgroundColor:[C.red, C.orange, C.blue] }],
                 tableColumns: ['Tipo','Detalle','Urgencia','Valor COP'],
                 tableRows: alerts.map(a=>[a.tipo, a.detalle, { val:a.urgencia, color:a.urgencia==='Alta'?C.red:C.orange }, formatCOP(a.valor)]),
@@ -494,8 +480,8 @@ const computeReports = (filtered, raw) => {
 
         'ops-abonos': {
             labels: ML,
-            insight: `${abonos.length} abonos · Total: ${formatCOP(abonos.reduce((a,b)=>a+parseFloat(b.valor||0),0))}`,
-            datasets: [{ label:'Total Abonado', data:allMonths.map(k=>abonosPorMes[k]||0), backgroundColor:'rgba(167,139,250,0.75)', borderColor:C.violet, borderRadius:5 }],
+            insight: `${abonos.length} abonos — Violeta: total recibido por mes`,
+            datasets: [{ label:'Total Abonado COP', data:allMonths.map(k=>abonosPorMes[k]||0), backgroundColor:'rgba(167,139,250,0.75)', borderColor:C.violet, borderRadius:5 }],
             tableColumns: ['Mes','Total Abonado'],
             tableRows: allMonths.map(k=>[monthLabel(k), formatCOP(abonosPorMes[k]||0)]),
             compatibleCharts: ['bar','line','area','table'],
@@ -504,7 +490,7 @@ const computeReports = (filtered, raw) => {
     };
 };
 
-// ─── API GLOBAL (botones en el DOM) ───────────────────────────────────────────
+// ─── API GLOBAL ───────────────────────────────────────────────────────────────
 window.applyDashDateFilter = () => {
     _dashStartDate = document.getElementById('dash-date-start')?.value || '';
     _dashEndDate   = document.getElementById('dash-date-end')?.value   || '';
@@ -536,8 +522,8 @@ window.exportDashExcel = () => {
     const g  = applyDateFilter(_dashCache.gastos,   'fecha');
     const cp = applyDateFilter(_dashCache.compras,  c => c.fecha_pedido || c.fecha_registro);
     const rows = [];
-    v.forEach(x  => rows.push({ Fecha:(x.fecha||'').split('T')[0],  Tipo:'Venta',       Concepto:`Orden #${x.id?.toString().slice(-4)}`,  'Total COP': parseFloat(x.valor_total_cop||0) }));
-    g.forEach(x  => rows.push({ Fecha:(x.fecha||'').split('T')[0],  Tipo:'Gasto',        Concepto:x.concepto||x.tipo_gasto,               'Total COP':-parseFloat(x.valor_cop||x.valor_origen||0) }));
+    v.forEach(x  => rows.push({ Fecha:(x.fecha||'').split('T')[0],  Tipo:'Venta',      Concepto:`Orden #${x.id?.toString().slice(-4)}`, 'Total COP': parseFloat(x.valor_total_cop||0) }));
+    g.forEach(x  => rows.push({ Fecha:(x.fecha||'').split('T')[0],  Tipo:'Gasto',       Concepto:x.concepto||x.tipo_gasto,              'Total COP':-parseFloat(x.valor_cop||x.valor_origen||0) }));
     cp.forEach(x => rows.push({ Fecha:(x.fecha_pedido||x.fecha_registro||'').split('T')[0], Tipo:'Compra USA', Concepto:x.proveedor, 'Total COP':-parseFloat(x.costo_cop||0) }));
     if (!rows.length) return alert('Sin datos en el período');
     downloadExcel(rows, `Balance_Maestro_${new Date().toISOString().split('T')[0]}`);
@@ -597,7 +583,6 @@ const _renderDashboardBody = () => {
     const compras = applyDateFilter(data.compras, c => c.fecha_pedido || c.fecha_registro);
     const abonos  = applyDateFilter(data.abonos,  'fecha');
 
-    // KPIs globales
     const totalFacturado  = ventas.reduce((a,v)=>a+(parseFloat(v.valor_total_cop)||0), 0);
     const totalCobrado    = ventas.reduce((a,v)=>a+(parseFloat(v.abonos_acumulados)||0), 0);
     const cartera         = ventas.reduce((a,v)=>a+(parseFloat(v.saldo_pendiente)||0), 0);
@@ -608,7 +593,6 @@ const _renderDashboardBody = () => {
     const margen          = totalCobrado > 0 ? ((balance/totalCobrado)*100).toFixed(1) : 0;
     const logsActivos     = data.logistica.filter(l => !mapFase(l.fase).includes('Entregado'));
 
-    // Reporte activo
     const filtered    = { ventas, gastos, compras, abonos, clientes:data.clientes, productos:data.productos, logistica:data.logistica };
     const reports     = computeReports(filtered, data);
     const reportData  = reports[_currentReportId];
@@ -645,12 +629,12 @@ const _renderDashboardBody = () => {
       <!-- ── KPI Strip ─────────────────────────────────────────────────────── -->
       <div class="bi-kpi-strip">
         ${[
-          { label:'Facturación',   val:formatCOP(totalFacturado),  icon:'📊', color:C.blue,                       sub:`${ventas.length} ventas` },
-          { label:'Total Cobrado', val:formatCOP(totalCobrado),    icon:'✅', color:C.green,                      sub:`${abonos.length} abonos` },
-          { label:'Cartera',       val:formatCOP(cartera),         icon:'⚠️', color:cartera>0?C.orange:C.green,   sub:'Saldo pendiente' },
-          { label:'Total Egresos', val:formatCOP(totalEgresos),    icon:'📤', color:C.red,                        sub:'Gastos + Compras' },
-          { label:'Balance Caja',  val:formatCOP(balance),         icon:'💰', color:balance>=0?C.green:C.red,     sub:'Cobrado − Egresos' },
-          { label:'Margen Neto',   val:`${margen}%`,               icon:'📈', color:margen>0?C.cyan:C.red,        sub:`${logsActivos.length} env. activos` },
+          { label:'Facturación',   val:formatCOP(totalFacturado),  icon:'📊', color:C.blue,                     sub:`${ventas.length} ventas` },
+          { label:'Total Cobrado', val:formatCOP(totalCobrado),    icon:'✅', color:C.green,                    sub:`${abonos.length} abonos` },
+          { label:'Cartera',       val:formatCOP(cartera),         icon:'⚠️', color:cartera>0?C.orange:C.green, sub:'Saldo pendiente' },
+          { label:'Total Egresos', val:formatCOP(totalEgresos),    icon:'📤', color:C.red,                      sub:'Gastos + Compras' },
+          { label:'Balance Caja',  val:formatCOP(balance),         icon:'💰', color:balance>=0?C.green:C.red,   sub:'Cobrado − Egresos' },
+          { label:'Margen Neto',   val:`${margen}%`,               icon:'📈', color:margen>0?C.cyan:C.red,      sub:`${logsActivos.length} env. activos` },
         ].map(k => `
           <div class="bi-kpi-card" style="border-top:3px solid ${k.color};">
             <div class="bkc-icon">${k.icon}</div>
@@ -710,24 +694,18 @@ const _renderDashboardBody = () => {
     }
 };
 
-// ─── Re-render sólo el área del gráfico ──────────────────────────────────────
+// ─── Re-render solo área de gráfico ──────────────────────────────────────────
 const _renderChartArea = () => {
     const reportData = _getComputedReport();
     if (!reportData) return;
     const chartType  = _currentChartType || reportData.defaultChart || 'bar';
 
-    // Actualizar botones activos
-    document.querySelectorAll('.bi-ct-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.textContent.includes(CHART_TYPES.find(x=>x.id===chartType)?.icon || ''));
-    });
-    // Más robusto: re-check por onclick
     document.querySelectorAll('.bi-ct-btn').forEach(btn => {
         const onclick = btn.getAttribute('onclick') || '';
         btn.classList.toggle('active', onclick.includes(`'${chartType}'`));
     });
 
     Object.values(Chart.instances).forEach(c => c.destroy());
-
     const area = document.getElementById('bi-chart-area');
     if (!area) return;
 
@@ -770,7 +748,7 @@ const _drawChart = (reportData, chartType) => {
     const canvas = document.getElementById('bi-main-chart');
     if (!canvas || !reportData) return;
 
-    const tc    = getThemeColors();
+    const tc = getThemeColors();
     Chart.defaults.color       = tc.text;
     Chart.defaults.font.family = 'Inter, sans-serif';
     Chart.defaults.font.size   = 12;
@@ -784,17 +762,75 @@ const _drawChart = (reportData, chartType) => {
     const datasets = reportData.datasets.map(ds => {
         const d = { ...ds };
         if (type === 'line') {
-            d.tension       = d.tension       ?? 0.4;
-            d.fill          = isArea ? (d.fill !== undefined ? d.fill : true) : false;
-            d.borderWidth   = d.borderWidth   ?? 2;
-            d.pointRadius   = d.pointRadius   ?? 4;
+            d.tension          = d.tension          ?? 0.4;
+            d.fill             = isArea ? (d.fill !== undefined ? d.fill : true) : false;
+            d.borderWidth      = d.borderWidth      ?? 2;
+            d.pointRadius      = d.pointRadius      ?? 4;
             d.pointHoverRadius = 7;
         }
         return d;
     });
 
     const isDonut = type === 'doughnut';
+
+    // Detectar gráfico de paleta (1 dataset, array de colores por barra)
+    const isPaletteChart = !isDonut && datasets.length === 1
+        && Array.isArray(datasets[0].backgroundColor)
+        && datasets[0].backgroundColor.length > 1;
+
+    // Leyenda para gráficos de paleta (color por barra)
+    const renderPaletteLegend = () => {
+        if (!isPaletteChart) return;
+        const labels = reportData.labels || [];
+        const colors = datasets[0].backgroundColor || [];
+        const pills  = labels.map((lbl, i) => {
+            const raw   = Array.isArray(colors) ? (colors[i] || '#999') : colors;
+            const clean = raw.length > 7 ? raw.slice(0, 7) : raw;
+            return `<span class="bi-legend-pill"><span class="bi-legend-dot" style="background:${clean};"></span>${lbl}</span>`;
+        }).join('');
+        const area = document.getElementById('bi-chart-area');
+        if (area) {
+            let leg = area.querySelector('.bi-palette-legend');
+            if (!leg) { leg = document.createElement('div'); area.appendChild(leg); }
+            leg.className   = 'bi-palette-legend';
+            leg.innerHTML   = pills;
+        }
+    };
+
+    // Legend: show for multi-dataset or donut; single-dataset palette uses custom
     const showLeg = datasets.length > 1 || isDonut;
+
+    // Configuración limpia de ejes (sin callback:undefined)
+    let scalesConfig = {};
+    if (!isDonut) {
+        const xTicks = { color: tc.text };
+        const yTicks = { color: tc.text };
+
+        if (isHoriz) {
+            xTicks.callback = function(val) {
+                return typeof val === 'number' && Math.abs(val) >= 1000 ? fmtK(val) : val;
+            };
+            yTicks.maxRotation = 0;
+        } else {
+            xTicks.maxRotation = 40;
+            yTicks.callback = function(val) {
+                return typeof val === 'number' && Math.abs(val) >= 1000 ? fmtK(val) : val;
+            };
+        }
+
+        scalesConfig = {
+            x: {
+                type:  isHoriz ? undefined : 'category',
+                grid:  { display: !isHoriz, color: tc.grid },
+                ticks: xTicks,
+            },
+            y: {
+                grid:    { color: isHoriz ? 'transparent' : tc.grid },
+                stacked: datasets.some(d => d.stack),
+                ticks:   yTicks,
+            },
+        };
+    }
 
     new Chart(canvas, {
         type,
@@ -820,28 +856,21 @@ const _drawChart = (reportData, chartType) => {
                     padding:         12,
                     callbacks: {
                         label: (ctx) => {
-                            const v = ctx.raw;
+                            const v     = ctx.raw;
+                            const label = ctx.dataset.label || ctx.label || '';
                             return typeof v === 'number' && Math.abs(v) >= 100
-                                ? ` ${ctx.dataset.label}: ${formatCOP(Math.abs(v))}`
-                                : ` ${ctx.dataset.label}: ${v}`;
-                        }
+                                ? ` ${label}: ${formatCOP(Math.abs(v))}`
+                                : ` ${label}: ${v}`;
+                        },
+                        title: (items) => items[0]?.label || '',
                     }
                 },
             },
-            scales: isDonut ? {} : {
-                x: {
-                    grid:  { display: !isHoriz, color: tc.grid },
-                    ticks: { color: tc.text, maxRotation: isHoriz ? 0 : 40,
-                             callback: isHoriz ? function(val) { return fmtAuto(this.getLabelForValue(val)); } : undefined }
-                },
-                y: {
-                    grid:    { color: isHoriz ? 'transparent' : tc.grid },
-                    stacked: datasets.some(d => d.stack),
-                    ticks:   { color: tc.text,
-                               callback: isHoriz ? undefined : function(val) { return typeof val==='number' && Math.abs(val)>=1000 ? fmtK(val) : val; } }
-                },
-            },
+            scales: scalesConfig,
             ...(isDonut && { cutout: '55%' }),
         }
     });
+
+    // Agregar leyenda de colores para gráficos de paleta
+    setTimeout(renderPaletteLegend, 80);
 };
