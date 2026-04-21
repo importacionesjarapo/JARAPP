@@ -473,8 +473,8 @@ const computeReports = (filtered, raw) => {
                 datasets: [{ label:'# Alertas', data:Object.values(urgMap), backgroundColor:[C.red, C.orange, C.blue] }],
                 tableColumns: ['Tipo','Detalle','Urgencia','Valor COP'],
                 tableRows: alerts.map(a=>[a.tipo, a.detalle, { val:a.urgencia, color:a.urgencia==='Alta'?C.red:C.orange }, formatCOP(a.valor)]),
-                compatibleCharts: ['table','doughnut','bar'],
-                defaultChart: 'table',
+                compatibleCharts: ['doughnut','bar','table'],
+                defaultChart: 'doughnut',
             };
         })(),
 
@@ -748,6 +748,14 @@ const _drawChart = (reportData, chartType) => {
     const canvas = document.getElementById('bi-main-chart');
     if (!canvas || !reportData) return;
 
+    // Guard: si no hay datos, mostrar mensaje en lugar de gráfico vacío
+    const allData = (reportData.datasets || []).flatMap(d => d.data || []);
+    if (allData.length === 0) {
+        const area = document.getElementById('bi-chart-area');
+        if (area) area.innerHTML = `<div class="bi-empty">📭 Sin datos para el período seleccionado</div>`;
+        return;
+    }
+
     const tc = getThemeColors();
     Chart.defaults.color       = tc.text;
     Chart.defaults.font.family = 'Inter, sans-serif';
@@ -800,36 +808,39 @@ const _drawChart = (reportData, chartType) => {
     // Legend: show for multi-dataset or donut; single-dataset palette uses custom
     const showLeg = datasets.length > 1 || isDonut;
 
-    // Configuración limpia de ejes (sin callback:undefined)
+    // ── Configuración de ejes separada explícitamente por orientación ────────────
+    const fmtTick = (val) => typeof val === 'number' && Math.abs(val) >= 1000 ? fmtK(val) : val;
     let scalesConfig = {};
-    if (!isDonut) {
-        const xTicks = { color: tc.text };
-        const yTicks = { color: tc.text };
 
+    if (!isDonut) {
         if (isHoriz) {
-            xTicks.callback = function(val) {
-                return typeof val === 'number' && Math.abs(val) >= 1000 ? fmtK(val) : val;
+            // Barra HORIZONTAL: Y = categorías (labels) | X = valores numéricos
+            scalesConfig = {
+                y: {
+                    type:  'category',
+                    grid:  { display: false },
+                    ticks: { color: tc.text, autoSkip: false },
+                },
+                x: {
+                    grid:  { color: tc.grid },
+                    ticks: { color: tc.text, callback: fmtTick },
+                },
             };
-            yTicks.maxRotation = 0;
         } else {
-            xTicks.maxRotation = 40;
-            yTicks.callback = function(val) {
-                return typeof val === 'number' && Math.abs(val) >= 1000 ? fmtK(val) : val;
+            // Barra VERTICAL / Línea / Área: X = categorías (labels) | Y = valores numéricos
+            scalesConfig = {
+                x: {
+                    type:  'category',
+                    grid:  { display: false },
+                    ticks: { color: tc.text, maxRotation: 40, autoSkip: true },
+                },
+                y: {
+                    grid:    { color: tc.grid },
+                    stacked: datasets.some(d => d.stack),
+                    ticks:   { color: tc.text, callback: fmtTick },
+                },
             };
         }
-
-        scalesConfig = {
-            x: {
-                type:  isHoriz ? undefined : 'category',
-                grid:  { display: !isHoriz, color: tc.grid },
-                ticks: xTicks,
-            },
-            y: {
-                grid:    { color: isHoriz ? 'transparent' : tc.grid },
-                stacked: datasets.some(d => d.stack),
-                ticks:   yTicks,
-            },
-        };
     }
 
     new Chart(canvas, {
