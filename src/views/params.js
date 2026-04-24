@@ -14,7 +14,8 @@ export const renderParams = async (renderLayout, navigateTo) => {
         Tienda: list.filter(p => p.clave === 'Tienda'),
         BodegaUSA: list.filter(p => p.clave === 'BodegaUSA'),
         TranspUSA: list.filter(p => p.clave === 'TranspUSA'),
-        TranspCOL: list.filter(p => p.clave === 'TranspCOL')
+        TranspCOL: list.filter(p => p.clave === 'TranspCOL'),
+        ValorLibra: list.filter(p => p.clave === 'ValorLibra')
     };
 
     const renderGroup = (title, key, arr) => `
@@ -63,6 +64,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
           ${renderGroup('Bodegas USA', 'BodegaUSA', grouped.BodegaUSA)}
           ${renderGroup('Transp. Local USA', 'TranspUSA', grouped.TranspUSA)}
           ${renderGroup('Transp. (Local Colombia)', 'TranspCOL', grouped.TranspCOL)}
+          ${renderGroup('Valor Libra Envio EEUU - COLOMBIA', 'ValorLibra', grouped.ValorLibra)}
       </div>
     `;
     renderLayout(html);
@@ -121,6 +123,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
                       <option value="BodegaUSA" ${clavePredefinida === 'BodegaUSA' ? 'selected' : ''}>Bodegas (USA)</option>
                       <option value="TranspUSA" ${clavePredefinida === 'TranspUSA' ? 'selected' : ''}>Transportadoras (Local USA)</option>
                       <option value="TranspCOL" ${clavePredefinida === 'TranspCOL' ? 'selected' : ''}>Transportadoras (Local COL)</option>
+                      <option value="ValorLibra" ${clavePredefinida === 'ValorLibra' ? 'selected' : ''}>Valor Libra Envio EEUU - COLOMBIA</option>
                    </select>
                 </div>
                 <div>

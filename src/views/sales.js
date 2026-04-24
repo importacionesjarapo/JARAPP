@@ -731,6 +731,16 @@ export const createSaleModal = async (navigateTo) => {
                     </div>
                 </div>
             </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;background:rgba(0,0,0,0.15);padding:1rem;border-radius:12px;border:1px solid rgba(255,255,255,0.05);">
+                <div>
+                    <label>Peso del Producto (Libras)</label>
+                    <input type="number" step="0.01" name="peso_producto" id="sale-peso" placeholder="Ej. 2.5" required>
+                </div>
+                <div>
+                    <label>TRM Cotizada</label>
+                    <input type="number" name="trm_cotizada" id="sale-trm" placeholder="Ej. 4000" required>
+                </div>
+            </div>
             <hr style="border-color:rgba(255,255,255,0.05);margin:0.5rem 0;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                <div><label>Valor Total (COP)</label><input type="number" name="valor_total_cop" id="sale-total" value="0" required min="0"></div>
@@ -948,6 +958,14 @@ export const createSaleModal = async (navigateTo) => {
             const comprobanteFile = document.getElementById('comp-sale-file')?.files[0];
             let comprobanteUrl = '';
             if (comprobanteFile) { btn.innerText='Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
+
+            // ─── Cálculo Envio Internacional ───
+            const peso = parseFloat(fd.get('peso_producto') || 0);
+            const trm = parseFloat(fd.get('trm_cotizada') || 0);
+            const libParam = configList.find(c => c.clave === 'ValorLibra');
+            const valorLibra = libParam ? parseFloat(libParam.valor || 0) : 0;
+            const valorEnvioInt = peso * valorLibra;
+
             const pvId = Date.now().toString();
             const pv={ 
                 id:pvId, 
@@ -960,6 +978,9 @@ export const createSaleModal = async (navigateTo) => {
                 saldo_pendiente:saldoP, 
                 comprobante_url:comprobanteUrl, 
                 direccion_envio: fd.get('direccion_envio') || '',
+                peso_producto: peso,
+                trm_cotizada: trm,
+                valor_envio_internacional: valorEnvioInt,
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local', 
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000) 
             };
@@ -1034,6 +1055,22 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
             <div style="background:var(--input-bg);padding:1rem 1.2rem;border-radius:12px;border:1px solid var(--glass-border);display:flex;flex-direction:column;"><span style="font-size:0.75rem;opacity:0.6;margin-bottom:4px;">💰 Valor Total</span><strong style="font-size:1.15rem;">${formatCOP(total)}</strong></div>
             <div style="background:rgba(6,214,160,0.05);padding:1rem 1.2rem;border-radius:12px;border:1px solid rgba(6,214,160,0.2);display:flex;flex-direction:column;"><span style="font-size:0.75rem;color:var(--success-green);margin-bottom:4px;">💸 Total Abonado</span><strong style="font-size:1.15rem;color:var(--success-green);">${formatCOP(abonado)}</strong><span style="font-size:0.68rem;opacity:0.45;margin-top:3px;">${abonos.length} pago(s)</span></div>
             <div style="background:${saldo>0?'rgba(230,57,70,0.05)':'rgba(6,214,160,0.05)'};padding:1rem 1.2rem;border-radius:12px;border:1px solid ${saldo>0?'rgba(230,57,70,0.2)':'rgba(6,214,160,0.2)'};display:flex;flex-direction:column;"><span style="font-size:0.75rem;color:${saldo>0?'var(--primary-red)':'var(--success-green)'};margin-bottom:4px;">${saldo>0?'⚠️ Saldo Pendiente':'✅ Estado'}</span><strong style="font-size:1.15rem;color:${saldo>0?'var(--primary-red)':'var(--success-green)'};">${saldo===0?'Pagado':formatCOP(saldo)}</strong></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:1rem;margin-bottom:1.5rem;">
+            <div style="background:var(--glass-hover);padding:0.8rem 1rem;border-radius:12px;border:1px solid var(--glass-border);">
+                <span style="font-size:0.7rem;opacity:0.5;text-transform:uppercase;">⚖️ Peso</span>
+                <div style="font-size:0.95rem;font-weight:700;">${v.peso_producto || 0} Lbs</div>
+            </div>
+            <div style="background:var(--glass-hover);padding:0.8rem 1rem;border-radius:12px;border:1px solid var(--glass-border);">
+                <span style="font-size:0.7rem;opacity:0.5;text-transform:uppercase;">📈 TRM Cotizada</span>
+                <div style="font-size:0.95rem;font-weight:700;">${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}</div>
+            </div>
+            ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
+            <div style="background:rgba(255,183,3,0.05);padding:0.8rem 1rem;border-radius:12px;border:1px solid rgba(255,183,3,0.2);">
+                <span style="font-size:0.7rem;color:#FFB703;text-transform:uppercase;">✈️ Envío Int. (Calculado)</span>
+                <div style="font-size:0.95rem;font-weight:700;color:#FFB703;">${v.valor_envio_internacional ? formatCOP(v.valor_envio_internacional) : '$0'}</div>
+            </div>` : ''}
         </div>
 
         <div class="abono-history-section">
