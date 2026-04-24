@@ -52,36 +52,55 @@ export const showToast = (message, type = 'success') => {
     const toast = document.createElement('div');
     toast.id = 'jarapo-toast';
     toast.style.position = 'fixed';
-    toast.style.bottom = '20px';
-    toast.style.right = '20px';
-    toast.style.padding = '1rem 2rem';
-    toast.style.background = type === 'success' ? 'var(--primary-red)' : 'var(--bg-charcoal)';
+    toast.style.top = '30px';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%) translateY(-20px)';
+    toast.style.padding = '15px 25px';
+    toast.style.background = 'rgba(3, 7, 18, 0.85)';
+    toast.style.backdropFilter = 'blur(12px)';
     toast.style.color = '#fff';
-    toast.style.borderRadius = 'var(--radius)';
+    toast.style.borderRadius = '12px';
     toast.style.zIndex = '10000';
-    toast.style.boxShadow = 'var(--soft-shadow)';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '12px';
     toast.style.opacity = '0';
-    toast.style.transform = 'translateY(20px)';
-    toast.style.transition = 'all 0.3s ease';
-    toast.style.border = '1px solid var(--glass-border)';
+    toast.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+    toast.style.fontFamily = "'Inter', sans-serif";
+    toast.style.fontWeight = '600';
+    toast.style.fontSize = '0.95rem';
 
-    if (type === 'error') {
-       toast.style.border = '1px solid var(--primary-red)';
+    let icon = 'ℹ️';
+    let borderColor = 'rgba(255,255,255,0.2)';
+    let shadowColor = 'rgba(255,255,255,0.05)';
+
+    if (type === 'success') {
+        icon = '✅';
+        borderColor = 'var(--success-green, #10B981)';
+        shadowColor = 'rgba(16, 185, 129, 0.2)';
+    } else if (type === 'error') {
+        icon = '⚠️';
+        borderColor = 'var(--primary-red, #E51365)';
+        shadowColor = 'rgba(229, 19, 101, 0.3)';
     }
 
-    toast.innerText = message;
+    toast.style.border = `1px solid ${borderColor}`;
+    toast.style.boxShadow = `0 10px 30px ${shadowColor}, inset 0 0 10px ${shadowColor}`;
+
+    toast.innerHTML = `<span style="font-size:1.2rem;">${icon}</span> <span>${message}</span>`;
+    
     document.body.appendChild(toast);
 
     setTimeout(() => {
         toast.style.opacity = '1';
-        toast.style.transform = 'translateY(0)';
+        toast.style.transform = 'translateX(-50%) translateY(0)';
     }, 10);
 
     setTimeout(() => {
         toast.style.opacity = '0';
-        toast.style.transform = 'translateY(20px)';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+        toast.style.transform = 'translateX(-50%) translateY(-20px)';
+        setTimeout(() => toast.remove(), 400);
+    }, 3500);
 };
 
 export const uploadImageToSupabase = async (file) => {
@@ -194,4 +213,122 @@ export const downloadExcel = (jsonData, fileName = 'reporte', sheetName = 'Datos
     });
 };
 
+/**
+ * Abre el modal genérico para detalles de KPI.
+ * @param {string} title - Título del modal
+ * @param {string} subtitle - Subtítulo descriptivo
+ * @param {string} itemsHtml - HTML pre-renderizado de los ítems (.kpi-modal-item)
+ */
+export const openKPIDetailModal = (title, subtitle, itemsHtml) => {
+    let mod = document.getElementById('kpi-detail-modal');
+    if (!mod) {
+        mod = document.createElement('div');
+        mod.id = 'kpi-detail-modal';
+        mod.className = 'modal-overlay';
+        mod.innerHTML = `
+            <div class="modal-content" id="modal-content" style="max-width: 600px; padding: 2rem;">
+                <div class="kpi-modal-header">
+                    <div>
+                        <h2 class="kpi-modal-title" id="kpi-modal-title"></h2>
+                        <div class="kpi-modal-subtitle" id="kpi-modal-subtitle"></div>
+                    </div>
+                    <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').classList.remove('active')" style="background:transparent; border:none; font-size:1.5rem; color:var(--text-muted); cursor:pointer;">&times;</button>
+                </div>
+                
+                <div class="kpi-modal-toolbar">
+                    <span style="font-size: 0.8rem; color: var(--text-faint);">Se muestran los detalles más recientes de este indicador.</span>
+                </div>
+                
+                <div class="kpi-modal-list" id="kpi-modal-list">
+                    <!-- Items injected here -->
+                </div>
+            </div>
+        `;
+        document.body.appendChild(mod);
+    }
+    
+    document.getElementById('kpi-modal-title').innerHTML = title;
+    document.getElementById('kpi-modal-subtitle').innerHTML = subtitle;
+    document.getElementById('kpi-modal-list').innerHTML = itemsHtml || '<div style="padding: 2rem; text-align: center; opacity: 0.5;">No hay detalles disponibles</div>';
+    
+    requestAnimationFrame(() => {
+        mod.classList.add('active');
+    });
+};
+
 window.openComprobanteViewer = openComprobanteViewer;
+window.openKPIDetailModal = openKPIDetailModal;
+
+/**
+ * Muestra un cuadro de confirmación personalizado con estilo de la app.
+ */
+export const showCustomConfirm = (title, message, onConfirm, onCancel) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    overlay.innerHTML = `
+        <div style="background:var(--bg-main);border:1px solid var(--brand-magenta);border-radius:16px;padding:2rem;max-width:400px;text-align:center;box-shadow:0 0 20px rgba(229,19,101,0.3);">
+            <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
+            <h3 style="margin-bottom:1rem;color:var(--text-main);">${title}</h3>
+            <p style="opacity:0.8;margin-bottom:1.5rem;font-size:0.9rem;">${message}</p>
+            <div style="display:flex;gap:10px;">
+                <button id="btn-cfm-yes" class="btn-primary" style="flex:1;padding:10px;">Confirmar</button>
+                <button id="btn-cfm-no" style="flex:1;padding:10px;background:none;border:1px solid var(--glass-border);color:var(--text-main);border-radius:8px;">Cancelar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#btn-cfm-yes').onclick = () => { onConfirm(); document.body.removeChild(overlay); };
+    overlay.querySelector('#btn-cfm-no').onclick = () => { if(onCancel) onCancel(); document.body.removeChild(overlay); };
+};
+
+window.showCustomConfirm = showCustomConfirm;
+
+/**
+ * Divide un array en sub-conjuntos para paginación.
+ */
+export const paginate = (items, page, rpp) => {
+    const start = (page - 1) * rpp;
+    return items.slice(start, start + rpp);
+};
+
+/**
+ * Renderiza el control de navegación de páginas (Glassmorphism).
+ */
+export const renderPagination = (total, page, rpp, module) => {
+    const totalPages = Math.ceil(total / rpp) || 1;
+    if (page > totalPages && total > 0) {
+        // Corrección de seguridad si quedamos en una página inexistente por filtros
+        setTimeout(() => window.changePage(module, 1), 10);
+        return '';
+    }
+
+    return `
+    <div class="glass-pagination" style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem; padding:12px 20px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border);">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:0.85rem; opacity:0.6;">Filas por página:</span>
+            <select onchange="window.changeRPP('${module}', this.value)" style="background:var(--input-bg); color:var(--text-main); border:1px solid var(--glass-border); padding:4px 8px; border-radius:8px; font-size:0.85rem; outline:none;">
+                <option value="10" ${rpp == 10 ? 'selected' : ''}>10</option>
+                <option value="25" ${rpp == 25 ? 'selected' : ''}>25</option>
+                <option value="50" ${rpp == 50 ? 'selected' : ''}>50</option>
+                <option value="100" ${rpp == 100 ? 'selected' : ''}>100</option>
+            </select>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:15px;">
+            <button class="btn-action" ${page <= 1 ? 'disabled style="opacity:0.3; cursor:default;"' : `onclick="window.changePage('${module}', ${page - 1})"`}>
+                Anterior
+            </button>
+            <span style="font-size:0.88rem; font-weight:600;">
+                <span style="color:var(--brand-magenta);">${page}</span> <span style="opacity:0.4;">de</span> ${totalPages}
+            </span>
+            <button class="btn-action" ${page >= totalPages ? 'disabled style="opacity:0.3; cursor:default;"' : `onclick="window.changePage('${module}', ${page + 1})"`}>
+                Siguiente
+            </button>
+        </div>
+
+        <div style="font-size:0.85rem; opacity:0.6;">
+            Total: <strong>${total}</strong> registros
+        </div>
+    </div>
+    `;
+};

@@ -79,8 +79,8 @@ class Auth {
 
   _getClient() {
     if (this._client) return this._client;
-    const url = localStorage.getItem('JARAPO_SUPA_URL');
-    const key = localStorage.getItem('JARAPO_SUPA_KEY');
+    const url = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL');
+    const key = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY');
     if (!url || !key) return null;
     this._client = createClient(url, key);
     return this._client;
@@ -194,6 +194,16 @@ class Auth {
     if (authResult.error) throw new Error(this._translateError(authResult.error.message));
     this._session = authResult.data.session;
 
+    // ── Registro de Logueo ────────────────────────────────
+    try {
+      await client.from('login_logs').insert({
+        user_id: this._session.user.id,
+        email: this._session.user.email
+      });
+    } catch (e) {
+      console.warn('[Auth] Error registrando log de logueo:', e.message);
+    }
+
     // ── Paso 2: Cargar perfil ─────────────────────────────
     await this._loadProfile();
 
@@ -257,15 +267,35 @@ class Auth {
     if (!client) throw new Error('Supabase no configurado.');
     if (!this.isAdmin()) throw new Error('Solo el administrador puede crear usuarios.');
 
+    // 1. Validar que el correo no exista ya
+    const { data: existingUser } = await client
+      .from('user_profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existingUser) {
+      throw new Error('El correo electrónico ya está vinculado a un usuario existente.');
+    }
+
+    // 2. Crear un cliente temporal sin persistir sesión para no desloguear al admin
+    const url = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL');
+    const key = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY');
+    const tempClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+
     const { data, error } = await withTimeout(
-      client.auth.admin.createUser({
-        email, password, email_confirm: true,
-        user_metadata: { full_name: fullName }
+      tempClient.auth.signUp({
+        email, 
+        password,
+        options: {
+          data: { full_name: fullName }
+        }
       }),
       15000, 'Timeout al crear usuario'
     );
 
     if (error) throw new Error(this._translateError(error.message));
+    if (!data.user) throw new Error('No se pudo crear el usuario.');
 
     const { error: profileError } = await withTimeout(
       client.from('user_profiles').upsert({

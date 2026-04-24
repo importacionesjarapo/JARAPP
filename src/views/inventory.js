@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, downloadExcel } from '../utils.js';
+import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let globalListCache = [];
@@ -45,12 +45,85 @@ const renderInvKPI = (list) => {
     return `
     <div class="kpi-strip">
         ${kpis.map(k=>`
-        <div class="kpi-strip-card">
+        <div class="kpi-strip-card" onclick="window.openInventoryKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
         </div>`).join('')}
     </div>`;
+};
+
+window.openInventoryKPI = (kpiName) => {
+    let title = kpiName;
+    let subtitle = '';
+    let productosFiltrados = [...globalListCache];
+    
+    if (kpiName === 'Total Productos') {
+        subtitle = 'Todos los productos registrados en el catálogo.';
+    } else if (kpiName === 'Disponibles MDE') {
+        productosFiltrados = productosFiltrados.filter(p => p.estado_producto === 'Disponible entrega inmediata');
+        subtitle = 'Productos listos para entrega inmediata en Medellín.';
+    } else if (kpiName === 'En Tránsito/Encargo') {
+        productosFiltrados = productosFiltrados.filter(p => p.estado_producto !== 'Disponible entrega inmediata');
+        subtitle = 'Productos que vienen en camino o son por encargo.';
+    } else if (kpiName === 'Valor Catálogo') {
+        productosFiltrados = productosFiltrados.filter(p => parseFloat(p.precio_cop||0) > 0);
+        productosFiltrados.sort((a,b) => parseFloat(b.precio_cop||0) - parseFloat(a.precio_cop||0));
+        subtitle = 'Productos ordenados por precio de venta.';
+    } else if (kpiName === 'Marcas Únicas') {
+        // En este caso mostraremos las marcas y la cantidad de productos por marca
+        const marcasCount = {};
+        productosFiltrados.forEach(p => {
+            if (p.marca) {
+                marcasCount[p.marca] = (marcasCount[p.marca] || 0) + 1;
+            }
+        });
+        const marcasArray = Object.keys(marcasCount).map(m => ({
+            marca: m,
+            count: marcasCount[m]
+        })).sort((a,b) => b.count - a.count);
+        
+        const itemsHtml = marcasArray.map(m => `
+        <div class="kpi-modal-item" style="cursor:default;">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">${m.marca}</div>
+                <div class="kpi-item-subtitle">Marca registrada en catálogo</div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="color:var(--primary-red);">${m.count} productos</div>
+            </div>
+        </div>
+        `).join('');
+        
+        window.openKPIDetailModal(title, 'Distribución de productos por marca.', itemsHtml);
+        return;
+    }
+    
+    const itemsHtml = productosFiltrados.map(p => {
+        const ventaAsociada = globalSalesCache.find(v => v.producto_id?.toString() === p.id.toString());
+        const rs = getProductRealStatus(p, ventaAsociada);
+        const stockHtml = p.estado_producto === 'Disponible entrega inmediata' 
+            ? `<span style="color:var(--success-green); font-weight:bold;">Talla: ${p.talla||'N/A'}</span>`
+            : `<span>Talla: ${p.talla||'N/A'}</span>`;
+            
+        return `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">${p.nombre_producto || 'Sin Nombre'} <span style="font-size:0.8em;opacity:0.6;font-weight:normal;margin-left:6px;">${p.marca||''}</span></div>
+                <div class="kpi-item-subtitle">${stockHtml} | Proveedor: ${p.proveedor || 'N/A'}</div>
+                <div class="kpi-item-info">
+                    <span style="color:${rs.color};">${rs.label}</span>
+                </div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value">${formatCOP(p.precio_cop)}</div>
+                <button class="btn-action" onclick="window.modalDetalleProducto('${p.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ficha Prod.</button>
+            </div>
+        </div>
+        `;
+    }).join('');
+    
+    window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
 // ─── VIEW: Grid ─────────────────────────────────────────────────────────────────
@@ -399,6 +472,12 @@ export const renderInventory = async (renderLayout, navigateTo) => {
         { id:'precios',   icon:'📊', label:'Precios' },
     ];
 
+    // Pagination State
+    const _page = parseInt(localStorage.getItem('inventory_page') || '1');
+    const _rpp  = parseInt(localStorage.getItem('inventory_rpp') || '10');
+    const filteredList = filterByTab(list, _invActiveTab);
+    const pagedList = (_invActiveView === 'grid' || _invActiveView === 'tabla') ? paginate(filteredList, _page, _rpp) : filteredList;
+
     const html = `
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.8rem;">
         <div>
@@ -423,15 +502,18 @@ export const renderInventory = async (renderLayout, navigateTo) => {
         </div>
         <div class="purchase-view-switcher">
             ${views.map(v=>`
-            <button class="pv-tab${v.id==='grid'?' active':''}" data-inv-view="${v.id}" onclick="window.switchInvView('${v.id}')">
+            <button class="pv-tab${v.id===_invActiveView?' active':''}" data-inv-view="${v.id}" onclick="window.switchInvView('${v.id}')">
                 ${v.icon} ${v.label}
             </button>`).join('')}
         </div>
     </div>
 
     <div id="inv-view-area">
-        ${renderViewGrid(filterByTab(list, _invActiveTab))}
-    </div>`;
+        ${_invActiveView === 'grid' ? renderViewGrid(pagedList) : 
+          _invActiveView === 'tabla' ? renderViewTabla(pagedList) : 
+          injectInventoryView(_invActiveView)}
+    </div>
+    ${(_invActiveView === 'grid' || _invActiveView === 'tabla') ? renderPagination(filteredList.length, _page, _rpp, 'inventory') : ''}`;
 
     renderLayout(html);
     setTimeout(()=>{ attachInvSearch(); attachGroupToggles(); }, 150);
@@ -576,10 +658,15 @@ export const createProductModal = async (id, navigateTo) => {
         try {
             if(uploadFile) finalUrl=await uploadImageToSupabase(uploadFile);
             let st_mde=parseInt(fd.get('smde')||'0');
+            const pcop=parseInt(fd.get('pcop')||'0');
             const estProd=fd.get('est');
+            const catProd=fd.get('cat')||'';
+            const tallaProd=fd.get('tal')||'';
+            if(pcop <= 0){btn.disabled=false;btn.innerText=origText;return showToast('Bloqueado: El Precio de Venta (COP) es obligatorio y debe ser mayor a 0','error');}
+            if((catProd==='Tenis'||catProd==='Ropa') && !tallaProd){btn.disabled=false;btn.innerText=origText;return showToast('Bloqueado: La Talla es obligatoria para Tenis y Ropa','error');}
             if(estProd==='Pendiente de compra') st_mde=0;
             if(estProd==='Disponible entrega inmediata'&&st_mde<=0){btn.disabled=false;btn.innerText=origText;return showToast('Bloqueado: Stock debe ser > 0 para disponibles','error');}
-            const payload={id:id||Date.now().toString(),nombre_producto:fd.get('nom'),sku:fd.get('sku'),marca:fd.get('mrc'),categoria:fd.get('cat')||'Generico',genero:fd.get('gen')||'',talla:fd.get('tal')||'',tienda_cotizacion:fd.get('ori')||'',precio_usd:fd.get('pusd'),precio_cop:fd.get('pcop'),stock_medellin:st_mde,stock_miami:data.stock_miami||0,stock_transito:data.stock_transito||0,url_imagen:finalUrl,link_producto:fd.get('link')||'',estado_producto:estProd};
+            const payload={id:id||Date.now().toString(),nombre_producto:fd.get('nom'),sku:fd.get('sku'),marca:fd.get('mrc'),categoria:fd.get('cat')||'Generico',genero:fd.get('gen')||'',talla:fd.get('tal')||'',tienda_cotizacion:fd.get('ori')||'',precio_usd:fd.get('pusd'),precio_cop:pcop,stock_medellin:st_mde,stock_miami:data.stock_miami||0,stock_transito:data.stock_transito||0,url_imagen:finalUrl,link_producto:fd.get('link')||'',estado_producto:estProd};
             btn.innerText='Sincronizando...';
             await db.postData('Productos',payload,mode);
             window.closeModal(); showToast('✅ Producto actualizado','success'); navigateTo('inventory');

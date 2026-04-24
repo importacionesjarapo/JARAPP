@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { renderError, formatCOP, downloadExcel } from '../utils.js';
+import { renderError, formatCOP, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let _cliCache = null;
@@ -39,12 +39,79 @@ const renderCRMKPI = (list, clientStats) => {
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
-        <div class="kpi-strip-card">
+        <div class="kpi-strip-card" onclick="window.openClientsKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
         </div>`).join('')}
     </div>`;
+};
+
+window.openClientsKPI = (kpiName) => {
+    if (!_cliCache) return;
+    const { list, clientStats } = _cliCache;
+    
+    let title = kpiName;
+    let subtitle = '';
+    
+    // Asignamos stats a cada cliente para filtrar fácil
+    let clientesFiltrados = list.map(c => ({
+        ...c,
+        stats: clientStats[c.id] || { count: 0, total_gastado: 0, saldo_pendiente: 0 }
+    }));
+    
+    if (kpiName === 'Total Clientes') {
+        subtitle = 'Todos los clientes registrados en el sistema.';
+    } else if (kpiName === 'LTV Total (Facturado)') {
+        clientesFiltrados = clientesFiltrados.filter(c => c.stats.total_gastado > 0);
+        clientesFiltrados.sort((a,b) => b.stats.total_gastado - a.stats.total_gastado);
+        subtitle = 'Clientes que han generado ingresos, ordenados por LTV.';
+    } else if (kpiName === 'Clientes Top (>500K)') {
+        clientesFiltrados = clientesFiltrados.filter(c => c.stats.total_gastado > 500000);
+        clientesFiltrados.sort((a,b) => b.stats.total_gastado - a.stats.total_gastado);
+        subtitle = 'Mejores clientes con compras acumuladas superiores a $500,000 COP.';
+    } else if (kpiName === 'Con Saldo Pendiente') {
+        clientesFiltrados = clientesFiltrados.filter(c => c.stats.saldo_pendiente > 0);
+        clientesFiltrados.sort((a,b) => b.stats.saldo_pendiente - a.stats.saldo_pendiente);
+        subtitle = 'Clientes que actualmente tienen deuda abierta.';
+    } else if (kpiName === 'Ciudades') {
+        subtitle = 'Clientes ordenados alfabéticamente por ciudad.';
+        clientesFiltrados = clientesFiltrados.filter(c => c.ciudad);
+        clientesFiltrados.sort((a,b) => a.ciudad.localeCompare(b.ciudad));
+    }
+    
+    const itemsHtml = clientesFiltrados.map(c => {
+        const stats = c.stats;
+        
+        let metaHtml = '';
+        if (kpiName === 'Con Saldo Pendiente') {
+            metaHtml = `<div style="color:var(--primary-red);">Debe: ${formatCOP(stats.saldo_pendiente)}</div>`;
+        } else if (kpiName === 'Ciudades') {
+            metaHtml = `<div>LTV: ${formatCOP(stats.total_gastado)}</div>`;
+        } else {
+            metaHtml = `<div>LTV: ${formatCOP(stats.total_gastado)}</div>`;
+        }
+        
+        return `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">${c.nombre || 'Sin Nombre'}</div>
+                <div class="kpi-item-subtitle">${c.ciudad || 'Ciudad no registrada'} | ID: ${c.numero_identificacion || 'N/A'}</div>
+                <div class="kpi-item-info">
+                    <span>${stats.count} pedido(s)</span>
+                    <span style="opacity:0.5;">|</span>
+                    <span style="color:var(--success-green);">${c.whatsapp ? c.whatsapp : 'Sin WhatsApp'}</span>
+                </div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="font-size:0.9rem;">${metaHtml}</div>
+                <button class="btn-action" onclick="window.modalDetalleCliente('${c.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ficha Cliente</button>
+            </div>
+        </div>
+        `;
+    }).join('');
+    
+    window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
 // ─── VIEW: Tabla ───────────────────────────────────────────────────────────────
@@ -445,8 +512,21 @@ export const renderClients = async (renderLayout, navigateTo) => {
                 <div class="modal-info-box" style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
                     <div><p style="margin:0 0 5px;font-size:0.75rem;opacity:0.6;">📱 WhatsApp</p><strong style="font-size:1.1rem;color:var(--success-green);">${c.whatsapp||'No registrado'}</strong></div>
                     <div><p style="margin:0 0 5px;font-size:0.75rem;opacity:0.6;">🏢 Lead Kommo</p><strong style="font-size:1.1rem;">${c.numero_lead_kommo||'Sin vincular'}</strong></div>
-                    <div><p style="margin:0 0 5px;font-size:0.75rem;opacity:0.6;">🏙️ Ciudad</p><strong style="font-size:1.1rem;">${c.ciudad||'No registrada'}</strong></div>
-                    <div><p style="margin:0 0 5px;font-size:0.75rem;opacity:0.6;">📍 Dirección</p><strong style="font-size:1.1rem;">${c.direccion||'No registrada'}</strong></div>
+                </div>
+
+                <h4 style="margin:0 0 10px 0;opacity:0.5;text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">Histórico de Direcciones</h4>
+                <div style="background:var(--glass-hover); border:1px solid var(--glass-border); border-radius:12px; padding:1rem; margin-bottom:1.5rem;">
+                    ${(c.direccion || '').split(' | ').reverse().map((d, i) => {
+                        const isMain = i === 0;
+                        return `
+                        <div style="display:flex; align-items:center; gap:12px; padding:8px 0; ${!isMain ? 'border-top:1px solid rgba(255,255,255,0.05); opacity:0.7;' : ''}">
+                            <div style="width:8px; height:8px; border-radius:50%; background:${isMain ? 'var(--primary-red)' : 'var(--glass-border)'}; box-shadow:${isMain ? '0 0 8px var(--primary-red)' : 'none'};"></div>
+                            <div style="flex:1;">
+                                <div style="font-size:0.95rem; font-weight:${isMain ? '700' : '400'};">${d}</div>
+                                ${isMain ? '<span style="font-size:0.65rem; color:var(--primary-red); font-weight:700; text-transform:uppercase; letter-spacing:1px;">Actual / Principal</span>' : ''}
+                            </div>
+                        </div>`;
+                    }).join('') || '<div style="opacity:0.4; text-align:center; padding:10px;">Sin direcciones registradas</div>'}
                 </div>
                 <h4 style="margin:0 0 10px;opacity:0.5;text-transform:uppercase;font-size:0.75rem;letter-spacing:1px;">Estadísticas CRM</h4>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
@@ -478,6 +558,11 @@ export const renderClients = async (renderLayout, navigateTo) => {
         { id:'timeline', icon:'📅', label:'Timeline CRM' },
     ];
 
+    // Pagination State
+    const _page = parseInt(localStorage.getItem('clients_page') || '1');
+    const _rpp  = parseInt(localStorage.getItem('clients_rpp') || '10');
+    const pagedList = _cliActiveView === 'tabla' ? paginate(list, _page, _rpp) : list;
+
     const html = `
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;">
         <div>
@@ -496,14 +581,15 @@ export const renderClients = async (renderLayout, navigateTo) => {
 
     <div class="purchase-view-switcher" style="margin-bottom:1.5rem;">
         ${tabs.map(t => `
-        <button class="pv-tab${t.id==='tabla'?' active':''}" data-cli-view="${t.id}" onclick="window.switchClientView('${t.id}')">
+        <button class="pv-tab${t.id===_cliActiveView?' active':''}" data-cli-view="${t.id}" onclick="window.switchClientView('${t.id}')">
             ${t.icon} ${t.label}
         </button>`).join('')}
     </div>
 
     <div id="cli-view-area">
-        ${renderViewTabla(list, clientStats)}
-    </div>`;
+        ${_cliActiveView === 'tabla' ? renderViewTabla(pagedList, clientStats) : injectClientView(_cliActiveView)}
+    </div>
+    ${_cliActiveView === 'tabla' ? renderPagination(list.length, _page, _rpp, 'clients') : ''}`;
 
     renderLayout(html);
     setTimeout(() => { attachCliSearch(); attachGroupToggles(); }, 150);
@@ -529,13 +615,42 @@ export const createClientModal = async (id, navigateTo) => {
         <form id="form-crud" style="display:flex;flex-direction:column;gap:1.2rem;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                <div><label>Nombre Completo</label><input type="text" name="nombre" value="${data.nombre}" required></div>
-               <div><label>Identificación (C.C/NIT)</label><input type="text" name="nid" value="${data.numero_identificacion}" required></div>
+               <div><label>Identificación (C.C/NIT)</label><input type="text" name="nid" value="${data.numero_identificacion}"></div>
             </div>
+            ${id ? `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+               <div>
+                  <div style="font-size:0.8rem;opacity:0.7;margin-bottom:5px;">Kommo Actuales:</div>
+                  <div style="background:var(--glass-hover);padding:10px;border-radius:8px;margin-bottom:10px;white-space:pre-wrap;font-size:0.85rem;border:1px solid var(--glass-border);">${data.numero_lead_kommo||'Ninguno'}</div>
+                  <input type="hidden" name="kommo" value="${data.numero_lead_kommo||''}">
+                  <label>Nuevo Kommo (Opcional)</label>
+                  <input type="text" name="new_kommo" value="">
+               </div>
+               <div>
+                  <div style="font-size:0.8rem;opacity:0.7;margin-bottom:5px;">WhatsApp Actuales:</div>
+                  <div style="background:var(--glass-hover);padding:10px;border-radius:8px;margin-bottom:10px;white-space:pre-wrap;font-size:0.85rem;border:1px solid var(--glass-border);">${data.whatsapp||'Ninguno'}</div>
+                  <input type="hidden" name="wa" value="${data.whatsapp||''}">
+                  <label>Nuevo WhatsApp (Opcional)</label>
+                  <input type="text" name="new_wa" value="">
+               </div>
+            </div>
+            ` : `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                <div><label>ID Lead Kommo (Opcional)</label><input type="text" name="kommo" value="${data.numero_lead_kommo}"></div>
                <div><label>WhatsApp</label><input type="text" name="wa" value="${data.whatsapp}" required></div>
             </div>
+            `}
+            ${id ? `
+            <div>
+               <div style="font-size:0.8rem;opacity:0.7;margin-bottom:5px;">Direcciones Actuales:</div>
+               <div style="background:var(--glass-hover);padding:10px;border-radius:8px;margin-bottom:10px;white-space:pre-wrap;font-size:0.85rem;border:1px solid var(--glass-border);">${data.direccion||'Ninguna'}</div>
+               <input type="hidden" name="dir" value="${data.direccion||''}">
+               <label>Agregar Nueva Dirección (Opcional)</label>
+               <input type="text" name="new_dir" value="" placeholder="Ej. Carrera 45 # 12-34">
+            </div>
+            ` : `
             <div><label>Dirección Física de Entrega</label><input type="text" name="dir" value="${data.direccion}" required></div>
+            `}
             <div><label>Ciudad de Residencia</label><input type="text" name="ciu" value="${data.ciudad}" required></div>
             <div style="display:flex;gap:15px;margin-top:1.5rem;">
                <button type="submit" class="btn-primary" style="flex:1;">Guardar en CRM</button>
@@ -547,10 +662,79 @@ export const createClientModal = async (id, navigateTo) => {
     document.getElementById('form-crud').onsubmit = async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const payload = { id:id||Date.now().toString(), nombre:fd.get('nombre'), numero_identificacion:fd.get('nid'), numero_lead_kommo:fd.get('kommo'), direccion:fd.get('dir'), ciudad:fd.get('ciu'), whatsapp:fd.get('wa'), fecha_registro:data.fecha_registro||new Date().toLocaleDateString() };
         const btn = e.target.querySelector('button[type="submit"]');
         btn.disabled=true; btn.innerText='Sincronizando...';
-        try { await db.postData('Clientes',payload,mode); window.closeModal(); navigateTo('clients'); }
+
+        const nid = fd.get('nid')||'';
+        let kommo = fd.get('kommo')||'';
+        let wa = fd.get('wa')||'';
+        let dir = fd.get('dir')||'';
+        const new_dir = fd.get('new_dir');
+        const new_wa = fd.get('new_wa');
+        const new_kommo = fd.get('new_kommo');
+
+        try { 
+            const list2 = await db.fetchData('Clientes');
+
+            if (mode === 'INSERT') {
+                const existing = list2.find(c => 
+                    (nid && c.numero_identificacion === nid) || 
+                    (kommo && c.numero_lead_kommo && c.numero_lead_kommo.includes(kommo)) || 
+                    (wa && c.whatsapp && c.whatsapp.includes(wa))
+                );
+
+                if (existing) {
+                    window.showCustomConfirm(
+                        'Cliente Duplicado',
+                        `El cliente ya existe (Nombre: ${existing.nombre}). ¿Deseas actualizarlo y agregar los nuevos datos a su historial?`,
+                        async () => {
+                            if (nid && !existing.numero_identificacion) existing.numero_identificacion = nid;
+                            if (wa && (!existing.whatsapp || !existing.whatsapp.includes(wa))) existing.whatsapp = existing.whatsapp ? existing.whatsapp + ' | ' + wa : wa;
+                            if (kommo && (!existing.numero_lead_kommo || !existing.numero_lead_kommo.includes(kommo))) existing.numero_lead_kommo = existing.numero_lead_kommo ? existing.numero_lead_kommo + ' | ' + kommo : kommo;
+                            
+                            const fullDir = `${fd.get('dir')} (${fd.get('ciu')})`;
+                            if (dir && (!existing.direccion || !existing.direccion.includes(fd.get('dir')))) {
+                                existing.direccion = existing.direccion ? existing.direccion + ' | ' + fullDir : fullDir;
+                            }
+                            existing.ciudad = fd.get('ciu'); // Actualizamos la ciudad principal
+                            
+                            await db.postData('Clientes', existing, 'UPDATE');
+                            window.closeModal(); navigateTo('clients');
+                        },
+                        () => {
+                            btn.disabled=false; btn.innerText='Guardar en CRM';
+                        }
+                    );
+                    return;
+                }
+            } else if (mode === 'UPDATE') {
+                if (new_dir) {
+                    const fullDir = `${new_dir} (${fd.get('ciu')})`;
+                    dir = dir ? dir + ' | ' + fullDir : fullDir;
+                }
+                if (new_wa) wa = wa ? wa + ' | ' + new_wa : new_wa;
+                if (new_kommo) kommo = kommo ? kommo + ' | ' + new_kommo : new_kommo;
+            }
+
+            // Para nuevos registros, formatear la dirección inicial
+            if (mode === 'INSERT' && dir && !dir.includes('(')) {
+                dir = `${dir} (${fd.get('ciu')})`;
+            }
+
+            const payload = { 
+                id:id||Date.now().toString(), 
+                nombre:fd.get('nombre'), 
+                numero_identificacion:nid, 
+                numero_lead_kommo:kommo, 
+                direccion:dir, 
+                ciudad:fd.get('ciu'), 
+                whatsapp:wa, 
+                fecha_registro:data.fecha_registro||new Date().toLocaleDateString() 
+            };
+            
+            await db.postData('Clientes',payload,mode); 
+            window.closeModal(); navigateTo('clients'); 
+        }
         catch(err){ alert(err.message); btn.disabled=false; btn.innerText='Reintentar'; }
     };
 };

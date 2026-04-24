@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel } from '../utils.js';
+import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 // ─── Cached data (persists across view switches without re-fetching) ───────────
 let _cache = null;
@@ -87,12 +87,89 @@ const renderKPIStrip = (compras) => {
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
-        <div class="kpi-strip-card">
+        <div class="kpi-strip-card" onclick="window.openPurchasesKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
         </div>`).join('')}
     </div>`;
+};
+
+window.openPurchasesKPI = (kpiName) => {
+    if (!_cache) return;
+    const { productos, ventas, clientes, logisticaList } = _cache;
+    let title = kpiName;
+    let subtitle = '';
+    let itemsHtml = '';
+    
+    let targetList = [..._purFiltered];
+    
+    if (kpiName === 'Total Invertido') {
+        subtitle = 'Desglose de compras ordenadas por valor invertido (USD).';
+        targetList.sort((a,b) => parseFloat(b.costo_usd||0) - parseFloat(a.costo_usd||0));
+    } else if (kpiName === 'Total Compras') {
+        subtitle = 'Todas las compras realizadas en el período seleccionado.';
+        targetList.sort((a,b) => new Date(b.fecha_pedido||0) - new Date(a.fecha_pedido||0));
+    } else if (kpiName === 'Para Encargos') {
+        subtitle = 'Compras vinculadas a una orden de venta de cliente.';
+        targetList = targetList.filter(c => c.venta_id && c.venta_id !== '');
+    } else if (kpiName === 'Para Stock') {
+        subtitle = 'Compras para inventario propio sin cliente asignado.';
+        targetList = targetList.filter(c => !c.venta_id || c.venta_id === '');
+    } else if (kpiName === 'Proveedores') {
+        subtitle = 'Agrupación de compras por proveedor o tienda de origen.';
+        const groups = {};
+        targetList.forEach(c => {
+            const key = (c.proveedor || 'Sin Proveedor').trim();
+            if (!groups[key]) groups[key] = { count: 0, total: 0 };
+            groups[key].count += 1;
+            groups[key].total += parseFloat(c.costo_usd||0);
+        });
+        const sorted = Object.entries(groups).sort((a,b) => b[1].total - a[1].total);
+        itemsHtml = sorted.map(([prov, data]) => `
+        <div class="kpi-modal-item" style="cursor:default;">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">${prov}</div>
+                <div class="kpi-item-subtitle">${data.count} compra(s) registrada(s)</div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="color:var(--primary-red);">${formatUSD(data.total)}</div>
+            </div>
+        </div>`).join('');
+        
+        window.openKPIDetailModal(title, subtitle, itemsHtml);
+        return;
+    }
+    
+    itemsHtml = targetList.map(c => {
+        const pData = productos.find(p => p.id?.toString() === c.producto_id?.toString()) || {};
+        const vData = c.venta_id ? ventas.find(v => v.id?.toString() === c.venta_id?.toString()) : null;
+        const cData = vData?.cliente_id ? clientes.find(cl => cl.id?.toString() === vData.cliente_id?.toString()) : null;
+        
+        const realStatus = c.venta_id
+            ? getLogisticaFase(c.venta_id, logisticaList, c.estado_compra || 'En proceso USA')
+            : (c.estado_compra || 'Stock USA');
+        const statusColor = c.venta_id
+            ? getLogisticaColor(realStatus)
+            : (realStatus.includes('Entregado') ? 'var(--success-green)' : 'var(--info-blue)');
+            
+        return `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">#${c.id.toString().slice(-4)} | ${pData.nombre_producto || c.proveedor || 'Sin Nombre'}</div>
+                <div class="kpi-item-subtitle">${c.fecha_pedido || 'N/A'} | ${c.venta_id ? ('Encargo: ' + (cData?.nombre || 'Desconocido')) : 'Stock Propio'}</div>
+                <div class="kpi-item-info">
+                    <span style="color:${statusColor};">${realStatus}</span>
+                </div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="color:var(--primary-red);">${formatUSD(c.costo_usd)}</div>
+                <button class="btn-action" onclick="window.modalDetalleCompra('${c.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Detalles</button>
+            </div>
+        </div>`;
+    }).join('');
+    
+    window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
 // ─── View 1: Tabla (mejorada) ───────────────────────────────────────────────────
@@ -569,6 +646,11 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         { id: 'timeline', icon: '📅', label: 'Línea de Tiempo' },
     ];
 
+    // Pagination State
+    const _page = parseInt(localStorage.getItem('purchases_page') || '1');
+    const _rpp  = parseInt(localStorage.getItem('purchases_rpp') || '10');
+    const pagedList = _currentView === 'tabla' ? paginate(_purFiltered, _page, _rpp) : _purFiltered;
+
     const html = `
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.5rem; flex-wrap:wrap; gap:15px;">
         <div>
@@ -608,8 +690,9 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
       <!-- Active view panel -->
       <div id="purchase-view-container">
-        ${getPanelHTML(_currentView, { ..._cache, compras: _purFiltered })}
+        ${getPanelHTML(_currentView, { ..._cache, compras: pagedList })}
       </div>
+      ${_currentView === 'tabla' ? renderPagination(_purFiltered.length, _page, _rpp, 'purchases') : ''}
     `;
 
     renderLayout(html);

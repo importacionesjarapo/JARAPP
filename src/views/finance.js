@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { formatCOP, formatUSD, renderError, showToast, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase, downloadExcel } from '../utils.js';
+import { formatCOP, formatUSD, renderError, showToast, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 // ─── Cached data ───────────────────────────────────────────────────────────────
 let _finCache = null;
@@ -53,12 +53,88 @@ const renderFinKPI = (ventas, gastos, compras) => {
     return `
     <div class="kpi-strip" style="grid-template-columns:repeat(6,1fr);">
         ${kpis.map(k => `
-        <div class="kpi-strip-card">
+        <div class="kpi-strip-card" onclick="window.openFinanceKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
         </div>`).join('')}
     </div>`;
+};
+
+window.openFinanceKPI = (kpiName) => {
+    let title = kpiName;
+    let subtitle = '';
+    let itemsHtml = '';
+    
+    if (kpiName === 'Ingresos Reales') {
+        subtitle = 'Ventas con abonos registrados en el período.';
+        const ventasConAbonos = localVentasFiltered.filter(v => parseFloat(v.abonos_acumulados||0) > 0);
+        ventasConAbonos.sort((a,b) => parseFloat(b.abonos_acumulados||0) - parseFloat(a.abonos_acumulados||0));
+        
+        itemsHtml = ventasConAbonos.map(v => `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">Orden #${v.id?.toString().slice(-4)}</div>
+                <div class="kpi-item-subtitle">${normDate(v.fecha)||'Sin fecha'} | ${v.tipo_venta||'Venta'}</div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="color:var(--success-green);">${formatCOP(v.abonos_acumulados)}</div>
+                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ver</button>
+            </div>
+        </div>`).join('');
+    } else if (kpiName === 'Facturación Total') {
+        subtitle = 'Todas las ventas registradas en el período.';
+        const sorted = [...localVentasFiltered].sort((a,b) => parseFloat(b.valor_total_cop||0) - parseFloat(a.valor_total_cop||0));
+        
+        itemsHtml = sorted.map(v => `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">Orden #${v.id?.toString().slice(-4)}</div>
+                <div class="kpi-item-subtitle">${normDate(v.fecha)||'Sin fecha'} | ${v.tipo_venta||'Venta'}</div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="color:var(--info-blue);">${formatCOP(v.valor_total_cop)}</div>
+                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ver</button>
+            </div>
+        </div>`).join('');
+    } else if (kpiName === 'Cartera Pendiente') {
+        subtitle = 'Ventas con saldos por cobrar.';
+        const pending = localVentasFiltered.filter(v => parseFloat(v.saldo_pendiente||0) > 0);
+        pending.sort((a,b) => parseFloat(b.saldo_pendiente||0) - parseFloat(a.saldo_pendiente||0));
+        
+        itemsHtml = pending.map(v => `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">Orden #${v.id?.toString().slice(-4)}</div>
+                <div class="kpi-item-subtitle">${normDate(v.fecha)||'Sin fecha'} | Total: ${formatCOP(v.valor_total_cop)}</div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="color:var(--primary-red);">${formatCOP(v.saldo_pendiente)}</div>
+                <button class="btn-action" onclick="window.modalAbono('${v.id}', ${v.saldo_pendiente}); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">💳 Abonar</button>
+            </div>
+        </div>`).join('');
+    } else if (kpiName === 'Total Egresos') {
+        subtitle = 'Gastos operativos y compras de inventario.';
+        const combined = [
+            ...localGastosFiltered.map(g => ({...g, sysTipo:'Gasto', val:parseFloat(g.valor_cop||0), date:normDate(g.fecha)})),
+            ...localComprasFiltered.map(c => ({...c, sysTipo:'Compra USA', val:parseFloat(c.costo_cop||0), date:normDate(c.fecha_pedido||c.fecha_registro)}))
+        ].sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+        
+        itemsHtml = combined.map(x => `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">${x.sysTipo === 'Gasto' ? (x.concepto||x.tipo_gasto) : x.proveedor}</div>
+                <div class="kpi-item-subtitle">${x.date||'Sin fecha'} | ${x.sysTipo}</div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value" style="color:var(--primary-red);">${formatCOP(x.val)}</div>
+            </div>
+        </div>`).join('');
+    } else if (kpiName === 'Balance de Caja' || kpiName === 'Margen Operativo') {
+        itemsHtml = `<div style="padding:2rem;text-align:center;opacity:0.6;">Este es un KPI calculado en base al total de Ingresos Reales y Total Egresos.</div>`;
+    }
+    
+    window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
 // ─── INGRESOS: Vista Tabla ─────────────────────────────────────────────────────
@@ -543,6 +619,22 @@ export const renderFinance = async (renderLayout, navigateTo) => {
         { id:'timeline', icon:'📅', label:'Timeline' },
     ];
 
+    // Pagination State
+    const _page = parseInt(localStorage.getItem('finance_page') || '1');
+    const _rpp  = parseInt(localStorage.getItem('finance_rpp') || '10');
+
+    // Filter current list based on active tab
+    const currentList = _finActiveMain === 'ingresos' 
+        ? localVentasFiltered 
+        : [
+            ...localGastosFiltered.map(g => ({...g, es_compra:false})),
+            ...localComprasFiltered.filter(c => parseFloat(c.costo_cop||0) > 0).map(c => ({...c, es_compra:true}))
+          ];
+
+    const pagedList = (_finActiveMain === 'ingresos' ? _finActiveIngView === 'tabla' : _finActiveEgrView === 'tabla')
+        ? paginate(currentList, _page, _rpp)
+        : currentList;
+
     const html = `
     <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.5rem; flex-wrap:wrap; gap:15px;">
         <div>
@@ -571,20 +663,26 @@ export const renderFinance = async (renderLayout, navigateTo) => {
     <!-- Main tabs: Ingresos / Egresos -->
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.8rem; margin-bottom:1rem;">
         <div class="purchase-view-switcher">
-            <button class="pv-tab fin-main-tab active" data-main="ingresos" onclick="window.switchFinMain('ingresos')">🟢 Ingresos</button>
-            <button class="pv-tab fin-main-tab" data-main="egresos" onclick="window.switchFinMain('egresos')">🔴 Egresos</button>
+            <button class="pv-tab fin-main-tab${_finActiveMain==='ingresos'?' active':''}" data-main="ingresos" onclick="window.switchFinMain('ingresos')">🟢 Ingresos</button>
+            <button class="pv-tab fin-main-tab${_finActiveMain==='egresos'?' active':''}" data-main="egresos" onclick="window.switchFinMain('egresos')">🔴 Egresos</button>
         </div>
         <div class="purchase-view-switcher" id="fin-sub-tabs">
-            ${ingSubTabs.map(t => `
-            <button class="pv-tab fin-sub-tab${t.id==='tabla'?' active':''}" data-sub="${t.id}" onclick="window.switchFinSub('${t.id}')">
+            ${(_finActiveMain === 'ingresos' ? ingSubTabs : egrSubTabs).map(t => `
+            <button class="pv-tab fin-sub-tab${t.id===(_finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView)?' active':''}" data-sub="${t.id}" onclick="window.switchFinSub('${t.id}')">
                 ${t.icon} ${t.label}
             </button>`).join('')}
         </div>
     </div>
 
     <div id="fin-panel">
-        ${getFinPanelHTML('ingresos','tabla',_finCache)}
-    </div>`;
+        ${getFinPanelHTML(_finActiveMain, (_finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView), {
+            ventas: _finActiveMain === 'ingresos' ? pagedList : localVentasFiltered,
+            gastos: _finActiveMain === 'egresos' ? pagedList.filter(x => !x.es_compra) : localGastosFiltered,
+            compras: _finActiveMain === 'egresos' ? pagedList.filter(x => x.es_compra) : localComprasFiltered,
+            logistica: _finCache.logistica
+        })}
+    </div>
+    ${(_finActiveMain === 'ingresos' ? _finActiveIngView === 'tabla' : _finActiveEgrView === 'tabla') ? renderPagination(currentList.length, _page, _rpp, 'finance') : ''}`;
 
     renderLayout(html);
     setTimeout(() => { attachFinSearch(); attachGroupToggles(); }, 150);

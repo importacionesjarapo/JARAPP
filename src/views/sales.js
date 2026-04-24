@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel } from '../utils.js';
+import { formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let localVentasCache = [];
@@ -48,12 +48,73 @@ const renderSalesKPI = (ventas) => {
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
-        <div class="kpi-strip-card">
+        <div class="kpi-strip-card" onclick="window.openSalesKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
         </div>`).join('')}
     </div>`;
+};
+
+window.openSalesKPI = (kpiName) => {
+    let title = kpiName;
+    let subtitle = '';
+    let ventasFiltradas = [...localVentasFiltered].reverse(); // Recientes primero
+    
+    if (kpiName === 'Facturación Total') {
+        subtitle = 'Todas las ventas que suman a la facturación total.';
+    } else if (kpiName === 'Abonos Recibidos') {
+        ventasFiltradas = ventasFiltradas.filter(v => (parseFloat(v.abonos_acumulados)||0) > 0);
+        subtitle = 'Ventas que tienen abonos registrados.';
+    } else if (kpiName === 'Saldos Pendientes') {
+        ventasFiltradas = ventasFiltradas.filter(v => (parseFloat(v.saldo_pendiente)||0) > 0);
+        subtitle = 'Ventas con saldo pendiente por pagar.';
+    } else if (kpiName === 'Encargos Internacionales') {
+        ventasFiltradas = ventasFiltradas.filter(v => v.tipo_venta === 'Encargo');
+        subtitle = 'Ventas marcadas como encargo internacional.';
+    } else if (kpiName === 'Ventas Stock Local') {
+        ventasFiltradas = ventasFiltradas.filter(v => v.tipo_venta !== 'Encargo');
+        subtitle = 'Ventas correspondientes a stock local.';
+    }
+    
+    const itemsHtml = ventasFiltradas.map(v => {
+        const c = localClientesCache.find(x => x.id.toString() === v.cliente_id?.toString());
+        const prod = localProductosCache.find(p => p.id.toString() === v.producto_id?.toString());
+        const total = parseFloat(v.valor_total_cop)||0;
+        const saldo = parseFloat(v.saldo_pendiente)||0;
+        const abono = parseFloat(v.abonos_acumulados)||0;
+        const date = normDate(v.fecha);
+        
+        let metaHtml = '';
+        if (kpiName === 'Saldos Pendientes') {
+            metaHtml = `<div style="color:var(--primary-red);">Debe: ${formatCOP(saldo)}</div>`;
+        } else if (kpiName === 'Abonos Recibidos') {
+            metaHtml = `<div style="color:var(--success-green);">Abonado: ${formatCOP(abono)}</div>`;
+        } else {
+            metaHtml = `<div>Total: ${formatCOP(total)}</div>`;
+        }
+        
+        return `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">Orden #${v.id.toString().slice(-4)} <span style="font-size:0.8em;opacity:0.6;font-weight:normal;margin-left:6px;">${date}</span></div>
+                <div class="kpi-item-subtitle">${c ? c.nombre : 'Cliente Desconocido'}</div>
+                <div class="kpi-item-info">
+                    <span>${prod ? prod.nombre_producto : 'Sin producto'}</span>
+                    <span style="opacity:0.5;">|</span>
+                    <span style="color:${v.tipo_venta==='Encargo'?'var(--warning-orange)':'var(--success-green)'}">${v.tipo_venta || 'Venta'}</span>
+                </div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value">${formatCOP(total)}</div>
+                ${metaHtml}
+                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ver Venta</button>
+            </div>
+        </div>
+        `;
+    }).join('');
+    
+    window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
 // ─── VIEW: Tabla ───────────────────────────────────────────────────────────────
@@ -194,23 +255,29 @@ const renderViewTipo = (ventas) => {
                 const fase  = getLogisticaFase(v.id, localLogisticaCache, v.estado_orden||'Procesando');
                 const faseCol = getLogisticaColor(fase);
                 return `
-                <div class="purchase-group-row" style="padding:0.8rem;background:var(--glass-hover);border-radius:10px;margin-bottom:8px;border:1px solid var(--glass-border);display:flex;flex-direction:column;gap:6px;">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-                        <div>
-                            <strong style="font-size:0.82rem;color:var(--primary-red);">#${v.id.toString().slice(-4)}</strong>
-                            <span style="font-size:0.75rem;opacity:0.6;margin-left:6px;">${normDate(v.fecha)||''}</span>
-                            <div style="font-size:0.8rem;margin-top:2px;">${c?c.nombre:'—'}</div>
-                            ${prod?`<div style="font-size:0.74rem;opacity:0.6;">${prod.marca} · ${prod.nombre_producto}</div>`:''}
+                <div class="purchase-group-row" style="padding:1rem;background:var(--glass-hover);border-radius:12px;margin-bottom:10px;border:1px solid var(--glass-border);display:flex;gap:15px;align-items:center;">
+                    <!-- Imagen -->
+                    ${prod && prod.url_imagen ? `<img src="${prod.url_imagen}" style="width:65px;height:65px;object-fit:cover;border-radius:8px;border:1px solid var(--glass-border);flex-shrink:0;">` : `<div style="width:65px;height:65px;background:var(--input-bg);border-radius:8px;border:1px dashed var(--glass-border);display:flex;align-items:center;justify-content:center;opacity:0.5;font-size:0.7rem;flex-shrink:0;">Sin Foto</div>`}
+                    
+                    <!-- Info Principal -->
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <strong style="font-size:0.9rem;color:var(--primary-red);">#${v.id.toString().slice(-4)}</strong>
+                            <span class="status-badge" style="background:${faseCol};font-size:0.6rem;padding:3px 8px;">${fase}</span>
+                            <span style="font-size:0.75rem;opacity:0.6;margin-left:auto;">${normDate(v.fecha)||''}</span>
                         </div>
-                        <div style="text-align:right;flex-shrink:0;">
-                            <span class="status-badge" style="background:${faseCol};font-size:0.58rem;">${fase}</span>
-                            <div style="font-weight:700;margin-top:4px;">${formatCOP(v.valor_total_cop||0)}</div>
-                            ${saldo>0?`<div style="font-size:0.72rem;color:var(--primary-red);">Debe: ${formatCOP(saldo)}</div>`:`<div style="font-size:0.72rem;color:var(--success-green);">✔ Pagado</div>`}
-                        </div>
+                        <div style="font-size:0.9rem;font-weight:700;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c?c.nombre:'—'}</div>
+                        ${prod?`<div style="font-size:0.8rem;opacity:0.7;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${prod.marca} · ${prod.nombre_producto}</div>`:''}
                     </div>
-                    <div style="display:flex;gap:6px;justify-content:flex-end;">
-                        <button class="btn-action" style="font-size:0.7rem;" onclick="window.modalDetalleVentaGlobal('${v.id}')">👁️ Ver</button>
-                        ${saldo>0?`<button class="btn-action" style="font-size:0.7rem;" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:''}
+                    
+                    <!-- Info Financiera y Acciones -->
+                    <div style="text-align:right;flex-shrink:0;min-width:130px;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;">
+                        <div style="font-weight:800;font-size:1rem;">${formatCOP(v.valor_total_cop||0)}</div>
+                        ${saldo>0?`<div style="font-size:0.8rem;color:var(--primary-red);font-weight:700;margin-top:4px;">Debe: ${formatCOP(saldo)}</div>`:`<div style="font-size:0.8rem;color:var(--success-green);font-weight:700;margin-top:4px;">✔ Pagado</div>`}
+                        <div style="display:flex;gap:8px;margin-top:10px;">
+                            <button class="btn-action" style="font-size:0.75rem;padding:5px 10px;" onclick="window.modalDetalleVentaGlobal('${v.id}')">👁️ Ver</button>
+                            ${saldo>0?`<button class="btn-action" style="font-size:0.75rem;padding:5px 10px;" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:''}
+                        </div>
                     </div>
                 </div>`;
             }).join('')}
@@ -510,6 +577,11 @@ export const renderSales = async (renderLayout, navigateTo) => {
         { id:'timeline',   icon:'📅', label:'Timeline' },
     ];
 
+    // Pagination State
+    const _page = parseInt(localStorage.getItem('sales_page') || '1');
+    const _rpp  = parseInt(localStorage.getItem('sales_rpp') || '10');
+    const pagedList = _salesActiveView === 'tabla' ? paginate(localVentasFiltered, _page, _rpp) : localVentasFiltered;
+
     const html = `
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:15px;">
         <div>
@@ -537,14 +609,15 @@ export const renderSales = async (renderLayout, navigateTo) => {
 
     <div class="purchase-view-switcher" style="margin-bottom:1.5rem;">
         ${tabs.map(t => `
-        <button class="pv-tab${t.id==='tabla'?' active':''}" data-sale-view="${t.id}" onclick="window.switchSalesView('${t.id}')">
+        <button class="pv-tab${t.id===_salesActiveView?' active':''}" data-sale-view="${t.id}" onclick="window.switchSalesView('${t.id}')">
             ${t.icon} ${t.label}
         </button>`).join('')}
     </div>
 
     <div id="sales-view-area">
-        ${renderViewTabla(localVentasFiltered)}
-    </div>`;
+        ${_salesActiveView === 'tabla' ? renderViewTabla(pagedList) : injectSalesView(_salesActiveView)}
+    </div>
+    ${_salesActiveView === 'tabla' ? renderPagination(localVentasFiltered.length, _page, _rpp, 'sales') : ''}`;
 
     renderLayout(html);
     setTimeout(() => { attachSalesSearch(); attachGroupToggles(); }, 150);
@@ -586,10 +659,44 @@ export const createSaleModal = async (navigateTo) => {
                <label style="flex:1;"><input type="radio" name="tipo_venta" value="Encargo" onchange="window.toggleSaleType(this.value)"> 📦 Por Encargo (EEUU)</label>
             </div>
             <div>
-               <label>Seleccionar Cliente</label>
+               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                   <label style="margin:0;">Seleccionar Cliente</label>
+                   <div style="display:flex;gap:8px;">
+                       <button type="button" class="btn-action" style="font-size:0.7rem;padding:4px 8px;" onclick="window.toggleInlineClient('NEW')">+ Crear Rápido</button>
+                       <button type="button" class="btn-action" style="font-size:0.7rem;padding:4px 8px;display:none;" id="btn-edit-inline-client" onclick="window.toggleInlineClient('EDIT')">✏️ Agregar Datos</button>
+                   </div>
+               </div>
                <input type="text" list="dl-clientes" id="sel-cliente-text" placeholder="Escribe el nombre del cliente..." required autocomplete="off">
                <datalist id="dl-clientes">${clientsList.map(c=>`<option data-id="${c.id}" value="${c.nombre} (CC: ${c.numero_identificacion||'-'})"></option>`).join('')}</datalist>
                <input type="hidden" name="cliente_id" id="sel-cliente-id" required>
+               
+               <div id="address-selection-box" style="display:none; background:rgba(255,255,255,0.03); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); margin-top:10px;">
+                    <h4 style="margin:0 0 10px 0; font-size:0.8rem; opacity:0.6; text-transform:uppercase; letter-spacing:1px;">📍 Dirección de Envío para esta Venta</h4>
+                    <select id="sel-direccion-envio" name="direccion_envio" style="background:var(--input-bg); color:var(--text-main); font-size:1rem; padding:10px; border-radius:12px; border:1px solid var(--glass-border); width:100%;">
+                        <option value="">Seleccione un cliente primero...</option>
+                    </select>
+               </div>
+               
+               <div id="inline-client-form" style="display:none;background:rgba(0,0,0,0.2);padding:1rem;border-radius:8px;margin-top:10px;border:1px dashed var(--brand-magenta);">
+                   <h4 id="inl-cli-title" style="margin:0 0 10px 0;opacity:0.9;">Crear Cliente Rápido</h4>
+                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:0.8rem;" id="inl-cli-grid-new">
+                       <div><label>Nombre Completo</label><input type="text" id="inl_cli_nombre"></div>
+                       <div><label>Cédula/NIT</label><input type="text" id="inl_cli_nid"></div>
+                       <div><label>WhatsApp</label><input type="text" id="inl_cli_wa"></div>
+                       <div><label>Ciudad</label><input type="text" id="inl_cli_ciu" value="Medellín"></div>
+                       <div style="grid-column:span 2;"><label>Dirección (Opcional)</label><input type="text" id="inl_cli_dir"></div>
+                       <div style="grid-column:span 2;"><label>ID Lead Kommo (Opcional)</label><input type="text" id="inl_cli_kommo"></div>
+                   </div>
+                   <div style="display:none;flex-direction:column;gap:0.8rem;margin-bottom:0.8rem;" id="inl-cli-grid-edit">
+                       <div><label>Nueva Dirección (Opcional)</label><input type="text" id="inl_cli_new_dir" placeholder="Se agregará al historial"></div>
+                       <div><label>Nuevo WhatsApp (Opcional)</label><input type="text" id="inl_cli_new_wa" placeholder="Ej. 3001234567"></div>
+                       <div><label>Nuevo ID Kommo (Opcional)</label><input type="text" id="inl_cli_new_kommo"></div>
+                   </div>
+                   <div style="display:flex;gap:10px;">
+                       <button type="button" class="btn-primary" style="font-size:0.75rem;padding:6px 12px;" onclick="window.saveInlineClient()">Guardar Cliente</button>
+                       <button type="button" style="font-size:0.75rem;padding:6px 12px;background:none;border:1px solid var(--glass-border);color:var(--text-main);border-radius:8px;" onclick="document.getElementById('inline-client-form').style.display='none'">Cancelar</button>
+                   </div>
+               </div>
             </div>
             <div id="section-stock">
                <label>Seleccionar Producto Físico</label>
@@ -654,13 +761,160 @@ export const createSaleModal = async (navigateTo) => {
         const fi=document.getElementById('enc-file-img'),pv=document.getElementById('enc-img-preview');
         if(fi&&pv) fi.onchange=(e)=>{ const f=e.target.files[0]; if(f){ const r=new FileReader(); r.onload=(re)=>{ pv.innerHTML=`<img src="${re.target.result}" style="height:100%;object-fit:cover;border-radius:6px;">`; }; r.readAsDataURL(f); } };
         const inpCli=document.getElementById('sel-cliente-text'),hidCli=document.getElementById('sel-cliente-id');
-        if(inpCli) inpCli.addEventListener('input',(e)=>{ hidCli.value=''; document.querySelectorAll('#dl-clientes option').forEach(o=>{ if(o.value===e.target.value){hidCli.value=o.getAttribute('data-id');} }); });
+        if(inpCli) inpCli.addEventListener('input',(e)=>{ 
+            hidCli.value=''; 
+            let found = false;
+            document.querySelectorAll('#dl-clientes option').forEach(o=>{ 
+                if(o.value===e.target.value){
+                    hidCli.value=o.getAttribute('data-id');
+                    found = true;
+                } 
+            }); 
+            const btnEdit = document.getElementById('btn-edit-inline-client');
+            const addrBox = document.getElementById('address-selection-box');
+            const selAddr = document.getElementById('sel-direccion-envio');
+            
+            if(btnEdit) btnEdit.style.display = found ? 'block' : 'none';
+            
+            if (found) {
+                const cId = hidCli.value;
+                const client = clientsList.find(c => c.id.toString() === cId.toString());
+                if (client && client.direccion) {
+                    addrBox.style.display = 'block';
+                    const history = client.direccion.split(' | ').reverse();
+                    selAddr.innerHTML = history.map(d => `<option value="${d}">${d}</option>`).join('');
+                } else {
+                    addrBox.style.display = 'none';
+                }
+            } else {
+                addrBox.style.display = 'none';
+            }
+        });
         const pSel=document.getElementById('sel-producto-text'),pHide=document.getElementById('sel-producto-id');
         const vTot=document.getElementById('sale-total'),vAb=document.getElementById('sale-abono'),lblS=document.getElementById('lbl-saldo');
         const updS=()=>{ const t=parseInt(vTot.value||0),a=parseInt(vAb.value||0); lblS.innerText=formatCOP(Math.max(0,t-a)); };
         if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); if(pr){vTot.value=pr;vAb.value=pr;updS();}} }); });
         if(vTot&&vAb){vTot.addEventListener('input',updS);vAb.addEventListener('input',updS);}
         attachComprobanteInput('comp-sale-file');
+
+        window.toggleInlineClient = (mode) => {
+            const container = document.getElementById('inline-client-form');
+            container.style.display = 'block';
+            container.dataset.mode = mode;
+            if (mode === 'NEW') {
+                document.getElementById('inl-cli-title').innerText = 'Crear Cliente Rápido';
+                document.getElementById('inl-cli-grid-new').style.display = 'grid';
+                document.getElementById('inl-cli-grid-edit').style.display = 'none';
+                document.getElementById('inl_cli_nombre').focus();
+            } else {
+                document.getElementById('inl-cli-title').innerText = 'Agregar Datos al Cliente';
+                document.getElementById('inl-cli-grid-new').style.display = 'none';
+                document.getElementById('inl-cli-grid-edit').style.display = 'flex';
+                document.getElementById('inl_cli_new_dir').focus();
+            }
+        };
+
+        window.saveInlineClient = async () => {
+            const mode = document.getElementById('inline-client-form').dataset.mode;
+            try {
+                const list2 = await db.fetchData('Clientes');
+                
+                if (mode === 'NEW') {
+                    const nombre = document.getElementById('inl_cli_nombre').value.trim();
+                    if (!nombre) return showToast('El nombre es obligatorio', 'error');
+                    const nid = document.getElementById('inl_cli_nid').value.trim();
+                    const wa = document.getElementById('inl_cli_wa').value.trim();
+                    const kommo = document.getElementById('inl_cli_kommo').value.trim();
+                    const dir = document.getElementById('inl_cli_dir').value.trim();
+                    const ciu = document.getElementById('inl_cli_ciu').value.trim() || 'Medellín';
+
+                    const existing = list2.find(c => 
+                        (nid && c.numero_identificacion === nid) || 
+                        (kommo && c.numero_lead_kommo && c.numero_lead_kommo.includes(kommo)) || 
+                        (wa && c.whatsapp && c.whatsapp.includes(wa))
+                    );
+
+                    if (existing) {
+                        window.showCustomConfirm(
+                            'Cliente Duplicado',
+                            `El cliente ya existe (Nombre: ${existing.nombre}). ¿Deseas actualizarlo y agregar los nuevos datos a su historial?`,
+                            async () => {
+                                if (nid && !existing.numero_identificacion) existing.numero_identificacion = nid;
+                                if (wa && (!existing.whatsapp || !existing.whatsapp.includes(wa))) existing.whatsapp = existing.whatsapp ? existing.whatsapp + ' | ' + wa : wa;
+                                if (kommo && (!existing.numero_lead_kommo || !existing.numero_lead_kommo.includes(kommo))) existing.numero_lead_kommo = existing.numero_lead_kommo ? existing.numero_lead_kommo + ' | ' + kommo : kommo;
+                                
+                                if (dir) {
+                                    const fullDir = `${dir} (${ciu})`;
+                                    if (!existing.direccion || !existing.direccion.includes(dir)) {
+                                        existing.direccion = existing.direccion ? existing.direccion + ' | ' + fullDir : fullDir;
+                                    }
+                                }
+                                existing.ciudad = ciu;
+                                
+                                await db.postData('Clientes', existing, 'UPDATE');
+                                showToast('Cliente actualizado', 'success');
+                                
+                                document.getElementById('sel-cliente-text').value = `${existing.nombre} (CC: ${existing.numero_identificacion||'-'})`;
+                                document.getElementById('sel-cliente-id').value = existing.id;
+                                document.getElementById('btn-edit-inline-client').style.display = 'block';
+                                document.getElementById('inline-client-form').style.display = 'none';
+                            }
+                        );
+                        return;
+                    } else {
+                        const newId = Date.now().toString();
+                        const fullDir = dir ? `${dir} (${ciu})` : '';
+                        const payload = { id: newId, nombre, numero_identificacion:nid, numero_lead_kommo:kommo, direccion:fullDir, ciudad:ciu, whatsapp:wa, fecha_registro:new Date().toLocaleDateString() };
+                        await db.postData('Clientes', payload, 'INSERT');
+                        showToast('Cliente creado', 'success');
+                        
+                        const dl = document.getElementById('dl-clientes');
+                        const optValue = `${nombre} (CC: ${nid||'-'})`;
+                        dl.innerHTML += `<option data-id="${newId}" value="${optValue}"></option>`;
+                        document.getElementById('sel-cliente-text').value = optValue;
+                        document.getElementById('sel-cliente-id').value = newId;
+                        document.getElementById('btn-edit-inline-client').style.display = 'block';
+                    }
+                } else if (mode === 'EDIT') {
+                    const selId = document.getElementById('sel-cliente-id').value;
+                    if (!selId) return showToast('No hay cliente seleccionado', 'error');
+                    const existing = list2.find(c => c.id.toString() === selId);
+                    if (!existing) return showToast('Cliente no encontrado', 'error');
+
+                    const new_dir = document.getElementById('inl_cli_new_dir').value.trim();
+                    const new_wa = document.getElementById('inl_cli_new_wa').value.trim();
+                    const new_kommo = document.getElementById('inl_cli_new_kommo').value.trim();
+
+                    let updated = false;
+                    if (new_dir) {
+                        const fullDir = `${new_dir} (${existing.ciudad || 'N/A'})`;
+                        existing.direccion = existing.direccion ? existing.direccion + ' | ' + fullDir : fullDir;
+                        updated = true;
+                    }
+                    if (new_wa && (!existing.whatsapp || !existing.whatsapp.includes(new_wa))) {
+                        existing.whatsapp = existing.whatsapp ? existing.whatsapp + ' | ' + new_wa : new_wa;
+                        updated = true;
+                    }
+                    if (new_kommo && (!existing.numero_lead_kommo || !existing.numero_lead_kommo.includes(new_kommo))) {
+                        existing.numero_lead_kommo = existing.numero_lead_kommo ? existing.numero_lead_kommo + ' | ' + new_kommo : new_kommo;
+                        updated = true;
+                    }
+
+                    if (updated) {
+                        await db.postData('Clientes', existing, 'UPDATE');
+                        showToast('Datos agregados al cliente', 'success');
+                    } else {
+                        showToast('No se agregaron datos nuevos', 'info');
+                    }
+                }
+                
+                document.getElementById('inline-client-form').style.display = 'none';
+                
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        };
+
     }, 150);
 
     document.getElementById('form-sale').onsubmit = async (e) => {
@@ -695,7 +949,20 @@ export const createSaleModal = async (navigateTo) => {
             let comprobanteUrl = '';
             if (comprobanteFile) { btn.innerText='Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
             const pvId = Date.now().toString();
-            const pv={ id:pvId, cliente_id:fd.get('cliente_id'), producto_id:finalProductId, tipo_venta:tipoVenta, fecha:new Date().toLocaleDateString(), valor_total_cop:valorTotal, abonos_acumulados:abonoIni, saldo_pendiente:saldoP, comprobante_url:comprobanteUrl, estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local', id_seguimiento:'SG-'+Math.floor(Math.random()*1000000) };
+            const pv={ 
+                id:pvId, 
+                cliente_id:fd.get('cliente_id'), 
+                producto_id:finalProductId, 
+                tipo_venta:tipoVenta, 
+                fecha:new Date().toLocaleDateString(), 
+                valor_total_cop:valorTotal, 
+                abonos_acumulados:abonoIni, 
+                saldo_pendiente:saldoP, 
+                comprobante_url:comprobanteUrl, 
+                direccion_envio: fd.get('direccion_envio') || '',
+                estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local', 
+                id_seguimiento:'SG-'+Math.floor(Math.random()*1000000) 
+            };
             showToast('Generando Venta...','info');
             await db.postData('Ventas',pv,'INSERT');
             // Registrar abono inicial en el historial si hubiera

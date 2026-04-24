@@ -28,7 +28,7 @@ const mainAppContent = document.querySelector('#app');
 
 const state = {
   currentView: 'dashboard',
-  get isLoggedIn() { return !!localStorage.getItem('JARAPO_SUPA_URL'); }
+  get isLoggedIn() { return !!(import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL')); }
 };
 
 // ── Nav Items definición (filtrados dinámicamente por permisos) ──
@@ -150,7 +150,7 @@ export const renderLayout = (contentHTML) => {
             </button>
         </div>
         <div class="actions" style="display:flex; gap:12px; align-items:center;">
-           <button class="btn-primary" id="main-quick-btn" ${auth.canEdit(state.currentView) || state.currentView === 'dashboard' ? '' : 'style="display:none;"'}>+ Nuevo Registro</button>
+           <!-- Botón global removido según solicitud -->
         </div>
       </header>
 
@@ -217,15 +217,7 @@ export const renderLayout = (contentHTML) => {
     }
   }, 100);
 
-  document.getElementById('main-quick-btn')?.addEventListener('click', () => {
-    if (state.currentView === 'clients') window.modalCliente();
-    else if (state.currentView === 'inventory') window.modalProducto();
-    else if (state.currentView === 'sales') window.modalVenta();
-    else if (state.currentView === 'purchases') window.modalCompra();
-    else if (state.currentView === 'finance') window.modalGasto();
-    else if (state.currentView === 'logistics') window.modalLogistica();
-    else alert("Elige un módulo para agregar un nuevo registro.");
-  });
+  // Event listener del main-quick-btn removido
 };
 
 export const navigateTo = (view) => {
@@ -305,6 +297,18 @@ window.modalGasto = () => createFinanceModal(navigateTo);
 window.modalLogistica = (id) => createLogisticsModal(id, navigateTo);
 window._navigateTo = navigateTo;
 
+// Pagination Handlers
+window.changePage = (view, page) => {
+    localStorage.setItem(`${view}_page`, page);
+    navigateTo(view);
+};
+window.changeRPP = (view, rpp) => {
+    localStorage.setItem(`${view}_rpp`, rpp);
+    localStorage.setItem(`${view}_page`, 1);
+    navigateTo(view);
+};
+
+
 // Estilos globales de formularios (inyectados)
 const styleSheet = document.createElement('style');
 styleSheet.textContent = `
@@ -322,6 +326,24 @@ async function bootApp() {
       else navigateTo(view);
     }, 'Primero configura tu conexión a Supabase.');
     return;
+  }
+
+  // Cargar logo global desde BD
+  try {
+    const { db } = await import('./db.js');
+    const config = await db.fetchData('Configuracion');
+    if (Array.isArray(config)) {
+      const logoParam = config.find(p => p.clave === 'GLOBAL_LOGO');
+      if (logoParam && logoParam.valor) {
+        localStorage.setItem('GLOBAL_LOGO_URL', logoParam.valor);
+        const logoImg = document.querySelector('.sidebar-logo-ring img');
+        if (logoImg && logoImg.src !== logoParam.valor) {
+            logoImg.src = logoParam.valor;
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Error cargando logo global:", e);
   }
 
   // Inicializar auth (verifica sesión existente)

@@ -180,6 +180,7 @@ function buildUsersRows(users) {
           <div class="td-actions-group">
             <button class="btn-action" onclick="window.adminEditUser('${u.id}')">✏ Editar</button>
             <button class="btn-action" onclick="window.adminResetPassword('${u.id}', '${u.full_name}')">🔑 Contraseña</button>
+            <button class="btn-action" onclick="window.adminViewLogs('${u.id}', '${u.full_name}')">🕒 Accesos</button>
           </div>
         </td>
       </tr>
@@ -222,6 +223,10 @@ function bindAdminEvents(users, navigateTo, renderLayout) {
 
   window.adminResetPassword = (userId, userName) => {
     openResetPasswordModal(userId, userName);
+  };
+
+  window.adminViewLogs = (userId, userName) => {
+    openLogsModal(userId, userName);
   };
 }
 
@@ -580,4 +585,93 @@ function openResetPasswordModal(userId, userName) {
       alertEl.style.display = 'block';
     }
   });
+}
+
+// ── Modal Historial de Logueos ──────────────────────────────
+async function openLogsModal(userId, userName) {
+  const modal = document.getElementById('admin-user-modal');
+  const body = document.getElementById('admin-modal-body');
+
+  body.innerHTML = `
+    <div class="admin-modal-header">
+      <div>
+        <h3>Historial de Accesos</h3>
+        <p style="font-size:0.78rem; color:var(--text-faint); margin-top:4px;">Usuario: <strong>${userName}</strong></p>
+      </div>
+      <button class="admin-modal-close" id="logs-modal-close">✕</button>
+    </div>
+    <div class="admin-modal-content">
+      <div id="logs-loading" style="text-align:center; padding:2rem;"><div class="loader"></div><p>Cargando accesos...</p></div>
+      <div id="logs-container" style="display:none; max-height:400px; overflow-y:auto; padding-right:10px;"></div>
+    </div>
+    <div class="admin-modal-footer">
+      <button class="btn-action" id="logs-cancel">Cerrar</button>
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+  setTimeout(() => { modal.classList.add('admin-modal-visible'); }, 80);
+
+  const closeModal = () => {
+    modal.classList.remove('admin-modal-visible');
+    setTimeout(() => { modal.style.display = 'none'; }, 300);
+  };
+
+  document.getElementById('logs-modal-close').onclick = closeModal;
+  document.getElementById('logs-cancel').onclick = closeModal;
+
+  // Fetch logs
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    const url = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL');
+    const key = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY');
+    const client = createClient(url, key);
+
+    const { data, error } = await client
+      .from('login_logs')
+      .select('login_time')
+      .eq('user_id', userId)
+      .order('login_time', { ascending: false })
+      .limit(50);
+
+    const loadingEl = document.getElementById('logs-loading');
+    const containerEl = document.getElementById('logs-container');
+
+    loadingEl.style.display = 'none';
+    containerEl.style.display = 'block';
+
+    if (error) {
+      containerEl.innerHTML = `<div class="login-alert login-alert-error">Error al cargar historial: ${error.message}</div>`;
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      containerEl.innerHTML = `<div style="text-align:center; opacity:0.6; padding:2rem;">Este usuario aún no registra accesos en el nuevo historial.</div>`;
+      return;
+    }
+
+    containerEl.innerHTML = data.map(log => {
+      const d = new Date(log.login_time);
+      const dateStr = d.toLocaleDateString('es-CO', { day:'2-digit', month:'short', year:'numeric' });
+      const timeStr = d.toLocaleTimeString('es-CO', { hour:'2-digit', minute:'2-digit' });
+      return `
+        <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:1.5rem;">🔑</span>
+            <div>
+              <strong style="display:block; font-size:0.9rem;">Acceso al sistema</strong>
+              <span style="font-size:0.75rem; color:var(--text-faint);">${dateStr} · ${timeStr}</span>
+            </div>
+          </div>
+          <span style="font-size:0.7rem; background:var(--success-green); color:black; padding:2px 8px; border-radius:12px; font-weight:700;">Éxito</span>
+        </div>
+      `;
+    }).join('');
+
+  } catch (err) {
+    document.getElementById('logs-loading').style.display = 'none';
+    const containerEl = document.getElementById('logs-container');
+    containerEl.style.display = 'block';
+    containerEl.innerHTML = `<div class="login-alert login-alert-error">No se pudo cargar el historial. ${err.message}</div>`;
+  }
 }

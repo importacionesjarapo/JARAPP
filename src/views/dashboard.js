@@ -636,7 +636,7 @@ const _renderDashboardBody = () => {
           { label:'Balance Caja',  val:formatCOP(balance),         icon:'💰', color:balance>=0?C.green:C.red,   sub:'Cobrado − Egresos' },
           { label:'Margen Neto',   val:`${margen}%`,               icon:'📈', color:margen>0?C.cyan:C.red,      sub:`${logsActivos.length} env. activos` },
         ].map(k => `
-          <div class="bi-kpi-card" style="border-top:3px solid ${k.color};">
+          <div class="bi-kpi-card" style="border-top:3px solid ${k.color}; cursor:pointer; transition:transform 0.2s;" onclick="window.openDashboardKPI('${k.label}')" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
             <div class="bkc-icon">${k.icon}</div>
             <div class="bkc-val" style="color:${k.color};">${k.val}</div>
             <div class="bkc-label">${k.label}</div>
@@ -884,4 +884,106 @@ const _drawChart = (reportData, chartType) => {
 
     // Agregar leyenda de colores para gráficos de paleta
     setTimeout(renderPaletteLegend, 80);
+};
+
+window.openDashboardKPI = (kpiName) => {
+    if (!_dashCache) return;
+    const { ventas, gastos, compras, abonos, logistica } = _dashCache;
+    
+    // Aplicamos filtros de fecha globales del dashboard si es necesario
+    const v = applyDateFilter(ventas, 'fecha');
+    const g = applyDateFilter(gastos, 'fecha');
+    const cp = applyDateFilter(compras, c => c.fecha_pedido || c.fecha_registro);
+    const a = applyDateFilter(abonos, 'fecha');
+    
+    let title = kpiName;
+    let subtitle = '';
+    let itemsHtml = '';
+    
+    if (kpiName === 'Facturación') {
+        subtitle = 'Ventas facturadas en el período seleccionado.';
+        const sorted = [...v].reverse();
+        itemsHtml = sorted.map(x => {
+            const date = (x.fecha||'').split('T')[0];
+            return `
+            <div class="kpi-modal-item">
+                <div class="kpi-item-main">
+                    <div class="kpi-item-title">Orden #${x.id?.toString().slice(-4)}</div>
+                    <div class="kpi-item-subtitle">${date} | ${x.tipo_venta||'Venta'}</div>
+                </div>
+                <div class="kpi-item-right">
+                    <div class="kpi-item-value" style="color:var(--info-blue);">${formatCOP(x.valor_total_cop)}</div>
+                    <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${x.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');">👁️ Ver</button>
+                </div>
+            </div>`;
+        }).join('');
+    } else if (kpiName === 'Total Cobrado') {
+        subtitle = 'Abonos y pagos recibidos.';
+        const sorted = [...a].reverse();
+        itemsHtml = sorted.map(x => {
+            const date = (x.fecha||'').split('T')[0];
+            return `
+            <div class="kpi-modal-item">
+                <div class="kpi-item-main">
+                    <div class="kpi-item-title">Abono a Orden #${x.venta_id?.toString().slice(-4)}</div>
+                    <div class="kpi-item-subtitle">${date} | ${x.metodo_pago||'Efectivo'}</div>
+                </div>
+                <div class="kpi-item-right">
+                    <div class="kpi-item-value" style="color:var(--success-green);">${formatCOP(x.valor)}</div>
+                </div>
+            </div>`;
+        }).join('');
+    } else if (kpiName === 'Cartera') {
+        subtitle = 'Ventas con saldo pendiente en este período.';
+        const pend = v.filter(x => parseFloat(x.saldo_pendiente||0)>0).sort((a,b) => parseFloat(b.saldo_pendiente||0)-parseFloat(a.saldo_pendiente||0));
+        itemsHtml = pend.map(x => {
+            const date = (x.fecha||'').split('T')[0];
+            return `
+            <div class="kpi-modal-item">
+                <div class="kpi-item-main">
+                    <div class="kpi-item-title">Orden #${x.id?.toString().slice(-4)}</div>
+                    <div class="kpi-item-subtitle">${date} | Total: ${formatCOP(x.valor_total_cop)}</div>
+                </div>
+                <div class="kpi-item-right">
+                    <div class="kpi-item-value" style="color:var(--primary-red);">${formatCOP(x.saldo_pendiente)}</div>
+                    <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${x.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');">👁️ Ver</button>
+                </div>
+            </div>`;
+        }).join('');
+    } else if (kpiName === 'Total Egresos') {
+        subtitle = 'Listado combinado de Gastos Operativos y Compras a proveedores.';
+        const arr = [];
+        g.forEach(x => arr.push({ ...x, sysTipo:'gasto', date: (x.fecha||'').split('T')[0] }));
+        cp.forEach(x => arr.push({ ...x, sysTipo:'compra', date: (x.fecha_pedido||x.fecha_registro||'').split('T')[0] }));
+        arr.sort((a,b) => new Date(b.date) - new Date(a.date));
+        itemsHtml = arr.map(x => {
+            if (x.sysTipo === 'gasto') {
+                return `
+                <div class="kpi-modal-item">
+                    <div class="kpi-item-main">
+                        <div class="kpi-item-title">Gasto: ${x.concepto || x.tipo_gasto}</div>
+                        <div class="kpi-item-subtitle">${x.date} | Gasto Operativo</div>
+                    </div>
+                    <div class="kpi-item-right">
+                        <div class="kpi-item-value" style="color:var(--primary-red);">${formatCOP(x.valor_cop||x.valor_origen)}</div>
+                    </div>
+                </div>`;
+            } else {
+                return `
+                <div class="kpi-modal-item">
+                    <div class="kpi-item-main">
+                        <div class="kpi-item-title">Compra: ${x.proveedor}</div>
+                        <div class="kpi-item-subtitle">${x.date} | Compra USA / Prov.</div>
+                    </div>
+                    <div class="kpi-item-right">
+                        <div class="kpi-item-value" style="color:var(--warning-orange);">${formatCOP(x.costo_cop)}</div>
+                    </div>
+                </div>`;
+            }
+        }).join('');
+    } else if (kpiName === 'Balance Caja' || kpiName === 'Margen Neto') {
+        itemsHtml = `<div style="padding:2rem;text-align:center;opacity:0.6;">El ${kpiName} es un cálculo derivado. Consulta los reportes gráficos de Finanzas para más detalle.</div>`;
+    }
+    
+    window.openKPIDetailModal(title, subtitle, itemsHtml);
 };

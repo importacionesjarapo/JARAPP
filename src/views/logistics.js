@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { renderError, showToast, uploadImageToSupabase, downloadExcel } from '../utils.js';
+import { renderError, showToast, uploadImageToSupabase, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 let _logStartDate = '';
 let _logEndDate = '';
@@ -39,7 +39,10 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         });
     }
 
-    const reversedList = filteredList.reverse();
+    const _page = parseInt(localStorage.getItem('logistics_page') || '1');
+    const _rpp  = parseInt(localStorage.getItem('logistics_rpp') || '10');
+    const pagedList = paginate(filteredList, _page, _rpp);
+    const reversedList = [...pagedList].reverse();
 
     const FASES = [
         "1. Comprado (Esperando Tracking Local USA)",
@@ -324,6 +327,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
           `;
       }).join('')}
       </div>
+      ${renderPagination(filteredList.length, _page, _rpp, 'logistics')}
     `;
     renderLayout(html);
     if(window.lucide) window.lucide.createIcons();
