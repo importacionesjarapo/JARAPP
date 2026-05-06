@@ -1,19 +1,25 @@
 import { db } from '../db.js';
-import { renderError, showToast, uploadImageToSupabase, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { auth } from '../auth.js';
+import { renderError, showToast, uploadImageToSupabase, downloadExcel, renderPagination, paginate, formatCOP } from '../utils.js';
 
 let _logStartDate = '';
 let _logEndDate = '';
+let _logActiveTab = 'general';
 
 export const renderLogistics = async (renderLayout, navigateTo) => {
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Módulo de Logística...</div>`);
     
-    const [list, ventas, clientes, compras, productos] = await Promise.all([
+    const [list, ventas, clientes, compras, productos, guiasIntRaw] = await Promise.all([
         db.fetchData('Logistica'),
         db.fetchData('Ventas'),
         db.fetchData('Clientes'),
         db.fetchData('Compras'),
-        db.fetchData('Productos')
+        db.fetchData('Productos'),
+        db.fetchData('GuiasInternacionales')
     ]);
+    
+    // Handle potential error if table doesn't exist yet
+    const guiasInt = Array.isArray(guiasIntRaw) ? guiasIntRaw : [];
     
     if (list.error) return renderError(renderLayout, list.error, navigateTo);
 
@@ -23,6 +29,11 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         renderLogistics(renderLayout, navigateTo);
     };
     window.applyLogDateFilter = applyLogFilter;
+
+    window.switchLogTab = (tab) => {
+        _logActiveTab = tab;
+        renderLogistics(renderLayout, navigateTo);
+    };
 
     let filteredList = [...list];
     if (_logStartDate || _logEndDate) {
@@ -120,10 +131,16 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
             </div>
             <button class="btn-excel" onclick="window.exportLogExcel()">📥 Excel</button>
             <input type="text" id="find-it" placeholder="Filtrar por guía, cliente o fase..." style="background:var(--input-bg); color:var(--text-main); padding:10px 15px; border-radius:12px; border:1px solid var(--glass-border); width:260px; outline:none;">
-            <button class="btn-primary" onclick="window.modalLogistica()">+ Agregar Seguimiento</button>
+            ${auth.canEdit('logistics') ? `<button class="btn-primary" onclick="window.modalLogistica()">+ Agregar Seguimiento</button>` : ''}
         </div>
       </div>
+
+      <div class="module-tabs" style="display:flex; gap:10px; margin-bottom:2rem; border-bottom:1px solid var(--glass-border); padding-bottom:10px;">
+          <button class="tab-btn ${_logActiveTab === 'general' ? 'active' : ''}" onclick="window.switchLogTab('general')" style="background:none; border:none; color:${_logActiveTab === 'general' ? 'var(--primary-red)' : 'var(--text-main)'}; font-weight:700; cursor:pointer; padding:5px 15px; border-bottom: 2px solid ${_logActiveTab === 'general' ? 'var(--primary-red)' : 'transparent'}; transition:all 0.3s;">Seguimiento General</button>
+          ${auth.canAccess('feat_usa') ? `<button class="tab-btn ${_logActiveTab === 'eeuu' ? 'active' : ''}" onclick="window.switchLogTab('eeuu')" style="background:none; border:none; color:${_logActiveTab === 'eeuu' ? 'var(--primary-red)' : 'var(--text-main)'}; font-weight:700; cursor:pointer; padding:5px 15px; border-bottom: 2px solid ${_logActiveTab === 'eeuu' ? 'var(--primary-red)' : 'transparent'}; transition:all 0.3s;">Envíos EEUU a Colombia</button>` : ''}
+      </div>
       
+      ${_logActiveTab === 'eeuu' && auth.canAccess('feat_usa') ? renderEnviosEEUU(list, ventas, clientes, compras, productos, guiasInt) : `
       ${summaryHtml}
 
       <div id="list-body">
@@ -179,6 +196,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                         <th style="padding:15px 20px;">CLIENTE / VENTA</th>
                         <th style="padding:15px 20px;">${th3}</th>
                         <th style="padding:15px 20px;">${th4}</th>
+                        ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `<th style="padding:15px 20px;">ENVÍO INT.</th>` : ''}
                         <th style="padding:15px 20px; text-align:right;">ACCIÓN</th>
                       </tr>
                   </thead>
@@ -187,35 +205,28 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                           const ventaAsoc = !ventas.error ? ventas.find(v => v.id.toString() === c.venta_id?.toString()) : null;
                           const cliInfo = ventaAsoc && !clientes.error ? clientes.find(cl => cl.id.toString() === ventaAsoc.cliente_id?.toString()) : null;
                           const nombreCli = cliInfo ? cliInfo.nombre : (c.venta_id ? 'Venta Vacia' : '-');
-                          
                           const compraAsoc = !compras.error ? compras.find(cmp => cmp.id.toString() === c.compra_id?.toString() || (c.venta_id && cmp.venta_id?.toString() === c.venta_id?.toString())) : null;
                           const prodAsoc = ventaAsoc && productos && !productos.error ? productos.find(p => p.id.toString() === ventaAsoc.producto_id?.toString()) : null;
-                          
-                          let td1 = '-';
-                          let td3 = '-';
-
+                          let td1 = '-'; let td3 = '-'; let td4 = '-';
                           if (i === 0) {
-                              // Phase 1: Comprado
                               td1 = `<strong style="font-family:monospace; font-size:1.0rem; color:var(--info-blue); display:inline-block; margin-bottom:4px;">Orden: ${compraAsoc ? compraAsoc.numero_orden || 'S/N' : '-'}</strong><br><span style="font-size:0.75rem; opacity:0.6;">Ult. Act: ${c.fecha_actualizacion ? c.fecha_actualizacion.split('T')[0] : '-'}</span>`;
                               td3 = `<strong>${compraAsoc ? compraAsoc.proveedor || '-' : '-'}</strong><br><div style="margin-top:4px;">${compraAsoc?.url_orden ? `<a href="${compraAsoc.url_orden}" target="_blank" style="font-size:0.7rem; color:var(--success-green); text-decoration:none;">[🔗 Ver Tienda]</a>` : ''}</div>`;
+                              td4 = c.ubicacion || '-';
                           } else if (i === 1 || i === 2) {
-                              // Phase 2, 3: Local USA
                               let arrivalHtml = `<div style="margin-top:4px;"><span style="font-size:0.75rem; opacity:0.8;">Est: <strong>${c.usa_fecha_estimada || '?'}</strong></span></div>`;
                               if (i === 2 && c.usa_bodega_fecha) {
                                   arrivalHtml += `<div style="margin-top:4px;"><span style="font-size:0.75rem; color:var(--success-green); font-weight:bold; background:rgba(6,214,160,0.1); padding:2px 6px; border-radius:4px;">Fecha Real: ${c.usa_bodega_fecha}</span></div>`;
                               }
-                              td1 = `<strong style="color:var(--primary-red); font-family:monospace; font-size:1.1rem; display:inline-block; margin-bottom:4px;">${c.usa_guia || 'Pendiente'}</strong><br>
-                                     <span style="font-size:0.75rem; opacity:0.8;">Envío: <strong>${c.usa_fecha_envio || '?'}</strong></span>${arrivalHtml}`;
-                              td3 = `<strong>${c.usa_empresa || 'S/N'}</strong><br><div style="margin-top:4px;">${c.usa_url ? `<a href="${c.usa_url}" target="_blank" style="font-size:0.7rem; color:var(--success-green); text-decoration:none;">[🔗 Rastrear Paquete USA]</a>` : ''}</div>`;
+                              td1 = `<strong style="color:var(--primary-red); font-family:monospace; font-size:1.1rem; display:inline-block; margin-bottom:4px;">${c.usa_guia || 'Pendiente'}</strong><br><span style="font-size:0.75rem; opacity:0.8;">Envío: <strong>${c.usa_fecha_envio || '?'}</strong></span>${arrivalHtml}`;
+                              td3 = `<strong>${c.usa_empresa || 'S/N'}</strong><br><div style="margin-top:4px;">${c.usa_url ? `<a href="${c.usa_url}" target="_blank" style="font-size:0.7rem; color:var(--success-green); text-decoration:none;">[🔗 Rastrear]</a>` : ''}</div>`;
+                              td4 = c.usa_bodega_nom || 'Por Asignar (USA)';
                           } else if (i === 3) {
-                              // Phase 4: Internacional
                               td1 = `<strong style="color:var(--info-blue); font-family:monospace; font-size:1.1rem; display:inline-block; margin-bottom:4px;">${c.int_guia || c.id_seguimiento_internacional || 'Pendiente'}</strong>`;
-                              td3 = `<strong>${c.paqueteria || 'S/N'}</strong><br><div style="margin-top:4px;">${c.int_url ? `<a href="${c.int_url}" target="_blank" style="font-size:0.7rem; color:var(--success-green); text-decoration:none;">[🔗 Rastrear Vuelo/Aduana]</a>` : ''}</div>`;
+                              td3 = `<strong>${c.paqueteria || 'S/N'}</strong><br><div style="margin-top:4px;">${c.int_url ? `<a href="${c.int_url}" target="_blank" style="font-size:0.7rem; color:var(--success-green); text-decoration:none;">[🔗 Rastrear]</a>` : ''}</div>`;
+                              td4 = `<span style="font-size:0.75rem; opacity:0.8;">Recibido en USA: <strong>${c.usa_bodega_fecha || 'Pendiente'}</strong></span><br><div style="margin-top:4px;"><span style="font-size:0.75rem; opacity:0.8; color:var(--info-blue);">Despachado a COL: <strong>${c.int_fecha_envio || 'Pendiente'}</strong></span></div>`;
                           } else if (i === 4) {
-                              // Phase 5: Bodega Colombia
                               const notificado = c.cliente_notificado === 'Sí';
                               let badgeHtml = notificado ? `<span style="background:rgba(6,214,160,0.1); color:var(--success-green); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(6,214,160,0.2);">✅ Cliente Informado</span>` : `<span style="background:rgba(230,57,70,0.1); color:var(--primary-red); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(230,57,70,0.2);">⚠️ No Notificado</span>`;
-                              
                               let contactHtml = '';
                               if (cliInfo) {
                                   const tel = cliInfo.telefono || cliInfo.whatsapp || '';
@@ -224,102 +235,46 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                                       contactHtml = `<br><div style="margin-top:8px; font-size:0.8rem; opacity:0.8;">📞 Wa/Tel: <strong>${tel}</strong> <a href="https://wa.me/57${num}" target="_blank" style="text-decoration:none; margin-left:3px;" title="Abrir Chat WA">💬</a></div>`;
                                   }
                               }
-
                               td1 = `<strong style="font-size:1rem; display:inline-block; color:var(--info-blue);">${c.col_bodega_fecha || 'Pendiente Ingreso'}</strong>`;
                               td3 = badgeHtml + contactHtml;
+                              td4 = prodAsoc ? `<strong style="font-size:0.9rem;">${prodAsoc.nombre_producto}</strong>` : 'Sin producto';
                           } else if (i === 5) {
-                              // Phase 6: Local COL
-                              td1 = `<strong style="color:var(--success-green); font-family:monospace; font-size:1.1rem; display:inline-block; margin-bottom:4px;">${c.cli_guia || 'Pendiente Guía'}</strong><br>
-                                     <div style="margin-top:4px;"><span style="font-size:0.75rem; opacity:0.8;">Envío: <strong>${c.cli_fecha_envio || '?'}</strong></span></div>`;
-                              
-                              let estadoBadge = c.cli_estado_entrega === 'Recibido' 
-                                  ? `<span style="background:rgba(6,214,160,0.1); color:var(--success-green); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(6,214,160,0.2);">✅ Recibido (${c.cli_fecha_recibido || 'Sin fecha'})</span>`
-                                  : `<span style="background:rgba(255,190,11,0.1); color:var(--warning-orange); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(255,190,11,0.2);">🚚 En Tránsito Local</span>`;
-                                  
-                              td3 = `${estadoBadge}<br><div style="margin-top:10px; font-size:0.8rem;"><strong>${c.cli_empresa || 'S/N'}</strong> ${c.cli_url ? `<a href="${c.cli_url}" target="_blank" style="margin-left:5px; color:var(--success-green); text-decoration:none;">[🔗 Rastrear]</a>` : ''}</div>`;
+                              td1 = `<strong style="color:var(--success-green); font-family:monospace; font-size:1.1rem; display:inline-block; margin-bottom:4px;">${c.cli_guia || 'Pendiente'}</strong><br><div style="margin-top:4px;"><span style="font-size:0.75rem; opacity:0.8;">Envío: <strong>${c.cli_fecha_envio || '?'}</strong></span></div>`;
+                              let estadoBadge = c.cli_estado_entrega === 'Recibido' ? `<span style="background:rgba(6,214,160,0.1); color:var(--success-green); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(6,214,160,0.2);">✅ Recibido</span>` : `<span style="background:rgba(255,190,11,0.1); color:var(--warning-orange); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(255,190,11,0.2);">🚚 En Tránsito Local</span>`;
+                              td3 = `${estadoBadge}<br><div style="margin-top:10px; font-size:0.8rem;"><strong>${c.cli_empresa || 'S/N'}</strong></div>`;
+                              td4 = `<strong style="color:var(--info-blue); font-size:0.9rem;">${nombreCli}</strong>`;
                           }
-
-                          let td4 = '-';
-                          if (i === 0) {
-                              td4 = c.ubicacion || '-';
-                          } else if (i === 1 || i === 2) {
-                              td4 = c.usa_bodega_nom || 'Por Asignar (USA)';
-                          } else if (i === 3) {
-                              td4 = `<span style="font-size:0.75rem; opacity:0.8;">Recibido en USA: <strong>${c.usa_bodega_fecha || 'Pendiente'}</strong></span><br>
-                                     <div style="margin-top:4px;"><span style="font-size:0.75rem; opacity:0.8; color:var(--info-blue);">Despachado a COL: <strong>${c.int_fecha_envio || 'Pendiente'}</strong></span></div>`;
-                          } else if (i === 4) {
-                              
-                              let badgeSaldoHtml = '';
-                              if (ventaAsoc) {
-                                   const saldoVal = parseInt(ventaAsoc.saldo_pendiente || '0', 10);
-                                   if (saldoVal <= 0) {
-                                        badgeSaldoHtml = `<div style="margin-top:8px;"><span style="padding:3px 6px; background:rgba(6,214,160,0.1); border:1px solid var(--success-green); border-radius:6px; font-size:0.7rem; font-weight:bold; color:var(--success-green); display:inline-block;">✅ Al día (Pagado)</span></div>`;
-                                   } else {
-                                        badgeSaldoHtml = `<div style="margin-top:8px;"><span style="padding:4px 8px; background:rgba(230,57,70,0.1); border:1px solid var(--primary-red); border-radius:6px; font-size:0.75rem; font-weight:bold; color:var(--primary-red); display:inline-block;">⚠️ Debe: $${saldoVal.toLocaleString('es-CO')}</span></div>`;
-                                   }
-                              }
-
-                              if (prodAsoc) {
-                                  td4 = `<strong style="font-size:0.9rem;">${prodAsoc.nombre_producto || 'Sin Nombre'}</strong><br><span style="font-size:0.75rem; opacity:0.7; display:inline-block; margin-top:4px;">Talla: <strong>${prodAsoc.talla || 'N/A'}</strong> | Marca: <strong>${prodAsoc.marca || 'N/A'}</strong></span>${badgeSaldoHtml}`;
-                              } else {
-                                  td4 = `<span style="opacity:0.5; font-size:0.8rem;">Sin producto asociado</span>${badgeSaldoHtml}`;
-                              }
-                          } else if (i === 5) {
-                              td4 = `<strong style="color:var(--info-blue); font-size:0.9rem;">${nombreCli}</strong><br><span style="font-size:0.75rem; opacity:0.7; display:inline-block; margin-top:4px;">${prodAsoc ? prodAsoc.nombre_producto : 'Sin Producto'}</span>`;
-                          }
-
                           let ultimaNota = '';
                           try {
                               if (c.historial) {
                                   let histArr = typeof c.historial === 'string' ? JSON.parse(c.historial) : c.historial;
-                                  if (histArr.length > 0) {
-                                      for (let k = histArr.length - 1; k >= 0; k--) {
-                                          let notaTexto = histArr[k] && histArr[k].notas ? String(histArr[k].notas).trim() : '';
-                                          let faseLog = histArr[k].fase || c.fase;
-                                          if (notaTexto !== '' && mapFase(faseLog) === f) {
-                                              ultimaNota = notaTexto;
-                                              break;
-                                          }
-                                      }
-                                  }
+                                  if (histArr.length > 0) ultimaNota = histArr[histArr.length - 1].notas || '';
                               }
-                          } catch(e) {
-                              console.warn("No se pudo parsear el historial:", e);
-                          }
-                          
-                          if (!ultimaNota && c.notas && mapFase(c.fase) === f) {
-                              ultimaNota = c.notas;
-                          }
-
-
-                          const searchStr = `${c.id_seguimiento_internacional || ''} ${nombreCli} ${c.ubicacion || ''} ${ultimaNota} ${f} ${prodAsoc ? prodAsoc.nombre_producto : ''} ${c.usa_guia || ''} ${c.int_guia || ''} ${c.cli_guia || ''} ${compraAsoc ? compraAsoc.numero_orden : ''} ${c.usa_empresa || ''} ${c.paqueteria || ''} ${c.cli_empresa || ''}`.replace(/\s+/g, ' ').trim();
+                          } catch(e) {}
+                          const searchStr = `${c.id_seguimiento_internacional || ''} ${nombreCli} ${td1} ${td3} ${td4}`.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
                           const safeSearchStr = searchStr.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
                           return `
-                              <tr style="border-top: 1px solid var(--glass-border); transition: 0.3s;" class="log-row" data-text="${safeSearchStr}">
-                                <td style="padding:15px 20px; vertical-align:middle;">
-                                    ${td1}
-                                </td>
-                                <td style="padding:15px 20px; vertical-align:middle; white-space:normal; min-width:200px;">
+                              <tr class="log-row" data-text="${safeSearchStr}">
+                                <td style="padding:15px 20px;">${td1}</td>
+                                <td style="padding:15px 20px;">
                                     <strong style="color:var(--warning-orange);">${nombreCli}</strong><br>
-                                    <span style="display:inline-block; margin-top:4px; margin-bottom:6px; font-size:0.7rem; opacity:0.6;">Dcto Venta: #${c.venta_id ? c.venta_id.toString().slice(-4) : '-'}</span>
-                                    ${ultimaNota ? `
-                                    <div style="background:rgba(255,255,255,0.08); padding:6px 10px; border-radius:6px; border-left:3px solid var(--warning-orange); font-size:0.75rem; color:var(--text-main); line-height:1.3; margin-top:4px;">
-                                        <i style="font-style:normal; opacity:0.6; font-size:0.7rem;">💬 Nota:</i><br><i>${ultimaNota}</i>
-                                    </div>
-                                    ` : ''}
+                                    <span style="font-size:0.7rem; opacity:0.6;">Venta #${c.venta_id ? c.venta_id.toString().slice(-4) : '-'}</span>
+                                    ${ultimaNota ? `<div style="font-size:0.75rem; opacity:0.7; font-style:italic; margin-top:4px; max-width:150px; overflow:hidden; text-overflow:ellipsis;">💬 ${ultimaNota}</div>` : ''}
                                 </td>
-                                <td style="padding:15px 20px; vertical-align:middle;">${td3}</td>
-                                <td style="padding:15px 20px; vertical-align:middle;">${td4}</td>
-                                <td style="padding:15px 20px; vertical-align:middle;">
-                                    <div style="display:flex; gap:10px; align-items:center; justify-content:flex-end;">
-                                        <button class="btn-action" onclick="window.modalDetalleLogistica('${c.id}')" title="Ver Historial" style="font-size:1.2rem; padding: 5px 10px;">👁️</button>
-                                        <button class="btn-action" onclick="window.modalLogistica('${c.id}')" title="Editar Fase" style="font-size:1.2rem; padding: 5px 10px;">✏️</button>
+                                <td style="padding:15px 20px;">${td3}</td>
+                                <td style="padding:15px 20px;">${td4}</td>
+                                ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
+                                <td style="padding:15px 20px; color:#FFB703; font-weight:700;">${ventaAsoc && ventaAsoc.valor_envio_internacional ? formatCOP(ventaAsoc.valor_envio_internacional) : '$0'}</td>
+                                ` : ''}
+                                <td style="padding:15px 20px; text-align:right;">
+                                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                                        <button class="btn-action" onclick="window.modalDetalleLogistica('${c.id}')">👁️</button>
+                                        ${auth.canEdit('logistics') ? `<button class="btn-action" onclick="window.modalLogistica('${c.id}')">✏️</button>` : ''}
                                     </div>
                                 </td>
                               </tr>
                           `;
-                      }).join('') : `<tr><td colspan="5" class="empty-log-row" style="text-align:center; padding:2rem; opacity:0.5;">No hay envíos actualmente en esta fase.</td></tr>`}
+                      }).join('') : `<tr><td colspan="6" style="text-align:center; padding:2rem;">No hay datos.</td></tr>`}
                   </tbody>
                   </table>
               </div>
@@ -327,51 +282,15 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
           `;
       }).join('')}
       </div>
-      ${renderPagination(filteredList.length, _page, _rpp, 'logistics')}
+      `}
+      ${_logActiveTab === 'general' ? renderPagination(filteredList.length, _page, _rpp, 'logistics') : ''}
     `;
     renderLayout(html);
     if(window.lucide) window.lucide.createIcons();
 
-    // Búsqueda
-    setTimeout(() => {
-        const fi = document.getElementById('find-it');
-        if (fi) {
-            fi.oninput = (e) => {
-                const k = e.target.value.toLowerCase().trim();
-                
-                document.querySelectorAll('#list-body .log-fase-block').forEach(block => {
-                    let hasVisibleRow = false;
-                    
-                    block.querySelectorAll('.log-row').forEach(r => {
-                        const text = r.getAttribute('data-text') || '';
-                        const match = text.toLowerCase().includes(k);
-                        r.style.display = match ? '' : 'none';
-                        if (match) hasVisibleRow = true;
-                    });
-                    
-                    const emptyRow = block.querySelector('.empty-log-row');
-                    if (emptyRow) {
-                        // Si la fase no tiene envios de por si
-                        block.style.display = (k === '') ? '' : 'none';
-                    } else {
-                        // Si tiene envios, mostrar u ocultar basado en si hubo matchs
-                        block.style.display = (hasVisibleRow || k === '') ? '' : 'none';
-                    }
-                });
-            };
-        }
-    }, 150);
-    
-    // Función global para ver historial
     window.modalDetalleLogistica = async (id) => {
         const item = reversedList.find(i => i.id.toString() === id.toString());
         if (!item) return;
-
-        let histArr = [];
-        if (item.historial) {
-            try { histArr = JSON.parse(item.historial); } catch(e){}
-        }
-
         const container = document.getElementById('modal-container');
         const content = document.getElementById('modal-content');
         
@@ -380,39 +299,11 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         
         let pFechaVenta = '';
         if (ventaAsoc && ventaAsoc.fecha) {
-            let dateV;
-            let dateStr = String(ventaAsoc.fecha).split(' ')[0]; // Limpiar la hora si la trae
-            
-            if (dateStr.includes('/')) {
-                const parts = dateStr.split('/');
-                if (parts[2]?.length === 4) {
-                    // Es DD/MM/YYYY o D/M/YYYY
-                    dateV = new Date(parts[2], parts[1] - 1, parts[0]);
-                } else if (parts[0]?.length === 4) {
-                    // Es YYYY/MM/DD
-                    dateV = new Date(parts[0], parts[1] - 1, parts[2]);
-                } else {
-                    dateV = new Date(dateStr);
-                }
-            } else if (dateStr.includes('-')) {
-                const parts = dateStr.split('T')[0].split('-');
-                if (parts[0]?.length === 4) {
-                    // YYYY-MM-DD
-                    dateV = new Date(parts[0], parts[1] - 1, parts[2]);
-                } else {
-                    dateV = new Date(dateStr);
-                }
-            } else {
-                dateV = new Date(dateStr);
-            }
-            
-            const hoy = new Date();
-            const dias = Math.floor((hoy - dateV) / (1000 * 60 * 60 * 24));
-            
+            let dateStr = String(ventaAsoc.fecha).split(' ')[0];
             pFechaVenta = `
                   <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.1); grid-column: span 2;">
-                      <span style="opacity:0.6;"><i style="font-style:normal; margin-right:5px;">🤝</i>Fecha de Venta Original del Encargo</span><br>
-                      <strong>${dateStr}</strong> <span style="font-size:0.8rem; background:rgba(230,57,70,0.2); color:var(--primary-red); padding:3px 8px; border-radius:10px; margin-left:5px; font-weight:bold;">Hace ${dias >= 0 ? dias : 0} día(s)</span>
+                      <span style="opacity:0.6;"><i style="font-style:normal; margin-right:5px;">🤝</i>Fecha de Venta Original</span><br>
+                      <strong>${dateStr}</strong>
                   </div>
             `;
         }
@@ -421,7 +312,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         if (compraRef || pFechaVenta) {
             compraBoxHtml = `
             <div style="background:var(--glass-hover); border:1px solid var(--glass-border); padding:1.5rem; border-radius:12px; margin-bottom:2rem;">
-               <h3 style="margin:0 0 15px 0; font-size:1.1rem; color:var(--text-main); text-transform:uppercase; letter-spacing:1px;"><span style="color:var(--info-blue);">🛍️</span> Detalles de la Compra Origen</h3>
+               <h3 style="margin:0 0 15px 0; font-size:1.1rem; color:var(--text-main); text-transform:uppercase; letter-spacing:1px;"><span style="color:var(--info-blue);">🛍️</span> Detalles de la Compra</h3>
                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; font-size:0.9rem;">
                   ${pFechaVenta}
                   <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
@@ -436,68 +327,43 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                       <span style="opacity:0.6;"><i style="font-style:normal; margin-right:5px;">📦</i>Orden Confirmación</span><br>
                       <strong style="color:var(--info-blue); font-family:monospace; font-size:1rem;">${compraRef?.numero_orden || 'S/N'}</strong>
                   </div>
-                  <div style="background:rgba(0,0,0,0.2); padding:10px; border-radius:8px;">
-                      <span style="opacity:0.6;"><i style="font-style:normal; margin-right:5px;">🔗</i>Enlace Oficial</span><br>
-                      ${compraRef?.url_orden ? `<a href="${compraRef?.url_orden}" target="_blank" style="display:inline-block; margin-top:4px; background:rgba(6,214,160,0.2); color:var(--success-green); border:1px solid rgba(6,214,160,0.3); padding:4px 10px; border-radius:15px; text-decoration:none; font-size:0.8rem; font-weight:bold;">Visitar Tienda</a>` : '<span style="opacity:0.4;">Enlace No Adjunto</span>'}
+                  ${(ventaAsoc && (window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas')) ? `
+                  <div style="background:rgba(255,183,3,0.1); padding:10px; border-radius:8px; border:1px solid rgba(255,183,3,0.2);">
+                      <span style="color:#FFB703; font-weight:bold;"><i style="font-style:normal; margin-right:5px;">✈️</i>Envío Internacional</span><br>
+                      <strong style="color:#FFB703;">${formatCOP(ventaAsoc.valor_envio_internacional || 0)}</strong>
                   </div>
+                  ` : ''}
                </div>
-            </div>
-            `;
+            </div>`;
         }
 
-        let virtualHistArr = [];
-
-        if (ventaAsoc && ventaAsoc.fecha) {
-            virtualHistArr.push({
-                fase: "Venta Registrada (Sistema Origen)",
-                fecha: String(ventaAsoc.fecha).split('T')[0],
-                notas: `Asignado a doc de venta #${ventaAsoc.id.toString().slice(-4)}`
-            });
-        }
+        let histArr = [];
+        if (item.historial) { try { histArr = JSON.parse(item.historial); } catch(e){} }
         
-        if (compraRef && compraRef.fecha_pedido) {
-            virtualHistArr.push({
-                fase: "Compra Proveedor Exterior",
-                fecha: String(compraRef.fecha_pedido).split('T')[0],
-                notas: `Orden Oficial #${compraRef.numero_orden || 'S/N'}, Tienda: ${compraRef.proveedor || 'N/A'}`
-            });
-        }
-
-        virtualHistArr = [...virtualHistArr, ...histArr];
-
-        let timelineHtml = virtualHistArr.length > 0 ? virtualHistArr.map((h, idx) => {
-            let cleanFase = h.fase.replace(/^(\d+[\.\-\)]?\s*)/, '');
-            return `
+        let timelineHtml = histArr.map((h, idx) => `
             <div style="position:relative; padding-left:25px; margin-bottom:15px;">
-                <div style="position:absolute; left:0; top:5px; width:10px; height:10px; border-radius:50%; background:var(--primary-red); border:2px solid var(--body-bg);"></div>
+                <div style="position:absolute; left:0; top:5px; width:10px; height:10px; border-radius:50%; background:var(--primary-red);"></div>
                 <div style="position:absolute; left:4px; top:15px; width:2px; height:calc(100% + 15px); background:var(--glass-border);"></div>
-                <strong style="color:var(--text-main); font-size:0.95rem;">${idx + 1}. ${cleanFase}</strong><br>
+                <strong style="font-size:0.9rem;">${h.fase}</strong><br>
                 <span style="opacity:0.5; font-size:0.75rem;">${h.fecha}</span>
-                ${h.notas ? `<p style="margin:5px 0 0; font-size:0.8rem; opacity:0.8; background:var(--glass-hover); padding:5px 10px; border-radius:8px;">${h.notas}</p>` : ''}
+                ${h.notas ? `<p style="margin:5px 0 0; font-size:0.8rem; opacity:0.8;">${h.notas}</p>` : ''}
             </div>
-            `;
-        }).join('') : '<p style="opacity:0.5;">Sin historial registrado previo.</p>';
+        `).join('') || '<p style="opacity:0.5;">Sin historial de cambios.</p>';
 
         content.innerHTML = `
-            <h2>Línea de Vida Logística</h2>
-            <div style="margin-top:1.5rem;">
-                ${compraBoxHtml}
-                <h3 style="margin-bottom:15px; font-size:1.1rem; color:var(--text-main); text-transform:uppercase; letter-spacing:1px;"><span style="color:var(--primary-red);">⏳</span> Cronología de Fases</h3>
-                ${timelineHtml}
-            </div>
-            
-            <h3 style="margin-top:2rem; border-top:1px solid var(--glass-border); padding-top:1rem;">Detalles Relevantes Asociados</h3>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:0.8rem;">
-                ${item.usa_guia ? `<div><strong>Guía USA:</strong> ${item.usa_guia}</div>` : ''}
-                ${item.usa_empresa ? `<div><strong>Transportadora USA:</strong> ${item.usa_empresa}</div>` : ''}
-                ${item.usa_bodega_nom ? `<div><strong>Bodega USA:</strong> ${item.usa_bodega_nom}</div>` : ''}
-                ${item.int_guia ? `<div><strong>Tracking Int:</strong> ${item.int_guia}</div>` : ''}
-                ${item.cli_guia ? `<div><strong>Guía Colombia:</strong> ${item.cli_guia}</div>` : ''}
-                ${item.cli_empresa ? `<div><strong>Transportadora COL:</strong> ${item.cli_empresa}</div>` : ''}
-            </div>
-
-            <div style="margin-top:2rem;">
-               <button type="button" class="btn-primary" onclick="window.closeModal()" style="width:100%;">Cerrar</button>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Historial Logístico</h2>
+                    <button class="modal-close" onclick="window.closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    ${compraBoxHtml}
+                    <h3 style="margin-bottom:15px; font-size:1.1rem;">Cronología</h3>
+                    ${timelineHtml}
+                </div>
+                <div class="modal-footer">
+                   <button type="button" class="btn-primary" onclick="window.closeModal()">Cerrar</button>
+                </div>
             </div>
         `;
         container.style.display = 'flex';
@@ -511,21 +377,25 @@ export const createLogisticsModal = async (id, navigateTo) => {
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
 
-    if (id) {
-       content.innerHTML = `<div style="text-align:center; padding:2rem;"><div class="loader"></div> Recuperando Seguimiento...</div>`;
-       container.style.display = 'flex';
-       const list = await db.fetchData('Logistica');
-       const target = list.find(it => it.id.toString() === id.toString());
-       if (target) data = { ...target };
-    }
+    content.innerHTML = `<div style="text-align:center; padding:2rem;"><div class="loader"></div> Preparando formulario...</div>`;
+    container.style.display = 'flex';
 
-    const [ventas, productos, clientes, conf, comprasData] = await Promise.all([
+    const [logisticaData, ventas, productos, clientes, conf, comprasData] = await Promise.all([
+        db.fetchData('Logistica'),
         db.fetchData('Ventas'),
         db.fetchData('Productos'),
         db.fetchData('Clientes'),
         db.fetchData('Configuracion'),
         db.fetchData('Compras')
     ]);
+    
+    const list = Array.isArray(logisticaData) ? logisticaData : [];
+    if (id) {
+        const target = list.find(it => it.id.toString() === id.toString());
+        if (target) data = { ...target };
+    }
+    
+    const itemsInUSA = list.filter(it => it.fase && it.fase.includes('3.') && it.id.toString() !== data.id?.toString());
     
     const comprasList = comprasData.error ? [] : comprasData;
     
@@ -558,165 +428,262 @@ export const createLogisticsModal = async (id, navigateTo) => {
     }
 
     content.innerHTML = `
-        <h2 style="margin-bottom:1.5rem;">${id ? 'Actualizar Envio' : 'Registrar Nuevo Envio'}</h2>
-        <form id="form-crud" style="display:flex; flex-direction:column; gap:1.2rem; max-height: 70vh; overflow-y: auto; padding-right:15px;">
-            
-            <div style="background:var(--glass-hover); padding:1rem; border-radius:12px; border:1px solid var(--glass-border);">
-                 <label style="font-weight:bold; color:var(--info-blue);">Cambiar Estado / Fase actual:</label>
-                 <select name="fase" id="log-fase-select" style="font-size:1.1rem; padding:10px; margin-top:5px; background:var(--input-bg); color:var(--text-main);">
-                     ${selectOptionsHtml}
-                 </select>
-            </div>
-
-            <div>
-               <label>Asociar a Orden de Venta (Opcional)</label>
-               <select name="venta_id" id="log-venta-select">
-                  <option value="">-- Sin Vincular --</option>
-                  ${!(ventas.error) ? ventas.reverse().map(v => `<option value="${v.id}" ${data.venta_id == v.id ? 'selected' : ''}>Orden #${v.id} - ${v.fecha || 'Sin fecha'}</option>`).join('') : ''}
-               </select>
-               <div id="log-preview-box" style="display:none; margin-top:15px;"></div>
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>${id ? 'Actualizar Seguimiento Logístico' : 'Registrar Nuevo Envío'}</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
             </div>
             
-            <!-- BLOQUE 1 Y 2: Tienda a Bodega USA -->
-            <div id="fase-b12" style="display:none; gap:1rem; flex-direction:column; padding:15px; border-left:3px solid var(--primary-red); background:rgba(255,0,0,0.05);">
-                <h4>Detalles Tracking Origen -> Estados Unidos</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                    <div><label>Guía Tienda (USA)</label><input type="text" name="usa_guia" value="${data.usa_guia || ''}"></div>
-                    <div><label>Empresa Transporte USA</label>
-                         <select name="usa_empresa">
-                            <option value="">-- Parametrizar Option --</option>
-                            ${transpUSA.map(t => `<option value="${t.valor}" ${data.usa_empresa === t.valor ? 'selected' : ''}>${t.valor}</option>`).join('')}
-                         </select>
-                    </div>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr; gap:1rem;">
-                    <div><label>URL Tracking USA</label><input type="url" name="usa_url" value="${data.usa_url || ''}"></div>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                    <div><label>Fecha de Envío USA</label><input type="date" name="usa_fecha_envio" value="${data.usa_fecha_envio || ''}"></div>
-                    <div><label>Fecha Estimada de Llegada a Bodega</label><input type="date" name="usa_fecha_estimada" value="${data.usa_fecha_estimada || ''}"></div>
-                </div>
-            </div>
-
-            <!-- BLOQUE 3: Bodega USA -->
-            <div id="fase-b3" style="display:none; gap:1rem; flex-direction:column; padding:15px; border-left:3px solid var(--warning-orange); background:rgba(255,165,0,0.05);">
-                <h4>Llegada a Bodega USA</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                    <div><label>Bodega USA de Recepción</label>
-                         <select name="usa_bodega_nom">
-                            <option value="">-- Seleccionar --</option>
-                            ${bodegasUSA.map(t => `<option value="${t.valor}" ${data.usa_bodega_nom === t.valor ? 'selected' : ''}>${t.valor}</option>`).join('')}
-                         </select>
-                    </div>
-                    <div><label>Fecha Llegada a Bodega</label><input type="date" name="usa_bodega_fecha" value="${data.usa_bodega_fecha || ''}"></div>
-                </div>
-                <div>
-                    <label>Evidencia Entrega / Guía Recibida (Opcional)</label>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <div style="width:60px; height:60px; border-radius:8px; overflow:hidden; background:var(--glass-hover); border:1px solid var(--glass-border); display:flex; justify-content:center; align-items:center;">
-                            <img id="usa-preview" src="${data.usa_bodega_foto || ''}" style="${data.usa_bodega_foto ? 'width:100%; height:100%; object-fit:cover;' : 'display:none;'}">
-                            <span id="usa-ph" style="font-size:0.6rem; opacity:0.5; text-align:center; ${data.usa_bodega_foto ? 'display:none;' : ''}">SIN<br>FOTO</span>
+            <form id="form-tracking">
+                <div class="modal-body">
+                    <!-- Sección de Asociación -->
+                    <div class="form-grid-2" style="margin-bottom: 2rem; border-bottom: 1px dashed var(--border-base); padding-bottom: 2rem;">
+                        <div class="form-group">
+                            <label class="form-label">Vincular a Orden de Venta (Opcional)</label>
+                            <select name="venta_id" id="log-venta-select">
+                                <option value="">-- Sin Vincular --</option>
+                                ${!(ventas.error) ? ventas.reverse().map(v => `<option value="${v.id}" ${data.venta_id == v.id ? 'selected' : ''}>Orden #${v.id} - ${v.fecha || 'Sin fecha'}</option>`).join('') : ''}
+                            </select>
                         </div>
-                        <div style="flex:1;">
-                            <input type="file" id="usa-foto-input" accept="image/*" style="font-size:0.8rem; padding:8px; width:100%; border:1px dashed var(--glass-border); border-radius:8px; cursor:pointer;">
-                            <input type="hidden" name="usa_bodega_foto" value="${data.usa_bodega_foto || ''}">
-                        </div>
+                        <div id="log-preview-box" style="display:none;"></div>
                     </div>
-                </div>
-            </div>
 
-            <!-- BLOQUE 4: Internacional / Aduana -->
-            <div id="fase-b4" style="display:none; gap:1rem; flex-direction:column; padding:15px; border-left:3px solid var(--info-blue); background:rgba(0,100,255,0.05);">
-                <h4>Tracking Aéreo / Internacional</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                    <div><label>Fecha Recepción en Bodega USA</label><input type="date" name="usa_bodega_fecha" value="${data.usa_bodega_fecha || ''}"></div>
-                    <div><label>Fecha Despacho Hacia COL</label><input type="date" name="int_fecha_envio" value="${data.int_fecha_envio || ''}"></div>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                     <div><label>Guía Consolidada (Aerolínea/Tracking Int)</label><input type="text" name="int_guia" value="${data.int_guia || data.id_seguimiento_internacional || ''}"></div>
-                     <div><label>Courier Int. (Paquetería)</label><input type="text" name="paq" value="${data.paqueteria || ''}"></div>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr; gap:1rem;">
-                     <div><label>URL Tracking Internacional</label><input type="url" name="int_url" value="${data.int_url || ''}"></div>
-                </div>
-            </div>
-            
-            <!-- BLOQUE 5: Bodega Colombia -->
-            <div id="fase-b5" style="display:none; gap:1rem; flex-direction:column; padding:15px; border-left:3px solid #ccc; background:rgba(255,255,255,0.05);">
-                <h4>Arribo a Bodega Colombia (MDE)</h4>
+                    <div class="form-grid-3">
+                        <div class="form-group full-width" style="grid-column: span 3; background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px;">
+                            <label class="form-label" style="color:var(--brand-magenta); font-weight:800; font-size:0.95rem;">Estado de Avance Logístico</label>
+                            <select name="fase" id="log-fase-select" style="font-size:1.1rem; font-weight:800; color: var(--brand-magenta); border-color: var(--brand-magenta);">
+                                ${selectOptionsHtml}
+                                ${currentIdx === 0 ? `<option value="${FASES_ALL[2]}" id="opt-jump-step-3" style="display:none;">Avanzar: ${FASES_ALL[2]} (Salto a Bodega)</option>` : ''}
+                            </select>
+                        </div>
+
+                        ${currentIdx === 0 ? `
+                        <div class="form-group full-width" style="grid-column: span 3; display:flex; flex-direction:row; align-items:center; gap:15px; padding: 0.5rem 1rem;">
+                            <input type="checkbox" id="chk-viaje-encargos" name="comprado_viaje_encargos" ${data.comprado_viaje_encargos ? 'checked' : ''} style="width:22px; height:22px; cursor:pointer;"
+                                onchange="
+                                    const opt = document.getElementById('opt-jump-step-3');
+                                    if(opt) opt.style.display = this.checked ? '' : 'none';
+                                    if(this.checked) {
+                                        document.getElementById('log-fase-select').value = '${FASES_ALL[2]}';
+                                        window._applyLogDynamicFields && window._applyLogDynamicFields();
+                                    }
+                                ">
+                            <label for="chk-viaje-encargos" style="font-weight:700; color:#D97706; cursor:pointer; margin:0; text-transform:none; font-size:0.9rem;">Comprado en viaje de encargos (EEUU) - Omitir Paso 2</label>
+                        </div>` : ''}
+                    </div>
+
+                <div class="modal-section-divider" style="height:1px; background:var(--border-base); margin:2rem 0;"></div>
                 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                    <div><label>Fecha de LLegada COL</label><input type="date" name="col_bodega_fecha" value="${data.col_bodega_fecha || ''}"></div>
-                    <div>
-                        <label>¿Notificado al Cliente?</label>
-                        <select name="cliente_notificado">
-                            <option value="No" ${data.cliente_notificado === 'No' || !data.cliente_notificado ? 'selected' : ''}>No, pendiente notificación</option>
-                            <option value="Sí" ${data.cliente_notificado === 'Sí' ? 'selected' : ''}>Sí, cliente informado</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div id="fase5-action-board" style="display:none; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); border-radius:12px; padding:15px; margin-top:5px;">
-                    <!-- Filled by JS with Client contact info and link to Sale -->
-                </div>
-
-                <div style="margin-top:0.5rem;">
-                    <label>Foto Recibido Colombia (Opcional)</label>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <div style="width:60px; height:60px; border-radius:8px; overflow:hidden; background:var(--glass-hover); border:1px solid var(--glass-border); display:flex; justify-content:center; align-items:center;">
-                            <img id="col-preview" src="${data.col_bodega_foto || ''}" style="${data.col_bodega_foto ? 'width:100%; height:100%; object-fit:cover;' : 'display:none;'}">
-                            <span id="col-ph" style="font-size:0.6rem; opacity:0.5; text-align:center; ${data.col_bodega_foto ? 'display:none;' : ''}">SIN<br>FOTO</span>
+                <div id="fase-b12" style="display:none; margin-top: 1rem;">
+                    <h3 style="font-size:0.95rem; color:var(--brand-magenta); margin-bottom:1.5rem; text-transform:uppercase; letter-spacing:1px; font-weight:800;">📦 Tracking Origen -> Estados Unidos</h3>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Guía Tienda (USA)</label>
+                            <input type="text" name="usa_guia" value="${data.usa_guia || ''}" placeholder="Número de tracking">
                         </div>
-                        <div style="flex:1;">
-                            <input type="file" id="col-foto-input" accept="image/*" style="font-size:0.8rem; padding:8px; width:100%; border:1px dashed var(--glass-border); border-radius:8px; cursor:pointer;">
-                            <input type="hidden" name="col_bodega_foto" value="${data.col_bodega_foto || ''}">
+                        <div class="form-group">
+                            <label class="form-label">Empresa Transporte USA</label>
+                            <select name="usa_empresa">
+                                <option value="">-- Seleccionar --</option>
+                                ${transpUSA.map(t => `<option value="${t.valor}" ${data.usa_empresa === t.valor ? 'selected' : ''}>${t.valor}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group" style="grid-column: span 3;">
+                            <label class="form-label">URL Tracking USA</label>
+                            <input type="url" name="usa_url" value="${data.usa_url || ''}" placeholder="https://www.fedex.com/tracking/...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha de Envío USA</label>
+                            <input type="date" name="usa_fecha_envio" value="${data.usa_fecha_envio || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha Estimada Llegada</label>
+                            <input type="date" name="usa_fecha_estimada" value="${data.usa_fecha_estimada || ''}">
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- BLOQUE 6: Entregado Cliente Final -->
-            <div id="fase-b6" style="display:none; gap:1rem; flex-direction:column; padding:15px; border-left:3px solid var(--success-green); background:rgba(0,255,0,0.05);">
-                <h4>Despacho a Cliente Final</h4>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                    <div><label>Empresa Transporte COL</label>
-                         <select name="cli_empresa">
-                            <option value="">-- Parametrizar Option --</option>
-                            ${transpCOL.map(t => `<option value="${t.valor}" ${data.cli_empresa === t.valor ? 'selected' : ''}>${t.valor}</option>`).join('')}
-                         </select>
+                <!-- BLOQUE 3: Bodega EEUU -->
+                <div id="fase-b3" style="display:none; margin-top: 1rem;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--text-main);">
+                        <span>🏢</span>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--text-main); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Recepción en Bodega EEUU</h3>
                     </div>
-                    <div><label>Guía Nacional</label><input type="text" name="cli_guia" value="${data.cli_guia || ''}"></div>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                    <div><label>Fecha Envío Local</label><input type="date" name="cli_fecha_envio" value="${data.cli_fecha_envio || ''}"></div>
-                    <div><label>URL Tracking Local</label><input type="url" name="cli_url" value="${data.cli_url || ''}"></div>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:5px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
-                    <div>
-                        <label>Estado de Recepción</label>
-                        <select name="cli_estado_entrega">
-                            <option value="En Tránsito" ${data.cli_estado_entrega === 'En Tránsito' || !data.cli_estado_entrega ? 'selected' : ''}>🚚 En Tránsito Local</option>
-                            <option value="Recibido" ${data.cli_estado_entrega === 'Recibido' ? 'selected' : ''}>✅ Entregado al Cliente Final</option>
-                        </select>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Fecha Arribo EEUU</label>
+                            <input type="date" name="usa_bodega_fecha" value="${data.usa_bodega_fecha || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Nombre de la Bodega (EEUU)</label>
+                            <select name="usa_bodega_nom">
+                                <option value="">-- Seleccionar Bodega --</option>
+                                ${bodegasUSA.map(b => `<option value="${b.valor}" ${data.usa_bodega_nom === b.valor ? 'selected' : ''}>${b.valor}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group full-width" style="grid-column: span 3;">
+                            <label class="form-label">Foto Paquete EEUU (Opcional)</label>
+                            <div style="display:flex; gap:15px; align-items:center; background:var(--surface-1); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
+                                <div style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                                    <img id="usa-preview" src="${data.usa_bodega_foto || ''}" style="${data.usa_bodega_foto ? 'width:100%; height:100%; object-fit:cover;' : 'display:none;'}">
+                                    <span id="usa-ph" style="font-size:0.6rem; opacity:0.4; text-align:center; ${data.usa_bodega_foto ? 'display:none;' : ''}">FOTO</span>
+                                </div>
+                                <div style="flex:1;">
+                                    <input type="file" id="usa-foto-input" accept="image/*" style="font-size:0.8rem; border:none; background:transparent; padding:0;">
+                                    <input type="hidden" name="usa_bodega_foto" value="${data.usa_bodega_foto || ''}">
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div><label>Fecha Recibido</label><input type="date" name="cli_fecha_recibido" value="${data.cli_fecha_recibido || ''}"></div>
                 </div>
+
+                <!-- BLOQUE 4: Tránsito Internacional -->
+                <div id="fase-b4" style="display:none; margin-top: 1rem;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--info);">
+                        <span>✈️</span>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--info); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Envío Internacional (USA → COL)</h3>
+                    </div>
+                    
+                    <div id="log-consolidation-box" style="margin-bottom:1.5rem;">
+                        ${(!id && Array.isArray(logisticaData)) ? `
+                            <div style="padding:1rem; background:rgba(37,99,235,0.05); border:1px dashed var(--info); border-radius:12px;">
+                                <label style="font-weight:800; font-size:0.85rem; color:var(--info); margin-bottom:10px; display:block;">📦 Consolidar con otros envíos en Bodega EEUU</label>
+                                ${logisticaData.filter(it => it.fase && it.fase.includes('3.')).map(it => {
+                                    const v = ventas.find(vnt => vnt.id.toString() === it.venta_id?.toString());
+                                    const p = v ? productos.find(prd => prd.id.toString() === v.producto_id?.toString()) : null;
+                                    return `
+                                        <label style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-base); cursor:pointer; font-size:0.82rem;">
+                                            <input type="checkbox" name="consolidate_ids" value="${it.id}" style="width:18px; height:18px;">
+                                            <span>${p?.nombre_producto || 'Producto Stock'} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
+                                        </label>
+                                    `;
+                                }).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Fecha Despacho Hacia COL</label>
+                            <input type="date" name="int_fecha_envio" value="${data.int_fecha_envio || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Guía Consolidada (Int)</label>
+                            <input type="text" name="int_guia" value="${data.int_guia || data.id_seguimiento_internacional || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Courier Internacional</label>
+                            <input type="text" name="paq" value="${data.paqueteria || ''}">
+                        </div>
+                        <div class="form-group" style="grid-column: span 3;">
+                            <label class="form-label">URL Tracking Int.</label>
+                            <input type="url" name="int_url" value="${data.int_url || ''}" placeholder="https://...">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- BLOQUE 5: Bodega Colombia -->
+                <div id="fase-b5" style="display:none; margin-top: 1rem;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--success-green);">
+                        <span>🇨🇴</span>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--success-green); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Recepción en Bodega Colombia</h3>
+                    </div>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Fecha Arribo COL</label>
+                            <input type="date" name="col_bodega_fecha" value="${data.col_bodega_fecha || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Notificación Cliente</label>
+                            <select name="cliente_notificado">
+                                <option value="No" ${data.cliente_notificado === 'No' || !data.cliente_notificado ? 'selected' : ''}>Pendiente notificación</option>
+                                <option value="Sí" ${data.cliente_notificado === 'Sí' ? 'selected' : ''}>Cliente informado ✅</option>
+                            </select>
+                        </div>
+                        <div class="form-group full-width" id="fase5-action-board" style="display:none; grid-column: span 3; padding:1.2rem; border-radius:12px; border:1px solid var(--info);"></div>
+                        
+                        <div class="form-group full-width" style="grid-column: span 3;">
+                            <label class="form-label">Foto Arribo (Opcional)</label>
+                            <div style="display:flex; gap:15px; align-items:center; background:var(--surface-1); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
+                                <div style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                                    <img id="col-preview" src="${data.col_bodega_foto || ''}" style="${data.col_bodega_foto ? 'width:100%; height:100%; object-fit:cover;' : 'display:none;'}">
+                                    <span id="col-ph" style="font-size:0.6rem; opacity:0.4; text-align:center; ${data.col_bodega_foto ? 'display:none;' : ''}">FOTO</span>
+                                </div>
+                                <div style="flex:1;">
+                                    <input type="file" id="col-foto-input" accept="image/*" style="font-size:0.8rem; border:none; background:transparent; padding:0;">
+                                    <input type="hidden" name="col_bodega_foto" value="${data.col_bodega_foto || ''}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BLOQUE 6: Entregado Cliente Final -->
+                <div id="fase-b6" style="display:none; margin-top: 1rem;">
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--success-green);">
+                        <span>🚚</span>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--success-green); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Despacho Nacional a Cliente</h3>
+                    </div>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Transportadora COL</label>
+                            <select name="cli_empresa">
+                                <option value="">-- Seleccionar --</option>
+                                ${transpCOL.map(t => `<option value="${t.valor}" ${data.cli_empresa === t.valor ? 'selected' : ''}>${t.valor}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Guía Nacional</label>
+                            <input type="text" name="cli_guia" value="${data.cli_guia || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha Envío Local</label>
+                            <input type="date" name="cli_fecha_envio" value="${data.cli_fecha_envio || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Valor Envío Local (COP) *</label>
+                            <input type="number" name="valor_envio_interno_colombia" value="${data.valor_envio_interno_colombia || ''}" required placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Estado de Recepción</label>
+                            <select name="cli_estado_entrega">
+                                <option value="En Tránsito" ${data.cli_estado_entrega === 'En Tránsito' || !data.cli_estado_entrega ? 'selected' : ''}>🚚 En Tránsito Local</option>
+                                <option value="Recibido" ${data.cli_estado_entrega === 'Recibido' ? 'selected' : ''}>✅ Entregado al Cliente Final</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha Recibido</label>
+                            <input type="date" name="cli_fecha_recibido" value="${data.cli_fecha_recibido || ''}">
+                        </div>
+                        <div class="form-group full-width" style="grid-column: span 3;">
+                            <label class="form-label">URL Tracking Local</label>
+                            <input type="url" name="cli_url" value="${data.cli_url || ''}" placeholder="https://...">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-section-divider" style="height:1px; background:var(--border-base); margin:2rem 0;"></div>
+
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label class="form-label">Añadir Nota / Comentario al Historial</label>
+                        <input type="text" name="notas_fase" value="" placeholder="Opcional. Breve novedad en este estado.">
+                    </div>
+                    <div style="display:none;"><input type="text" name="ubi" value="${data.ubicacion}"></div>
+                    <input type="hidden" name="id_seguimiento_internacional" value="${data.id_seguimiento_internacional || ''}">
+                </div>
+
+                <div id="form-error" style="display:none; color:var(--primary-red); background:var(--brand-magenta-dim); padding:1rem; border-radius:12px; margin-top:1.5rem; text-align:center; font-weight:700;"></div>
             </div>
 
-            <!-- GLOBALES -->
-            <hr style="opacity:0.2;">
-            <div style="display:grid; grid-template-columns:1fr; gap:1rem;">
-               <div><label>Añadir Nota / Comentario al Historial</label><input type="text" name="notas_fase" value="" placeholder="Opcional. Breve novedad en este estado."></div>
-               <div style="display:none;"><label>Ubicación Actual Histórica</label><input type="text" name="ubi" value="${data.ubicacion}"></div>
-               <input type="hidden" name="id_seguimiento_internacional" value="${data.id_seguimiento_internacional || ''}">
-            </div>
-
-            <div style="display:flex; gap:15px; margin-top:0.5rem;">
-               <button type="submit" class="btn-primary" style="flex:1;">Guardar Fase</button>
-               <button type="button" onclick="window.closeModal()" style="flex:1; background:none; border:1px solid var(--glass-border); color:var(--text-main); border-radius:16px;">Cerrar</button>
+            <div class="modal-footer">
+                <button type="button" class="btn-action" style="padding:10px 25px;" onclick="window.closeModal()">Cerrar</button>
+                <button type="submit" id="btn-save-log" class="btn-primary" style="padding:10px 30px;">
+                    ${id ? 'Actualizar Información' : 'Registrar Logística'}
+                </button>
             </div>
         </form>
-    `;
+    </div>`;
     
     container.style.display = 'flex';
     
@@ -725,31 +692,47 @@ export const createLogisticsModal = async (id, navigateTo) => {
         const fsel = document.getElementById('log-fase-select');
         if(!fsel) return;
         const val = fsel.value;
+        const isViajeEncargos = document.getElementById('chk-viaje-encargos')?.checked;
 
         // Hide all initially
-        document.getElementById('fase-b12').style.display = 'none';
-        document.getElementById('fase-b3').style.display  = 'none';
-        document.getElementById('fase-b4').style.display  = 'none';
-        document.getElementById('fase-b5').style.display  = 'none';
-        document.getElementById('fase-b6').style.display  = 'none';
+        ['fase-b12', 'fase-b3', 'fase-b4', 'fase-b5', 'fase-b6'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.style.display = 'none';
+        });
 
         if(val.includes('1.') || val.includes('2.')) {
-            document.getElementById('fase-b12').style.display = 'flex';
+            document.getElementById('fase-b12').style.display = 'block';
         } else if (val.includes('3.')) {
-            document.getElementById('fase-b12').style.display = 'flex'; // show prev
-            document.getElementById('fase-b3').style.display = 'flex';
+            // Viaje de encargos: omite tracking tienda→bodega (fase-b12),
+            // pero SÍ muestra recepción en Bodega EEUU (fase-b3)
+            if (isViajeEncargos) {
+                document.getElementById('fase-b12').style.display = 'none';
+                document.getElementById('fase-b3').style.display = 'block';
+            } else {
+                document.getElementById('fase-b12').style.display = 'block';
+                document.getElementById('fase-b3').style.display = 'block';
+            }
         } else if (val.includes('4.')) {
-            document.getElementById('fase-b4').style.display = 'flex';
+            document.getElementById('fase-b4').style.display = 'block';
+            if (data.fase?.includes('3.') || mode === 'INSERT' || isViajeEncargos) {
+                const czone = document.getElementById('consolidation-zone');
+                if(czone) czone.style.display = 'block';
+            }
         } else if (val.includes('5.')) {
-            document.getElementById('fase-b4').style.display = 'flex'; // show prev related
-            document.getElementById('fase-b5').style.display = 'flex';
+            document.getElementById('fase-b4').style.display = 'block';
+            document.getElementById('fase-b5').style.display = 'block';
         } else if (val.includes('6.')) {
-            document.getElementById('fase-b6').style.display = 'flex';
+            document.getElementById('fase-b6').style.display = 'block';
         }
     };
 
     const fsel = document.getElementById('log-fase-select');
+    // expose for checkbox onchange
+    window._applyLogDynamicFields = applyDynamicFields;
     if (fsel) { fsel.addEventListener('change', applyDynamicFields); applyDynamicFields(); }
+    // Also listen to checkbox in case it was pre-checked on load
+    const chkViaje = document.getElementById('chk-viaje-encargos');
+    if (chkViaje) chkViaje.addEventListener('change', applyDynamicFields);
 
     // Dynamic Product Preview logic
     const updateLogPreview = () => {
@@ -785,6 +768,12 @@ export const createLogisticsModal = async (id, navigateTo) => {
                        <div><span style="opacity:0.6;">Destinatario Final:</span><br><strong style="color:var(--info-blue);">${clientName}</strong></div>
                        <div><span style="opacity:0.6;">Orden Asignada (${cmpData?.proveedor || ''}):</span><br><strong>${cmpData?.numero_orden || 'Sin Orden Cargada'}</strong> ${cmpData?.url_orden ? `<a href="${cmpData.url_orden}" target="_blank" style="color:var(--success-green); text-decoration:none;">🔗</a>` : ''}</div>
                    </div>
+                   ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') ? `
+                   <div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--glass-border); font-size:0.75rem;">
+                        <span style="opacity:0.6;">✈️ Costo Envío Internacional:</span> <strong style="color:#FFB703;">${formatCOP(vData.valor_envio_internacional || 0)}</strong>
+                        <span style="opacity:0.4; font-size:0.65rem; margin-left:5px;">(${vData.peso_producto || 0} Lbs × USD Rate × ${formatCOP(vData.trm_cotizada || 0)})</span>
+                   </div>
+                   ` : ''}
                </div>
            </div>
         `;
@@ -860,7 +849,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
             if (vRel) {
                 const saldoVal = parseInt(vRel.saldo_pendiente || "0", 10);
                 if (saldoVal > 0) {
-                    alert(`⚠️ ALERTA DE RECAUDO ⚠️\n\nNo puedes avanzar este envío a la fase "6. Entregado a Cliente Final" porque hay un saldo pendiente por cobrar de $${saldoVal.toLocaleString('es-CO')} COP.\n\nDebes ir primero a la Orden de Venta y asentar el pago para que el saldo quede en $0 antes de entregar el producto.`);
+                    await window.customAlert('ALERTA DE RECAUDO', `No puedes avanzar este envío a la fase "6. Entregado a Cliente Final" porque hay un saldo pendiente por cobrar de $${saldoVal.toLocaleString('es-CO')} COP.\n\nDebes ir primero a la Orden de Venta y asentar el pago para que el saldo quede en $0 antes de entregar el producto.`, 'warning');
                     return; // Stop form submission
                 }
             }
@@ -902,7 +891,8 @@ export const createLogisticsModal = async (id, navigateTo) => {
             'usa_bodega_nom','usa_bodega_fecha','usa_bodega_foto',
             'int_fecha_envio','int_guia','int_url',
             'col_bodega_fecha','col_bodega_foto','cliente_notificado',
-            'cli_guia','cli_empresa','cli_url','cli_fecha_envio','cli_estado_entrega','cli_fecha_recibido'
+            'cli_guia','cli_empresa','cli_url','cli_fecha_envio','cli_estado_entrega','cli_fecha_recibido',
+            'valor_envio_interno_colombia','comprado_viaje_encargos'
         ];
         
         fields.forEach(kf => {
@@ -947,17 +937,62 @@ export const createLogisticsModal = async (id, navigateTo) => {
                 const urlObj = await uploadImageToSupabase(fiCOL.files[0]);
                 if (urlObj) payload.col_bodega_foto = urlObj;
             }
-        } catch(e) {
-            showToast("Hubo un error subiendo la fotografía: " + e.message, "error");
-            btn.disabled = false; btn.innerText = "Guadar Fase";
-            return;
-        }
 
-        btn.innerHTML = '<i class="loader"></i> Finalizando Registro...';
-        
-        try { 
+            // --- Lógica de Consolidación ---
+            const consolidateIds = fd.getAll('consolidate_ids');
+            const guiaUSD = fd.get('guia_total_usd');
+            const guiaCOP = fd.get('guia_total_cop');
+            
+            let newGuiaId = null;
+            if (nuevaFase.includes('4.') && (guiaUSD || guiaCOP)) {
+                btn.innerHTML = '<i class="loader"></i> Creando Guía Internacional...';
+                newGuiaId = Date.now().toString();
+                const guiaPayload = {
+                    id: newGuiaId,
+                    numero_guia: fd.get('int_guia') || payload.int_guia || '',
+                    valor_usd: parseFloat(guiaUSD || 0),
+                    valor_cop: parseInt(guiaCOP || 0),
+                    courier: fd.get('paq') || payload.paqueteria || '',
+                    fecha_creacion: new Date().toISOString()
+                };
+                await db.postData('GuiasInternacionales', guiaPayload, 'INSERT');
+                payload.guia_internacional_id = newGuiaId;
+            }
+
+            btn.innerHTML = '<i class="loader"></i> Guardando Registro Principal...';
             const res = await db.postData('Logistica', payload, mode); 
             if(res.error) throw new Error(res.error);
+
+            // Actualizar otros productos consolidados
+            if (newGuiaId && consolidateIds.length > 0) {
+                btn.innerHTML = `<i class="loader"></i> Consolidando ${consolidateIds.length} productos...`;
+                for (const otherId of consolidateIds) {
+                    const otherItem = list.find(it => it.id.toString() === otherId.toString());
+                    if (otherItem) {
+                        const otherPayload = { 
+                            ...otherItem,
+                            fase: nuevaFase,
+                            guia_internacional_id: newGuiaId,
+                            id_seguimiento_internacional: payload.id_seguimiento_internacional,
+                            int_guia: payload.int_guia,
+                            paqueteria: payload.paqueteria,
+                            int_fecha_envio: payload.int_fecha_envio,
+                            int_url: payload.int_url,
+                            fecha_actualizacion: new Date().toISOString()
+                        };
+                        let otherHist = [];
+                        try { otherHist = JSON.parse(otherItem.historial || '[]'); } catch(e){}
+                        otherHist.push({
+                            fase: nuevaFase,
+                            fecha: new Date().toLocaleString('es-CO'),
+                            notas: `Consolidado en guía ${payload.int_guia}`
+                        });
+                        otherPayload.historial = JSON.stringify(otherHist);
+                        await db.postData('Logistica', otherPayload, 'UPDATE');
+                    }
+                }
+            }
+
             window.closeModal(); 
             showToast('Guía logística procesada con éxito.', 'success');
             navigateTo('logistics'); 
@@ -968,3 +1003,235 @@ export const createLogisticsModal = async (id, navigateTo) => {
         }
     };
 };
+
+// --- New Submodule: Envíos EEUU a Colombia ---
+const renderEnviosEEUU = (list, ventas, clientes, compras, productos, guiasInt) => {
+    if (guiasInt.length === 0) {
+        return `
+            <div class="glass-card" style="text-align:center; padding:4rem; opacity:0.6;">
+                <div style="font-size:3rem; margin-bottom:1rem;">📦</div>
+                <h3>No hay guías internacionales registradas</h3>
+                <p>Las guías aparecerán aquí cuando consolides envíos desde Bodega USA.</p>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="glass-card" style="padding:0; overflow:hidden; border:1px solid rgba(255,255,255,0.1);">
+            <div style="background:rgba(255,255,255,0.05); padding:1rem 1.5rem; border-bottom:1px solid var(--glass-border);">
+                <h3 style="margin:0; font-size:1.1rem;">Relación de Guías Internacionales</h3>
+            </div>
+            <div style="overflow-x:auto;">
+                <table style="width:100%; text-align:left; border-collapse:collapse; white-space: nowrap;">
+                    <thead style="opacity: 0.5; font-size: 0.7rem; background:rgba(0,0,0,0.2);">
+                        <tr>
+                            <th style="padding:15px 20px;">Nº GUÍA / COURIER</th>
+                            <th style="padding:15px 20px;">FECHA CREACIÓN</th>
+                            <th style="padding:15px 20px;">PRODUCTOS</th>
+                            <th style="padding:15px 20px;">VALOR TOTAL (COP)</th>
+                            <th style="padding:15px 20px;">VALOR TOTAL (USD)</th>
+                            <th style="padding:15px 20px; text-align:right;">ACCIÓN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${guiasInt.reverse().map(g => {
+                            const items = list.filter(l => l.guia_internacional_id?.toString() === g.id.toString());
+                            if (items.length === 0) return '';
+                            return `
+                                <tr class="log-row">
+                                    <td style="padding:15px 20px;">
+                                        <strong style="color:var(--info-blue); font-family:monospace; font-size:1.1rem;">${g.numero_guia}</strong><br>
+                                        <span style="font-size:0.75rem; opacity:0.6;">${g.courier || 'N/A'}</span>
+                                    </td>
+                                    <td style="padding:15px 20px;">${g.fecha_creacion ? g.fecha_creacion.split('T')[0] : 'N/A'}</td>
+                                    <td style="padding:15px 20px;">
+                                        <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:10px; font-weight:bold; font-size:0.8rem;">${items.length} ítems</span>
+                                    </td>
+                                    <td style="padding:15px 20px; font-weight:700;">${formatCOP(g.valor_cop || 0)}</td>
+                                    <td style="padding:15px 20px; opacity:0.8;">$${g.valor_usd || 0} USD</td>
+                                    <td style="padding:15px 20px; text-align:right;">
+                                        <button class="btn-action" onclick="window.modalDetalleGuia('${g.id}')">👁️ Ver Detalle</button>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+};
+
+window.modalDetalleGuia = async (guiaId) => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `<div style="text-align:center; padding:2rem;"><div class="loader"></div> Cargando detalle de guía...</div>`;
+    container.style.display = 'flex';
+
+    const [guias, logistica, ventas, productos] = await Promise.all([
+        db.fetchData('GuiasInternacionales'),
+        db.fetchData('Logistica'),
+        db.fetchData('Ventas'),
+        db.fetchData('Productos')
+    ]);
+
+    const guiasList = Array.isArray(guias) ? guias : [];
+    const guia = guiasList.find(g => g.id.toString() === guiaId.toString());
+    if (!guia) {
+        showToast('Guía no encontrada', 'error');
+        window.closeModal();
+        return;
+    }
+
+    const items = logistica.filter(l => l.guia_internacional_id?.toString() === guiaId.toString());
+    
+    // Preparar lista de otras guías para poder mover productos (únicas y válidas)
+    const validOtherGuias = [];
+    const seenGuias = new Set();
+    
+    for (const g of guiasList) {
+        if (g.id.toString() === guiaId.toString()) continue;
+        if (!g.numero_guia) continue;
+        if (seenGuias.has(g.numero_guia)) continue;
+        
+        const gItems = logistica.filter(l => l.guia_internacional_id?.toString() === g.id.toString());
+        if (gItems.length > 0) {
+            validOtherGuias.push(g);
+            seenGuias.add(g.numero_guia);
+        }
+    }
+
+    const guiasOptionsSelect = validOtherGuias.map(g => `<option value="${g.numero_guia}">${g.numero_guia} ${g.courier ? `(${g.courier})` : ''}</option>`).join('');
+    
+    // Calcular suma de valores individuales
+    let sumaIndividuales = 0;
+    const itemsHtml = items.map(l => {
+        const v = ventas.find(v => v.id.toString() === l.venta_id?.toString());
+        const p = v ? productos.find(p => p.id.toString() === v.producto_id?.toString()) : null;
+        const valorInt = v?.valor_envio_internacional || 0;
+        sumaIndividuales += valorInt;
+
+        return `
+            <div id="item-row-${l.id}" style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--glass-border); font-size:0.85rem;">
+                <div style="flex:1;">
+                    <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
+                    <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>
+                </div>
+                <div style="text-align:right; margin-right:15px; width: 100px;">
+                    <div style="font-weight:700; color:#FFB703;">${formatCOP(valorInt)}</div>
+                </div>
+                ${validOtherGuias.length > 0 ? `
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                        <select id="move-sel-${l.id}" style="font-size:0.75rem; padding:4px 6px; border-radius:4px; background:var(--input-bg); border:1px solid var(--glass-border); color:var(--text-main); max-width: 150px;" onchange="document.getElementById('move-txt-${l.id}').value = this.value">
+                            <option value="">Elegir de lista...</option>
+                            ${guiasOptionsSelect}
+                        </select>
+                        <input type="text" id="move-txt-${l.id}" placeholder="...o pegar guía" style="font-size:0.75rem; padding:4px 6px; border-radius:4px; background:var(--input-bg); border:1px solid var(--glass-border); color:var(--text-main); max-width: 150px;">
+                    </div>
+                    <button class="btn-action" style="padding:6px 12px; font-size:0.75rem; background:rgba(255,255,255,0.1); height: 100%;" onclick="window.moverArticuloGuia('${l.id}', document.getElementById('move-txt-${l.id}').value || document.getElementById('move-sel-${l.id}').value, '${guiaId}')">Mover</button>
+                </div>
+                ` : '<span style="font-size:0.75rem; opacity:0.5;">No hay otras guías disponibles</span>'}
+            </div>
+        `;
+    }).join('');
+
+    const diferencia = sumaIndividuales - (guia.valor_cop || 0);
+
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color:var(--info-blue);">Detalle Guía: ${guia.numero_guia}</h2>
+                <button class="modal-close" onclick="window.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid-2" style="margin-bottom:1.5rem;">
+                    <div class="glass-card" style="padding:15px; text-align:center; border:1px solid var(--glass-border);">
+                        <span style="font-size:0.75rem; opacity:0.6; text-transform:uppercase;">Valor Total Guía</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:var(--success-green); margin:5px 0;">${formatCOP(guia.valor_cop || 0)}</div>
+                        <div style="font-size:0.85rem; opacity:0.5;">$${guia.valor_usd || 0} USD</div>
+                    </div>
+                    <div class="glass-card" style="padding:15px; text-align:center; border:1px solid var(--glass-border);">
+                        <span style="font-size:0.75rem; opacity:0.6; text-transform:uppercase;">Suma Individuales</span>
+                        <div style="font-size:1.3rem; font-weight:bold; color:#FFB703; margin:5px 0;">${formatCOP(sumaIndividuales)}</div>
+                        <div style="font-size:0.85rem; opacity:0.5;">Cobrado a clientes</div>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="padding:15px; margin-bottom:1.5rem; border:1px solid ${diferencia >= 0 ? 'rgba(6,214,160,0.3)' : 'rgba(230,57,70,0.3)'}; background:${diferencia >= 0 ? 'rgba(6,214,160,0.05)' : 'rgba(230,57,70,0.05)'};">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:700; font-size:0.95rem;">${diferencia >= 0 ? '💹 Ganancia Estimada Flete:' : '⚠️ Diferencia en Flete:'}</span>
+                        <strong style="font-size:1.2rem; color:${diferencia >= 0 ? 'var(--success-green)' : 'var(--primary-red)'}">${formatCOP(Math.abs(diferencia))}</strong>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom:12px; font-size:1.1rem;">Productos en esta Guía (${items.length})</h3>
+                <p style="font-size:0.8rem; opacity:0.7; margin-top:-5px; margin-bottom:10px;">Puedes mover un producto a otra guía si fue empaquetado de manera diferente.</p>
+                <div style="max-height:300px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--glass-border); margin-bottom:1rem;">
+                    ${itemsHtml || '<div style="padding:20px; text-align:center; opacity:0.5;">No hay productos vinculados.</div>'}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="window.closeModal()">Cerrar</button>
+            </div>
+        </div>
+    `;
+};
+
+window.moverArticuloGuia = async (logisticaId, newGuiaId, currentGuiaId) => {
+    if (!newGuiaId) {
+        window.showToast('Debes seleccionar una guía de destino', 'error');
+        return;
+    }
+    
+    try {
+        const btn = document.querySelector(`#item-row-${logisticaId} button`);
+        if(btn) { btn.disabled = true; btn.innerText = '⏳'; }
+        
+        const [logistica, guias] = await Promise.all([
+            db.fetchData('Logistica'),
+            db.fetchData('GuiasInternacionales')
+        ]);
+        
+        const item = logistica.find(l => l.id.toString() === logisticaId.toString());
+        const newGuia = guias.find(g => g.numero_guia === newGuiaId || g.id.toString() === newGuiaId.toString());
+        
+        if (!item || !newGuia) throw new Error("Guía de destino no encontrada o inválida");
+
+        let histArr = [];
+        try { histArr = JSON.parse(item.historial || '[]'); } catch(e){}
+        histArr.push({
+            fase: item.fase,
+            fecha: new Date().toLocaleString('es-CO'),
+            notas: `Movido a la guía internacional ${newGuia.numero_guia} por reacomodo de bodega.`
+        });
+
+        const payload = {
+            ...item,
+            guia_internacional_id: newGuia.id,
+            int_guia: newGuia.numero_guia,
+            paqueteria: newGuia.courier || item.paqueteria,
+            id_seguimiento_internacional: newGuia.numero_guia,
+            historial: JSON.stringify(histArr),
+            fecha_actualizacion: new Date().toISOString()
+        };
+
+        const res = await db.postData('Logistica', payload, 'UPDATE');
+        if (res.error) throw new Error(res.error);
+        
+        window.showToast('Producto movido exitosamente', 'success');
+        
+        // Recargar el modal para ver los cambios instantáneamente
+        window.modalDetalleGuia(currentGuiaId);
+        
+        // Intentar recargar la vista principal si la función global existe
+        const logisticsBtn = document.querySelector('nav button[onclick="window.loadSection(\\\'logistics\\\')"]');
+        if (logisticsBtn) logisticsBtn.click();
+        
+    } catch(err) {
+        window.showToast('Error moviendo artículo: ' + err.message, 'error');
+        const btn = document.querySelector(`#item-row-${logisticaId} button`);
+        if(btn) { btn.disabled = false; btn.innerText = 'Mover'; }
+    }
+};
+

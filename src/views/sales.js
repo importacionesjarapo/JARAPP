@@ -1,5 +1,6 @@
 import { db } from '../db.js';
-import { formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { auth } from '../auth.js';
+import { formatCOP, formatUSD, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let localVentasCache = [];
@@ -38,13 +39,18 @@ const renderSalesKPI = (ventas) => {
     const encargos       = ventas.filter(v => v.tipo_venta === 'Encargo').length;
     const stockLocal     = ventas.filter(v => v.tipo_venta !== 'Encargo').length;
 
-    const kpis = [
+    let kpis = [
         { icon:'💰', value: formatCOP(totalFacturado), label:'Facturación Total',      color:'var(--info-blue)' },
         { icon:'✅', value: formatCOP(totalAbonos),    label:'Abonos Recibidos',        color:'var(--success-green)' },
         { icon:'⚠️', value: formatCOP(totalSaldo),     label:'Saldos Pendientes',       color: totalSaldo > 0 ? 'var(--primary-red)' : 'var(--success-green)' },
         { icon:'📦', value: encargos,                  label:'Encargos Internacionales', color:'var(--warning-orange)' },
         { icon:'🛒', value: stockLocal,                label:'Ventas Stock Local',       color:'var(--brand-green)' },
     ];
+
+    if (!auth.canAccess('feat_money')) {
+        kpis = kpis.filter(k => !['Facturación Total', 'Abonos Recibidos'].includes(k.label));
+    }
+
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
@@ -176,7 +182,7 @@ const renderViewTabla = (ventas) => {
                         <td class="td-actions">
                             <div class="td-actions-group">
                                 <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}')" title="Ver Detalle">👁️ Ver</button>
-                                ${saldo>0?`<button class="btn-action" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:`<span style="opacity:0.4;font-size:0.72rem;white-space:nowrap">✔ Pagado</span>`}
+                                ${auth.canEdit('sales') && saldo>0?`<button class="btn-action" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:`${saldo>0?'':'<span style="opacity:0.4;font-size:0.72rem;white-space:nowrap">✔ Pagado</span>'}`}
                             </div>
                         </td>
                     </tr>`;
@@ -220,7 +226,7 @@ const renderViewPendientes = (ventas) => {
                         <strong style="color:var(--primary-red);">Debe: ${formatCOP(saldo)}</strong>
                         <span style="font-size:0.72rem;opacity:0.6;">${pct}% pendiente</span>
                         <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}')">👁️ Ver</button>
-                        <button class="btn-primary" style="font-size:0.72rem;padding:6px 12px;" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>
+                        ${auth.canEdit('sales') ? `<button class="btn-primary" style="font-size:0.72rem;padding:6px 12px;" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>` : ''}
                     </div>
                 </div>
                 <div class="purchase-group-bar-wrap">
@@ -276,7 +282,7 @@ const renderViewTipo = (ventas) => {
                         ${saldo>0?`<div style="font-size:0.8rem;color:var(--primary-red);font-weight:700;margin-top:4px;">Debe: ${formatCOP(saldo)}</div>`:`<div style="font-size:0.8rem;color:var(--success-green);font-weight:700;margin-top:4px;">✔ Pagado</div>`}
                         <div style="display:flex;gap:8px;margin-top:10px;">
                             <button class="btn-action" style="font-size:0.75rem;padding:5px 10px;" onclick="window.modalDetalleVentaGlobal('${v.id}')">👁️ Ver</button>
-                            ${saldo>0?`<button class="btn-action" style="font-size:0.75rem;padding:5px 10px;" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:''}
+                            ${auth.canEdit('sales') && saldo>0?`<button class="btn-action" style="font-size:0.75rem;padding:5px 10px;" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:''}
                         </div>
                     </div>
                 </div>`;
@@ -467,27 +473,46 @@ export const renderSales = async (renderLayout, navigateTo) => {
         const container = document.getElementById('modal-container');
         const content   = document.getElementById('modal-content');
         content.innerHTML = `
-            <h2 style="margin-bottom:0.5rem;">Registrar Abono</h2>
-            <p style="opacity:0.7;margin-bottom:0;">Saldo pendiente: <strong style="color:var(--primary-red);">${formatCOP(saldoPendiente)}</strong></p>
-            <form id="form-abono" style="display:flex;flex-direction:column;gap:1.2rem;margin-top:1.5rem;">
-                <div><label>Valor a Abonar (COP)</label><input type="number" id="valor_abono" required min="1" max="${saldoPendiente}"></div>
-                <div><label>Método de Pago</label>
-                    <select name="metodo_pago" required>
-                        <option value="Transferencia Bancolombia">Transferencia Bancolombia</option>
-                        <option value="Nequi">Nequi</option>
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Tarjeta">Tarjeta de Crédito</option>
-                    </select>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Registrar Abono</h2>
+                    <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
                 </div>
-                <div>
-                    <label style="margin-bottom:6px;display:block;">Comprobante de Pago <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span></label>
-                    ${buildComprobanteUploadHTML('comp-abono-file')}
-                </div>
-                <div style="display:flex;gap:15px;margin-top:0.5rem;">
-                    <button type="submit" class="btn-primary" style="flex:1;">Confirmar Abono</button>
-                    <button type="button" onclick="window.closeModal()" style="flex:1;background:none;border:1px solid var(--glass-border);color:var(--text-main);border-radius:16px;">Cancelar</button>
-                </div>
-            </form>`;
+                
+                <form id="form-abono">
+                    <div class="modal-body">
+                        <div style="background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px; margin-bottom:2rem; text-align:center; border:1px solid var(--brand-magenta-glow);">
+                            <span style="font-size:0.8rem; opacity:0.8; text-transform:uppercase;">Saldo Pendiente</span>
+                            <div style="font-size:2rem; font-weight:800; color:var(--brand-magenta); margin-top:6px;">${formatCOP(saldoPendiente)}</div>
+                        </div>
+
+                        <div class="form-grid-3">
+                            <div class="form-group">
+                                <label class="form-label">Valor a Abonar (COP)</label>
+                                <input type="number" id="valor_abono" required min="1" max="${saldoPendiente}" placeholder="0">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Método de Pago</label>
+                                <select name="metodo_pago" required>
+                                    <option value="Transferencia Bancolombia">Transferencia Bancolombia</option>
+                                    <option value="Nequi">Nequi</option>
+                                    <option value="Efectivo">Efectivo</option>
+                                    <option value="Tarjeta">Tarjeta de Crédito</option>
+                                </select>
+                            </div>
+                            <div class="form-group full-width" style="grid-column: span 3;">
+                                <label class="form-label">Comprobante de Pago <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
+                                ${buildComprobanteUploadHTML('comp-abono-file')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn-action" style="padding:10px 25px;" onclick="window.closeModal()">Cancelar</button>
+                        <button type="submit" class="btn-primary" style="padding:10px 30px;">Confirmar Abono</button>
+                    </div>
+                </form>
+            </div>`;
         container.style.display = 'flex';
         setTimeout(() => attachComprobanteInput('comp-abono-file'), 100);
         document.getElementById('form-abono').onsubmit = async (e) => {
@@ -599,7 +624,7 @@ export const renderSales = async (renderLayout, navigateTo) => {
             </div>
             <button class="btn-excel" onclick="window.exportSalesExcel()">📥 Excel</button>
             <input type="text" id="find-sale" placeholder="Buscar cliente, producto..." style="background:var(--glass-hover);padding:10px 15px;border-radius:12px;color:var(--text-main);border:1px solid var(--glass-border);width:230px;outline:none;">
-            <button class="btn-primary" onclick="window.modalVenta()">+ Nueva Venta</button>
+            ${auth.canEdit('sales') ? `<button class="btn-primary" onclick="window.modalVenta()">+ Nueva Venta</button>` : ''}
         </div>
     </div>
 
@@ -652,119 +677,270 @@ export const createSaleModal = async (navigateTo) => {
     }
 
     content.innerHTML = `
-        <h2 style="margin-bottom:1.5rem;">Registrar Nueva Venta</h2>
-        <form id="form-sale" style="display:flex;flex-direction:column;gap:1.2rem;max-height:70vh;overflow-y:auto;padding-right:1rem;">
-            <div style="display:flex;gap:1rem;border-bottom:1px solid var(--glass-border);padding-bottom:1rem;">
-               <label style="flex:1;"><input type="radio" name="tipo_venta" value="Stock" checked onchange="window.toggleSaleType(this.value)"> 🛒 Stock Local</label>
-               <label style="flex:1;"><input type="radio" name="tipo_venta" value="Encargo" onchange="window.toggleSaleType(this.value)"> 📦 Por Encargo (EEUU)</label>
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Registrar Nueva Venta</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
             </div>
-            <div>
-               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                   <label style="margin:0;">Seleccionar Cliente</label>
-                   <div style="display:flex;gap:8px;">
-                       <button type="button" class="btn-action" style="font-size:0.7rem;padding:4px 8px;" onclick="window.toggleInlineClient('NEW')">+ Crear Rápido</button>
-                       <button type="button" class="btn-action" style="font-size:0.7rem;padding:4px 8px;display:none;" id="btn-edit-inline-client" onclick="window.toggleInlineClient('EDIT')">✏️ Agregar Datos</button>
-                   </div>
-               </div>
-               <input type="text" list="dl-clientes" id="sel-cliente-text" placeholder="Escribe el nombre del cliente..." required autocomplete="off">
-               <datalist id="dl-clientes">${clientsList.map(c=>`<option data-id="${c.id}" value="${c.nombre} (CC: ${c.numero_identificacion||'-'})"></option>`).join('')}</datalist>
-               <input type="hidden" name="cliente_id" id="sel-cliente-id" required>
-               
-               <div id="address-selection-box" style="display:none; background:rgba(255,255,255,0.03); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); margin-top:10px;">
-                    <h4 style="margin:0 0 10px 0; font-size:0.8rem; opacity:0.6; text-transform:uppercase; letter-spacing:1px;">📍 Dirección de Envío para esta Venta</h4>
-                    <select id="sel-direccion-envio" name="direccion_envio" style="background:var(--input-bg); color:var(--text-main); font-size:1rem; padding:10px; border-radius:12px; border:1px solid var(--glass-border); width:100%;">
-                        <option value="">Seleccione un cliente primero...</option>
-                    </select>
-               </div>
-               
-               <div id="inline-client-form" style="display:none;background:rgba(0,0,0,0.2);padding:1rem;border-radius:8px;margin-top:10px;border:1px dashed var(--brand-magenta);">
-                   <h4 id="inl-cli-title" style="margin:0 0 10px 0;opacity:0.9;">Crear Cliente Rápido</h4>
-                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:0.8rem;" id="inl-cli-grid-new">
-                       <div><label>Nombre Completo</label><input type="text" id="inl_cli_nombre"></div>
-                       <div><label>Cédula/NIT</label><input type="text" id="inl_cli_nid"></div>
-                       <div><label>WhatsApp</label><input type="text" id="inl_cli_wa"></div>
-                       <div><label>Ciudad</label><input type="text" id="inl_cli_ciu" value="Medellín"></div>
-                       <div style="grid-column:span 2;"><label>Dirección (Opcional)</label><input type="text" id="inl_cli_dir"></div>
-                       <div style="grid-column:span 2;"><label>ID Lead Kommo (Opcional)</label><input type="text" id="inl_cli_kommo"></div>
-                   </div>
-                   <div style="display:none;flex-direction:column;gap:0.8rem;margin-bottom:0.8rem;" id="inl-cli-grid-edit">
-                       <div><label>Nueva Dirección (Opcional)</label><input type="text" id="inl_cli_new_dir" placeholder="Se agregará al historial"></div>
-                       <div><label>Nuevo WhatsApp (Opcional)</label><input type="text" id="inl_cli_new_wa" placeholder="Ej. 3001234567"></div>
-                       <div><label>Nuevo ID Kommo (Opcional)</label><input type="text" id="inl_cli_new_kommo"></div>
-                   </div>
-                   <div style="display:flex;gap:10px;">
-                       <button type="button" class="btn-primary" style="font-size:0.75rem;padding:6px 12px;" onclick="window.saveInlineClient()">Guardar Cliente</button>
-                       <button type="button" style="font-size:0.75rem;padding:6px 12px;background:none;border:1px solid var(--glass-border);color:var(--text-main);border-radius:8px;" onclick="document.getElementById('inline-client-form').style.display='none'">Cancelar</button>
-                   </div>
-               </div>
-            </div>
-            <div id="section-stock">
-               <label>Seleccionar Producto Físico</label>
-               <input type="text" list="dl-productos" id="sel-producto-text" placeholder="Escribe nombre o SKU..." required autocomplete="off">
-               <datalist id="dl-productos">
-                  ${productsList.filter(p=>p.estado_producto==='Disponible entrega inmediata'&&parseInt(p.stock_medellin)>0).map(p=>`<option data-id="${p.id}" data-price="${p.precio_cop}" value="${p.nombre_producto} | SKU: ${p.sku} | COP ${formatCOP(p.precio_cop)} [Disp: ${p.stock_medellin}]"></option>`).join('')}
-               </datalist>
-               <input type="hidden" name="producto_id" id="sel-producto-id" required>
-            </div>
-            <div id="section-encargo" style="display:none;flex-direction:column;gap:1rem;background:rgba(0,0,0,0.2);padding:1rem;border-radius:12px;">
-                <h4 style="margin:0;opacity:0.8;">Detalles del Producto Solicitado</h4>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-                    <div><label>Categoría</label><select id="enc_tipo"><option value="">-- Selecciona --</option>${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></div>
-                    <div><label>Tienda a Cotizar</label><select id="enc_tienda"><option value="">-- Selecciona --</option>${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></div>
-                </div>
-                <div><label>Nombre / Modelo Exacto</label><input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:0.5rem;">
-                    <div><label>Link del Producto (URL)</label><input type="url" id="enc_link" placeholder="https://..."></div>
-                    <div><label>Valor Cotizado (USD)</label><input type="number" step="0.01" id="enc_precio_usd" placeholder="Ej. 120.50"></div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;">
-                    <div><label>Marca</label><select id="enc_marca"><option value="">-- Selecciona --</option>${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></div>
-                    <div><label>Género</label><select id="enc_genero"><option value="">-- Selecciona --</option>${generos.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></div>
-                    <div><label>Talla</label><input type="text" id="enc_talla" placeholder="Ej. 9US"></div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-                    <div><label>Cantidad</label><input type="number" id="enc_cantidad" value="1" min="1"></div>
-                    <div><label>Foto Referencia (Opcional)</label>
-                        <input type="file" id="enc-file-img" accept="image/*" style="padding:10px;background:var(--input-bg);border-radius:12px;border:1px dashed rgba(255,255,255,0.2);">
-                        <div id="enc-img-preview" style="height:40px;border-radius:8px;display:flex;overflow:hidden;margin-top:5px;"></div>
-                        <input type="hidden" id="enc_url" value="">
+            
+            <form id="form-sale" onsubmit="return false;">
+                <div class="modal-body">
+                    <!-- Sección de Transacción y Cliente -->
+                    <div class="form-grid-3" style="margin-bottom: 2rem; border-bottom: 1px dashed var(--border-base); padding-bottom: 2rem;">
+                        <div class="form-group">
+                            <label class="form-label">Fecha Real Venta</label>
+                            <input type="date" name="fecha_real_venta" id="fecha_real_venta" value="${new Date().toISOString().split('T')[0]}" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Transacción</label>
+                            <div style="display:flex; gap:2.5rem; padding:10px 0;">
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color: var(--text-main);">
+                                    <input type="radio" name="tipo_venta" value="Stock" checked onchange="window.toggleSaleType(this.value)" style="width:20px; height:20px; margin:0;"> 🛒 Stock Local
+                                </label>
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color: var(--brand-magenta);">
+                                    <input type="radio" name="tipo_venta" value="Encargo" onchange="window.toggleSaleType(this.value)" style="width:20px; height:20px; margin:0;"> 📦 Por Encargo (USA)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                <label class="form-label" style="margin:0;">Información del Cliente</label>
+                                <div style="display:flex; gap:10px;">
+                                    <button type="button" class="btn-action" style="font-size:0.75rem; padding:6px 12px; font-weight:700;" onclick="window.toggleInlineClient('NEW')">+ Cliente Nuevo</button>
+                                    <button type="button" class="btn-action" style="font-size:0.75rem; padding:6px 12px; font-weight:700; display:none;" id="btn-edit-inline-client" onclick="window.toggleInlineClient('EDIT')">✏️ Editar</button>
+                                </div>
+                            </div>
+                            <input type="text" list="dl-clientes" id="sel-cliente-text" placeholder="Buscar por nombre o identificación..." required autocomplete="off">
+                            <datalist id="dl-clientes">${clientsList.map(c=>`<option data-id="${c.id}" value="${c.nombre} (CC: ${c.numero_identificacion||'-'})"></option>`).join('')}</datalist>
+                            <input type="hidden" name="cliente_id" id="sel-cliente-id" required>
+                        </div>
+                    </div>
+                        
+                    <div id="address-selection-box" style="display:none; background:var(--surface-1); padding:1.5rem; border-radius:16px; border:1px solid var(--border-base); margin-bottom: 2rem;">
+                        <label class="form-label" style="color:var(--brand-magenta); margin-bottom:10px; font-weight:800;">📍 Dirección de Envío Seleccionada</label>
+                        <select id="sel-direccion-envio" name="direccion_envio" required>
+                            <option value="">Seleccione un cliente primero...</option>
+                        </select>
+                    </div>
+                        
+                        <div id="inline-client-form" style="display:none; background:var(--surface-2); padding:1.5rem; border-radius:12px; margin-top:15px; border:1px dashed var(--brand-magenta);">
+                            <h4 id="inl-cli-title" style="margin:0 0 1.2rem 0; color:var(--brand-magenta); font-weight:700;">Crear Cliente Rápido</h4>
+                            <div id="inl-cli-grid-new" class="form-grid-3" style="margin-bottom:1.5rem;">
+                                <div class="form-group">
+                                    <label class="form-label">Nombre Completo</label>
+                                    <input type="text" id="inl_cli_nombre">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Cédula/NIT</label>
+                                    <input type="text" id="inl_cli_nid">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">WhatsApp</label>
+                                    <input type="text" id="inl_cli_wa">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Ciudad</label>
+                                    <input type="text" id="inl_cli_ciu" value="Medellín">
+                                </div>
+                                <div class="form-group full-width">
+                                    <label class="form-label">Dirección (Opcional)</label>
+                                    <input type="text" id="inl_cli_dir">
+                                </div>
+                                <div class="form-group full-width">
+                                    <label class="form-label">ID Lead Kommo (Opcional)</label>
+                                    <input type="text" id="inl_cli_kommo">
+                                </div>
+                            </div>
+                            <div id="inl-cli-grid-edit" style="display:none; flex-direction:column; gap:1.2rem; margin-bottom:1.5rem;">
+                                <div class="form-group">
+                                    <label class="form-label">Nueva Dirección (Opcional)</label>
+                                    <input type="text" id="inl_cli_new_dir" placeholder="Se agregará al historial">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Nuevo WhatsApp (Opcional)</label>
+                                    <input type="text" id="inl_cli_new_wa" placeholder="Ej. 3001234567">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Nuevo ID Kommo (Opcional)</label>
+                                    <input type="text" id="inl_cli_new_kommo">
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:12px;">
+                                <button type="button" class="btn-primary" style="font-size:0.8rem; padding:8px 20px;" onclick="window.saveInlineClient()">Guardar Cliente</button>
+                                <button type="button" class="btn-action" style="font-size:0.8rem; padding:8px 20px;" onclick="document.getElementById('inline-client-form').style.display='none'">Cancelar</button>
+                            </div>
+                        </div>
+
+                    <div id="section-stock" class="form-group full-width">
+                        <label class="form-label">Seleccionar Producto Físico</label>
+                        <input type="text" list="dl-productos" id="sel-producto-text" placeholder="Escribe nombre o SKU..." required autocomplete="off">
+                        <datalist id="dl-productos">
+                            ${productsList.filter(p=>p.estado_producto==='Disponible entrega inmediata'&&parseInt(p.stock_medellin)>0).map(p=>`<option data-id="${p.id}" data-price="${p.precio_cop}" value="${p.nombre_producto} | SKU: ${p.sku} | COP ${formatCOP(p.precio_cop)} [Disp: ${p.stock_medellin}]"></option>`).join('')}
+                        </datalist>
+                        <input type="hidden" name="producto_id" id="sel-producto-id" required>
+                    </div>
+
+                <div id="section-encargo" style="display:none;">
+                    <div style="height:1px; background:var(--border-base); margin:2rem 0;"></div>
+                    <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--brand-magenta);">
+                        <span>📋</span>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto por Encargo</h3>
+                    </div>
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Categoría <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_tipo">
+                                <option value="">-- Selecciona --</option>
+                                ${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tienda a Cotizar <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_tienda">
+                                <option value="">-- Selecciona --</option>
+                                ${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group full-width">
+                            <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
+                            <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue">
+                        </div>
+                        <div class="form-group" style="grid-column: span 3;">
+                            <label class="form-label">Enlace del Producto (URL) <span style="color:var(--primary-red);">*</span></label>
+                            <input type="url" id="enc_link" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Valor Cotizado (USD) <span style="color:var(--primary-red);">*</span></label>
+                            <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Marca <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_marca">
+                                <option value="">-- Selecciona --</option>
+                                ${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" id="lbl-enc-genero">Género</label>
+                            <select id="enc_genero">
+                                <option value="">-- Selecciona --</option>
+                                ${generos.map(x=>`<option value="${x}">${x}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" id="lbl-enc-talla">Talla</label>
+                            <input type="text" id="enc_talla" placeholder="Ej. 9US">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Cantidad <span style="color:var(--primary-red);">*</span></label>
+                            <input type="number" id="enc_cantidad" value="1" min="1">
+                        </div>
+                        <div class="form-group full-width">
+                            <label class="form-label">Foto de Referencia <span style="color:var(--primary-red);">*</span></label>
+                            <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
+                                <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                                    <span style="font-size:0.6rem; opacity:0.4;">FOTO</span>
+                                </div>
+                                <div style="flex:1;">
+                                    <input type="file" id="enc-file-img" accept="image/*" style="font-size:0.8rem; border:none; background:transparent; padding:0;">
+                                    <input type="hidden" id="enc_url" value="">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;background:rgba(0,0,0,0.15);padding:1rem;border-radius:12px;border:1px solid rgba(255,255,255,0.05);">
-                <div>
-                    <label>Peso del Producto (Libras)</label>
-                    <input type="number" step="0.01" name="peso_producto" id="sale-peso" placeholder="Ej. 2.5" required>
+
+                <div style="height:1px; background:var(--border-base); margin:2rem 0;"></div>
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--success-green);">
+                    <span>💰</span>
+                    <h3 style="margin:0; font-size:0.85rem; color:var(--success-green); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Información Financiera</h3>
                 </div>
-                <div>
-                    <label>TRM Cotizada</label>
-                    <input type="number" name="trm_cotizada" id="sale-trm" placeholder="Ej. 4000" required>
+                
+                <div class="form-grid-3">
+                    <div class="form-group">
+                        <label class="form-label">Peso Estimado (Libras) <span style="color:var(--primary-red);">*</span></label>
+                        <input type="text" name="peso_producto" id="sale-peso" placeholder="0.0" required inputmode="decimal">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">TRM Cotizada <span style="color:var(--primary-red);">*</span></label>
+                        <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" required inputmode="numeric">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Valor Venta (COP) <span style="color:var(--primary-red);">*</span></label>
+                        <input type="number" name="valor_total_cop" id="sale-total" required min="1" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
+                        <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
+                    </div>
+                    
+                    <div class="form-group full-width" style="background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px; border:1px solid var(--brand-magenta-glow); display:grid; grid-template-columns:1fr 1fr; gap:2rem; align-items:center;">
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label" style="color:var(--brand-magenta);">Abono Inicial (COP)</label>
+                            <input type="number" name="abono_inicial" id="sale-abono" value="0" min="0" style="background:var(--bg-main);">
+                        </div>
+                        <div style="text-align:right;">
+                            <span style="font-size:0.7rem; opacity:0.6; text-transform:uppercase; letter-spacing:1px; color:var(--brand-magenta);">Saldo Pendiente</span>
+                            <div id="lbl-saldo" style="font-size:2rem; font-weight:800; color:var(--brand-magenta); margin-top:4px;">$0</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label class="form-label">Comprobante de Pago Inicial <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
+                        ${buildComprobanteUploadHTML('comp-sale-file')}
+                    </div>
                 </div>
+            </div><!-- /modal-body -->
+
+            <div class="modal-footer">
+                <button type="button" class="btn-action" style="padding:10px 25px;" onclick="window.closeModal()">Cancelar</button>
+                <button type="submit" class="btn-primary" style="padding:10px 30px;">Confirmar y Procesar Venta</button>
             </div>
-            <hr style="border-color:rgba(255,255,255,0.05);margin:0.5rem 0;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-               <div><label>Valor Total (COP)</label><input type="number" name="valor_total_cop" id="sale-total" value="0" required min="0"></div>
-               <div><label>Abono Inicial (COP)</label><input type="number" name="abono_inicial" id="sale-abono" value="0" required min="0">
-                   <p style="font-size:0.65rem;color:var(--success-green);margin-top:5px;">Saldo Calculado: <span id="lbl-saldo">$0</span></p>
-               </div>
-            </div>
-            <div>
-               <label style="margin-bottom:6px;display:block;">Comprobante de Pago Inicial <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span></label>
-               ${buildComprobanteUploadHTML('comp-sale-file')}
-            </div>
-            <div style="display:flex;gap:15px;margin-top:1rem;">
-               <button type="submit" class="btn-primary" style="flex:1;">Confirmar y Procesar Venta</button>
-               <button type="button" onclick="window.closeModal()" style="flex:1;background:none;border:1px solid var(--glass-border);color:var(--text-main);border-radius:16px;">Cancelar</button>
-            </div>
-        </form>`;
+        </form>
+    </div>`;
+
+    window.updateEncargoRequirements = () => {
+        const cat = document.getElementById('enc_tipo')?.value || '';
+        const condCats = ['Tenis', 'Calzado', 'Ropa', 'Accesorios'];
+        const isCond = condCats.includes(cat);
+        const genero = document.getElementById('enc_genero');
+        const talla = document.getElementById('enc_talla');
+        const lblGen = document.getElementById('lbl-enc-genero');
+        const lblTalla = document.getElementById('lbl-enc-talla');
+        
+        if (isCond) {
+            genero?.setAttribute('required', 'true');
+            talla?.setAttribute('required', 'true');
+            if (lblGen) lblGen.innerHTML = `Género <span style="color:var(--primary-red);">*</span>`;
+            if (lblTalla) lblTalla.innerHTML = `Talla <span style="color:var(--primary-red);">*</span>`;
+        } else {
+            genero?.removeAttribute('required');
+            talla?.removeAttribute('required');
+            if (lblGen) lblGen.innerHTML = `Género`;
+            if (lblTalla) lblTalla.innerHTML = `Talla`;
+        }
+    };
 
     window.toggleSaleType = (val) => {
         const secStock   = document.getElementById('section-stock');
         const secEncargo = document.getElementById('section-encargo');
         const selStockTx = document.getElementById('sel-producto-text');
-        const reqEnc = ['enc_tipo','enc_tienda','enc_nombre','enc_marca','enc_genero','enc_talla','enc_cantidad'];
-        if (val==='Stock') { secStock.style.display='block'; secEncargo.style.display='none'; selStockTx.setAttribute('required','true'); reqEnc.forEach(id=>document.getElementById(id)?.removeAttribute('required')); }
-        else { secStock.style.display='none'; secEncargo.style.display='flex'; selStockTx.removeAttribute('required'); reqEnc.forEach(id=>document.getElementById(id)?.setAttribute('required','true')); }
+        const reqEncAlways = ['enc_tipo','enc_tienda','enc_nombre','enc_link','enc_precio_usd','enc_marca','enc_cantidad'];
+        const reqEncCond = ['enc_genero', 'enc_talla'];
+
+        if (val==='Stock') { 
+            secStock.style.display='block'; 
+            secEncargo.style.display='none'; 
+            selStockTx.setAttribute('required','true'); 
+            [...reqEncAlways, ...reqEncCond].forEach(id=>document.getElementById(id)?.removeAttribute('required')); 
+        } else { 
+            secStock.style.display='none'; 
+            secEncargo.style.display='block'; 
+            selStockTx.removeAttribute('required'); 
+            reqEncAlways.forEach(id=>document.getElementById(id)?.setAttribute('required','true'));
+            window.updateEncargoRequirements();
+        }
     };
 
     setTimeout(() => {
@@ -789,12 +965,12 @@ export const createSaleModal = async (navigateTo) => {
             if (found) {
                 const cId = hidCli.value;
                 const client = clientsList.find(c => c.id.toString() === cId.toString());
+                addrBox.style.display = 'block';
                 if (client && client.direccion) {
-                    addrBox.style.display = 'block';
                     const history = client.direccion.split(' | ').reverse();
                     selAddr.innerHTML = history.map(d => `<option value="${d}">${d}</option>`).join('');
                 } else {
-                    addrBox.style.display = 'none';
+                    selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
                 }
             } else {
                 addrBox.style.display = 'none';
@@ -805,6 +981,9 @@ export const createSaleModal = async (navigateTo) => {
         const updS=()=>{ const t=parseInt(vTot.value||0),a=parseInt(vAb.value||0); lblS.innerText=formatCOP(Math.max(0,t-a)); };
         if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); if(pr){vTot.value=pr;vAb.value=pr;updS();}} }); });
         if(vTot&&vAb){vTot.addEventListener('input',updS);vAb.addEventListener('input',updS);}
+        const encTipo = document.getElementById('enc_tipo');
+        if (encTipo) encTipo.onchange = () => window.updateEncargoRequirements();
+        
         attachComprobanteInput('comp-sale-file');
 
         window.toggleInlineClient = (mode) => {
@@ -845,31 +1024,30 @@ export const createSaleModal = async (navigateTo) => {
                     );
 
                     if (existing) {
-                        window.showCustomConfirm(
-                            'Cliente Duplicado',
-                            `El cliente ya existe (Nombre: ${existing.nombre}). ¿Deseas actualizarlo y agregar los nuevos datos a su historial?`,
-                            async () => {
-                                if (nid && !existing.numero_identificacion) existing.numero_identificacion = nid;
-                                if (wa && (!existing.whatsapp || !existing.whatsapp.includes(wa))) existing.whatsapp = existing.whatsapp ? existing.whatsapp + ' | ' + wa : wa;
-                                if (kommo && (!existing.numero_lead_kommo || !existing.numero_lead_kommo.includes(kommo))) existing.numero_lead_kommo = existing.numero_lead_kommo ? existing.numero_lead_kommo + ' | ' + kommo : kommo;
-                                
-                                if (dir) {
-                                    const fullDir = `${dir} (${ciu})`;
-                                    if (!existing.direccion || !existing.direccion.includes(dir)) {
-                                        existing.direccion = existing.direccion ? existing.direccion + ' | ' + fullDir : fullDir;
-                                    }
+                        const ok = await window.customConfirm('Cliente Duplicado', `El cliente ya existe (Nombre: ${existing.nombre}). ¿Deseas actualizarlo y agregar los nuevos datos a su historial?`);
+                        if (ok) {
+                            if (nid && !existing.numero_identificacion) existing.numero_identificacion = nid;
+                            if (wa && (!existing.whatsapp || !existing.whatsapp.includes(wa))) existing.whatsapp = existing.whatsapp ? existing.whatsapp + ' | ' + wa : wa;
+                            if (kommo && (!existing.numero_lead_kommo || !existing.numero_lead_kommo.includes(kommo))) existing.numero_lead_kommo = existing.numero_lead_kommo ? existing.numero_lead_kommo + ' | ' + kommo : kommo;
+                            
+                            if (dir) {
+                                const fullDir = `${dir} (${ciu})`;
+                                if (!existing.direccion || !existing.direccion.includes(dir)) {
+                                    existing.direccion = existing.direccion ? existing.direccion + ' | ' + fullDir : fullDir;
                                 }
-                                existing.ciudad = ciu;
-                                
-                                await db.postData('Clientes', existing, 'UPDATE');
-                                showToast('Cliente actualizado', 'success');
-                                
-                                document.getElementById('sel-cliente-text').value = `${existing.nombre} (CC: ${existing.numero_identificacion||'-'})`;
-                                document.getElementById('sel-cliente-id').value = existing.id;
-                                document.getElementById('btn-edit-inline-client').style.display = 'block';
-                                document.getElementById('inline-client-form').style.display = 'none';
                             }
-                        );
+                            existing.ciudad = ciu;
+                            
+                            await db.postData('Clientes', existing, 'UPDATE');
+                            showToast('Cliente actualizado', 'success');
+                            
+                            document.getElementById('sel-cliente-text').value = `${existing.nombre} (CC: ${existing.numero_identificacion||'-'})`;
+                            document.getElementById('sel-cliente-id').value = existing.id;
+                            document.getElementById('btn-edit-inline-client').style.display = 'block';
+                            document.getElementById('inline-client-form').style.display = 'none';
+                            // Refrescar direcciones
+                            document.getElementById('sel-cliente-text').dispatchEvent(new Event('input'));
+                        }
                         return;
                     } else {
                         const newId = Date.now().toString();
@@ -884,6 +1062,9 @@ export const createSaleModal = async (navigateTo) => {
                         document.getElementById('sel-cliente-text').value = optValue;
                         document.getElementById('sel-cliente-id').value = newId;
                         document.getElementById('btn-edit-inline-client').style.display = 'block';
+                        document.getElementById('inline-client-form').style.display = 'none';
+                        // Refrescar direcciones
+                        document.getElementById('sel-cliente-text').dispatchEvent(new Event('input'));
                     }
                 } else if (mode === 'EDIT') {
                     const selId = document.getElementById('sel-cliente-id').value;
@@ -932,10 +1113,23 @@ export const createSaleModal = async (navigateTo) => {
         const fd=new FormData(e.target);
         const tipoVenta=fd.get('tipo_venta');
         const cliHidden=document.getElementById('sel-cliente-id').value;
-        if(!cliHidden) return showToast('Debes seleccionar un Cliente válido.','error');
+        if(!cliHidden) return window.showToast('Debes seleccionar un Cliente válido.','error');
+        
+        if (tipoVenta === 'Encargo') {
+            const fotoFile = document.getElementById('enc-file-img')?.files[0];
+            if (!fotoFile) {
+                return window.showToast('La foto de referencia es obligatoria para pedidos por encargo.', 'error');
+            }
+        }
+
         fd.set('cliente_id',cliHidden);
-        if(tipoVenta==='Stock'){ const prodH=document.getElementById('sel-producto-id').value; if(!prodH) return showToast('Debes seleccionar un Producto válido.','error'); fd.set('producto_id',prodH); }
+        if(tipoVenta==='Stock'){ const prodH=document.getElementById('sel-producto-id').value; if(!prodH) return window.showToast('Debes seleccionar un Producto válido.','error'); fd.set('producto_id',prodH); }
         const valorTotal=parseInt(fd.get('valor_total_cop')||0);
+        const gananciaCalc=parseInt(fd.get('ganancia_calculada')||0);
+        
+        if (valorTotal <= 0) return window.showToast('El Valor Total debe ser mayor a 0.', 'error');
+        if (gananciaCalc <= 0) return window.showToast('La Ganancia Calculada debe ser mayor a 0.', 'error');
+
         const abonoIni=parseInt(fd.get('abono_inicial')||0);
         const saldoP=valorTotal-abonoIni;
         const btn=e.target.querySelector('button[type="submit"]');
@@ -947,7 +1141,7 @@ export const createSaleModal = async (navigateTo) => {
             if(tipoVenta==='Encargo'&&uploadFile){ btn.innerText='Subiendo Foto...'; finalImageUrl=await uploadImageToSupabase(uploadFile); }
             if(tipoVenta==='Encargo'){
                 const newProdId=Date.now().toString(); finalProductId=newProdId;
-                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre').value||'Producto sin nombre', marca:document.getElementById('enc_marca').value, categoria:document.getElementById('enc_tipo').value, genero:document.getElementById('enc_genero').value, talla:document.getElementById('enc_talla').value, tienda_cotizacion:document.getElementById('enc_tienda').value, url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?document.getElementById('enc_link').value:'', cantidad_encargada:document.getElementById('enc_cantidad').value, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?document.getElementById('enc_precio_usd').value:'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU' };
+                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre').value||'Producto sin nombre', marca:document.getElementById('enc_marca').value, categoria:document.getElementById('enc_tipo').value, genero:document.getElementById('enc_genero').value, talla:document.getElementById('enc_talla').value, tienda_cotizacion:document.getElementById('enc_tienda').value, url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?document.getElementById('enc_link').value:'', cantidad_encargada:document.getElementById('enc_cantidad').value, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?document.getElementById('enc_precio_usd').value:'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU', ganancia_calculada: gananciaCalc };
                 showToast('Creando ficha del producto...','info');
                 await db.postData('Productos',pp,'INSERT');
             } else {
@@ -959,12 +1153,17 @@ export const createSaleModal = async (navigateTo) => {
             let comprobanteUrl = '';
             if (comprobanteFile) { btn.innerText='Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
 
-            // ─── Cálculo Envio Internacional ───
-            const peso = parseFloat(fd.get('peso_producto') || 0);
-            const trm = parseFloat(fd.get('trm_cotizada') || 0);
+            // ─── Cálculo Envio Internacional (Limpieza de formatos) ───
+            const cleanNum = (val) => {
+                if (!val) return 0;
+                let s = val.toString().trim().replace(/,/g, '.');
+                return parseFloat(s) || 0;
+            };
+            const peso = cleanNum(fd.get('peso_producto'));
+            const trm = cleanNum(fd.get('trm_cotizada'));
             const libParam = configList.find(c => c.clave === 'ValorLibra');
-            const valorLibra = libParam ? parseFloat(libParam.valor || 0) : 0;
-            const valorEnvioInt = peso * valorLibra;
+            const valorLibraUSD = libParam ? parseFloat(libParam.valor || 0) : 0;
+            const valorEnvioInt = Math.round(peso * valorLibraUSD * trm);
 
             const pvId = Date.now().toString();
             const pv={ 
@@ -972,8 +1171,9 @@ export const createSaleModal = async (navigateTo) => {
                 cliente_id:fd.get('cliente_id'), 
                 producto_id:finalProductId, 
                 tipo_venta:tipoVenta, 
-                fecha:new Date().toLocaleDateString(), 
+                fecha:fd.get('fecha_real_venta') || new Date().toLocaleDateString(), 
                 valor_total_cop:valorTotal, 
+                ganancia_calculada:gananciaCalc,
                 abonos_acumulados:abonoIni, 
                 saldo_pendiente:saldoP, 
                 comprobante_url:comprobanteUrl, 
@@ -988,7 +1188,7 @@ export const createSaleModal = async (navigateTo) => {
             await db.postData('Ventas',pv,'INSERT');
             // Registrar abono inicial en el historial si hubiera
             if (abonoIni > 0) {
-                const initAbono = { id: (Date.now()+1).toString(), venta_id: pvId, valor: abonoIni, metodo_pago: 'Pago Inicial', fecha: new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
+                const initAbono = { id: (Date.now()+1).toString(), venta_id: pvId, valor: abonoIni, metodo_pago: 'Pago Inicial', fecha: fd.get('fecha_real_venta') || new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
                 await db.postData('Abonos', initAbono, 'INSERT');
             }
             window.closeModal(); showToast('✅ Operación Exitosa','success'); navigateTo('sales');
@@ -1046,43 +1246,95 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
         : `<div style="text-align:center;padding:1.2rem;opacity:0.4;font-size:0.82rem;">Sin pagos registrados aún.</div>`;
 
     content.innerHTML=`
-        ${backBtn}
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;border-bottom:1px solid var(--glass-border);padding-bottom:1rem;">
-            <div><h2 style="margin:0;color:var(--primary-red);">ORDEN #${v.id.toString().slice(-4)}</h2><span style="opacity:0.6;font-size:0.8rem;">Fecha: ${fechaCorta} · ${v.tipo_venta||''}</span></div>
-            <button ${closeAttr} style="background:none;border:none;color:var(--text-main);font-size:1.5rem;cursor:pointer;">&times;</button>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
-            <div style="background:var(--input-bg);padding:1rem 1.2rem;border-radius:12px;border:1px solid var(--glass-border);display:flex;flex-direction:column;"><span style="font-size:0.75rem;opacity:0.6;margin-bottom:4px;">💰 Valor Total</span><strong style="font-size:1.15rem;">${formatCOP(total)}</strong></div>
-            <div style="background:rgba(6,214,160,0.05);padding:1rem 1.2rem;border-radius:12px;border:1px solid rgba(6,214,160,0.2);display:flex;flex-direction:column;"><span style="font-size:0.75rem;color:var(--success-green);margin-bottom:4px;">💸 Total Abonado</span><strong style="font-size:1.15rem;color:var(--success-green);">${formatCOP(abonado)}</strong><span style="font-size:0.68rem;opacity:0.45;margin-top:3px;">${abonos.length} pago(s)</span></div>
-            <div style="background:${saldo>0?'rgba(230,57,70,0.05)':'rgba(6,214,160,0.05)'};padding:1rem 1.2rem;border-radius:12px;border:1px solid ${saldo>0?'rgba(230,57,70,0.2)':'rgba(6,214,160,0.2)'};display:flex;flex-direction:column;"><span style="font-size:0.75rem;color:${saldo>0?'var(--primary-red)':'var(--success-green)'};margin-bottom:4px;">${saldo>0?'⚠️ Saldo Pendiente':'✅ Estado'}</span><strong style="font-size:1.15rem;color:${saldo>0?'var(--primary-red)':'var(--success-green)'};">${saldo===0?'Pagado':formatCOP(saldo)}</strong></div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:1rem;margin-bottom:1.5rem;">
-            <div style="background:var(--glass-hover);padding:0.8rem 1rem;border-radius:12px;border:1px solid var(--glass-border);">
-                <span style="font-size:0.7rem;opacity:0.5;text-transform:uppercase;">⚖️ Peso</span>
-                <div style="font-size:0.95rem;font-weight:700;">${v.peso_producto || 0} Lbs</div>
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:15px;">
+                    ${backBtn ? '<button onclick="' + backAction + '" style="background:none; border:none; color:var(--text-main); cursor:pointer; padding:0; display:flex; align-items:center;">⬅️</button>' : ''}
+                    <h2 style="margin:0; color:var(--brand-magenta);">ORDEN #${v.id.toString().slice(-4)}</h2>
+                </div>
+                <button class="modal-close-btn" ${closeAttr}>✕</button>
             </div>
-            <div style="background:var(--glass-hover);padding:0.8rem 1rem;border-radius:12px;border:1px solid var(--glass-border);">
-                <span style="font-size:0.7rem;opacity:0.5;text-transform:uppercase;">📈 TRM Cotizada</span>
-                <div style="font-size:0.95rem;font-weight:700;">${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}</div>
+
+        <div class="modal-body" style="padding-top:1rem;">
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:1.2rem; margin-bottom:2rem;">
+                <div style="background:var(--surface-2); padding:1.2rem; border-radius:16px; border:1px solid var(--border-base); text-align:center;">
+                    <span style="font-size:0.7rem; opacity:0.6; text-transform:uppercase; letter-spacing:1px;">Valor Total</span>
+                    <div style="font-size:1.3rem; font-weight:800; margin-top:5px;">${formatCOP(total)}</div>
+                </div>
+                <div style="background:rgba(6,214,160,0.08); padding:1.2rem; border-radius:16px; border:1px solid rgba(6,214,160,0.3); text-align:center;">
+                    <span style="font-size:0.7rem; color:var(--success); text-transform:uppercase; letter-spacing:1px;">Total Abonado</span>
+                    <div style="font-size:1.3rem; font-weight:800; color:var(--success); margin-top:5px;">${formatCOP(abonado)}</div>
+                </div>
+                <div style="background:${saldo>0?'var(--brand-magenta-dim)':'rgba(6,214,160,0.08)'}; padding:1.2rem; border-radius:16px; border:1px solid ${saldo>0?'var(--brand-magenta-glow)':'rgba(6,214,160,0.3)'}; text-align:center;">
+                    <span style="font-size:0.7rem; color:${saldo>0?'var(--brand-magenta)':'var(--success)'}; text-transform:uppercase; letter-spacing:1px;">${saldo>0?'Saldo Pendiente':'Estado'}</span>
+                    <div style="font-size:1.3rem; font-weight:800; color:${saldo>0?'var(--brand-magenta)':'var(--success)'}; margin-top:5px;">${saldo===0?'PAGADO':formatCOP(saldo)}</div>
+                </div>
             </div>
-            ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
-            <div style="background:rgba(255,183,3,0.05);padding:0.8rem 1rem;border-radius:12px;border:1px solid rgba(255,183,3,0.2);">
-                <span style="font-size:0.7rem;color:#FFB703;text-transform:uppercase;">✈️ Envío Int. (Calculado)</span>
-                <div style="font-size:0.95rem;font-weight:700;color:#FFB703;">${v.valor_envio_internacional ? formatCOP(v.valor_envio_internacional) : '$0'}</div>
-            </div>` : ''}
+
+            <div class="form-grid" style="margin-bottom:2rem;">
+                <div class="form-group" style="background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
+                    <span style="font-size:0.65rem; opacity:0.5; text-transform:uppercase;">⚖️ Peso</span>
+                    <div style="font-size:1rem; font-weight:700;">${v.peso_producto || 0} Lbs</div>
+                </div>
+                <div class="form-group" style="background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
+                    <span style="font-size:0.65rem; opacity:0.5; text-transform:uppercase;">📈 TRM Cotizada</span>
+                    <div style="font-size:1rem; font-weight:700;">${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}</div>
+                </div>
+                ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') ? `
+                <div class="form-group full-width" style="background:rgba(255,183,3,0.08); padding:1.2rem; border-radius:16px; border:1px solid rgba(255,183,3,0.3); display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <span style="font-size:0.65rem; color:#FFB703; text-transform:uppercase;">✈️ Envío Internacional</span>
+                        <div style="font-size:1.2rem; font-weight:800; color:#FFB703;">${v.valor_envio_internacional ? formatCOP(v.valor_envio_internacional) : '$0'}</div>
+                    </div>
+                    <div style="text-align:right; opacity:0.6; font-size:0.65rem; color:#FFB703;">
+                        ${v.peso_producto || 0} Lbs × USD $${Math.round((v.valor_envio_internacional || 0) / ((v.peso_producto || 1) * (v.trm_cotizada || 1)))} × ${v.trm_cotizada ? formatCOP(v.trm_cotizada) : '$0'}
+                    </div>
+                </div>` : ''}
+            </div>
+
+            <div class="abono-history-section" style="background:var(--surface-2); border-radius:16px; padding:1.5rem; margin-bottom:2rem; border:1px solid var(--border-base);">
+                <h4 class="abono-history-title" style="margin-bottom:1.5rem; font-size:0.85rem; color:var(--text-main);">📋 Historial de Pagos <span class="abono-count-badge">${abonos.length}</span></h4>
+                <div class="abono-history-list">${abonosHTML}</div>
+            </div>
+
+            ${producto?`
+            <div style="display:flex; gap:2rem; background:var(--surface-2); padding:2rem; border-radius:20px; border:1px solid var(--border-base); align-items:center; margin-bottom:2rem;">
+                <div style="width:140px; height:140px; background:var(--bg-main); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--border-base); flex-shrink:0;">
+                    ${producto.url_imagen?`<img src="${producto.url_imagen}" style="width:100%; height:100%; object-fit:cover;">`:"<span style='opacity:0.1;'>FOTO</span>"}
+                </div>
+                <div style="flex:1;">
+                    <span style="color:var(--brand-magenta); font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:1px;">${producto.marca}</span>
+                    <h3 style="margin:10px 0; font-size:1.4rem; color:var(--text-main);">${producto.nombre_producto}</h3>
+                    <div style="display:flex; gap:12px; margin-top:15px; flex-wrap:wrap;">
+                        <span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Talla: <strong>${producto.talla||'N/A'}</strong></span>
+                        <span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Género: <strong>${producto.genero||'N/A'}</strong></span>
+                        <span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base); opacity:0.6;">SKU: ${producto.sku}</span>
+                    </div>
+                    ${v.tipo_venta==='Encargo'&&producto.link_producto?`<div style="margin-top:20px;"><a href="${producto.link_producto}" target="_blank" style="font-size:0.8rem; padding:8px 15px; background:rgba(6,214,160,0.1); color:var(--success); text-decoration:none; border-radius:10px; border:1px solid rgba(6,214,160,0.2); font-weight:700;">🔗 Enlace de Compra Original</a></div>`:''}
+                </div>
+            </div>` : '<div style="padding:2rem; background:var(--surface-2); text-align:center; border-radius:20px; border:1px dashed var(--border-base); opacity:0.4; margin-bottom:2rem;">Ficha de producto no disponible</div>'}
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:2rem; background:var(--surface-2); padding:2rem; border-radius:20px; border:1px solid var(--border-base); margin-bottom:2rem;">
+                <div>
+                    <h4 style="margin:0 0 1.2rem 0; opacity:0.5; text-transform:uppercase; font-size:0.65rem; letter-spacing:1.5px; color:var(--text-main);">Información del Cliente</h4>
+                    ${cliente?`
+                        <p style="margin:0 0 8px; font-size:1.2rem; font-weight:800; color:var(--text-main);">${cliente.nombre}</p>
+                        <p style="margin:0; opacity:0.7; font-size:0.9rem;">Documento: ${cliente.numero_identificacion||'N/A'}</p>
+                        <p style="margin:6px 0 0; opacity:0.7; font-size:0.9rem;">WhatsApp: ${cliente.whatsapp||'N/A'}</p>
+                        ${v.direccion_envio?`<p style="margin:15px 0 0; color:#FFB703; font-size:0.9rem; font-weight:800; background:rgba(255,183,3,0.08); padding:10px; border-radius:8px; border-left:4px solid #FFB703;">📍 Envío a: ${v.direccion_envio}</p>`:''}
+                    `:'<span style="opacity:0.4;">Cliente no vinculado.</span>'}
+                </div>
+                <div style="text-align:right; border-left:1px solid var(--border-base); padding-left:2rem;">
+                    <h4 style="margin:0 0 1.2rem 0; opacity:0.5; text-transform:uppercase; font-size:0.65rem; letter-spacing:1.5px; color:var(--text-main);">Seguimiento Logístico</h4>
+                    <span style="font-size:0.8rem; padding:8px 18px; border-radius:30px; font-weight:800; color:#fff; background:${_faseColor}; box-shadow:0 4px 12px ${_faseColor}40;">${estadoLogistica}</span>
+                    <p style="margin:20px 0 0; opacity:0.7; font-size:0.9rem;">Canal de Origen: <strong style="color:var(--brand-magenta);">${v.tipo_venta==='Encargo'?'📦 Encargo Int.':'🛒 Stock Local'}</strong></p>
+                </div>
+            </div>
         </div>
 
-        <div class="abono-history-section">
-            <h4 class="abono-history-title">📋 Historial de Pagos <span class="abono-count-badge">${abonos.length}</span></h4>
-            <div class="abono-history-list">${abonosHTML}</div>
+        <div class="modal-footer" style="justify-content:center;">
+            ${auth.canEdit('sales') && saldo > 0 ? `<button class="btn-primary" style="padding:12px 40px; font-size:1rem;" onclick="window.closeModal(); window.modalAbono('${v.id}', ${saldo})">Registrar Abono</button>` : ''}
+            ${saldo===0 ? `<div style="padding:10px 30px; background:rgba(6,214,160,0.1); color:var(--success); border-radius:30px; font-weight:800; border:1px solid var(--success);">✅ ORDEN COMPLETAMENTE PAGADA</div>` : ''}
         </div>
-
-        ${producto?`<div style="display:flex;gap:1.5rem;background:var(--glass-hover);padding:1.5rem;border-radius:12px;border:1px solid var(--glass-border);align-items:center;margin-bottom:1.5rem;"><div style="width:120px;height:120px;background:var(--input-bg);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">${producto.url_imagen?`<img src="${producto.url_imagen}" style="width:100%;height:100%;object-fit:cover;">`:"<span style='opacity:0.2;'>FOTO</span>"}</div><div style="flex:1;"><span style="color:var(--primary-red);font-size:0.8rem;font-weight:700;text-transform:uppercase;">${producto.marca}</span><h3 style="margin:8px 0;font-size:1.2rem;">${producto.nombre_producto}</h3><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;"><span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;">Talla: <strong>${producto.talla||'N/A'}</strong></span><span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;">Gen: <strong>${producto.genero||'N/A'}</strong></span><span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;opacity:0.6;">REF: ${producto.sku}</span></div>${v.tipo_venta==='Encargo'&&producto.link_producto?`<div style="margin-top:10px;"><a href="${producto.link_producto}" target="_blank" style="font-size:0.8rem;padding:6px 12px;background:rgba(6,214,160,0.1);color:var(--success-green);text-decoration:none;border-radius:6px;border:1px solid rgba(6,214,160,0.2);">🔗 Enlace de Compra</a></div>`:''}</div></div>`:
-        `<div style="padding:1.2rem;background:var(--glass-hover);text-align:center;border-radius:12px;border:1px dashed rgba(255,255,255,0.1);opacity:0.5;margin-bottom:1.5rem;">Producto desvinculado del historial</div>`}
-        <div style="background:var(--glass-hover);padding:1.5rem;border-radius:12px;border:1px solid var(--glass-border);display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
-            <div><h4 style="margin:0 0 0.8rem 0;opacity:0.5;text-transform:uppercase;font-size:0.7rem;letter-spacing:1px;">Datos del Cliente</h4>${cliente?`<p style="margin:0 0 4px;font-size:1.1rem;font-weight:700;">${cliente.nombre}</p><p style="margin:0;opacity:0.6;font-size:0.85rem;">CC/NIT: ${cliente.numero_identificacion||'N/A'}</p><p style="margin:4px 0 0;opacity:0.6;font-size:0.85rem;">WA: ${cliente.whatsapp||'N/A'}</p>`:'<span style="opacity:0.5;">Cliente no encontrado.</span>'}</div>
-            <div style="text-align:right;"><h4 style="margin:0 0 0.8rem 0;opacity:0.5;text-transform:uppercase;font-size:0.7rem;letter-spacing:1px;">Logística</h4><span style="font-size:0.75rem;padding:6px 12px;border-radius:15px;font-weight:700;color:#fff;background:${_faseColor};">${estadoLogistica}</span><p style="margin:12px 0 0;opacity:0.6;font-size:0.85rem;">Origen: <strong style="color:#FFB703;">${v.tipo_venta==='Encargo'?'📦 Encargo Int.':'🛒 Stock Físico'}</strong></p></div>
-        </div>
-        <div style="text-align:center;">${saldo>0?`<button class="btn-primary" onclick="window.modalAbono('${v.id}',${saldo})">+ Registrar Nuevo Abono</button>`:`<span style="opacity:0.6;">✅ Venta completamente pagada</span>`}</div>`;
+        </div>`;
 };

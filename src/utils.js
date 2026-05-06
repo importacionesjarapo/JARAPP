@@ -32,10 +32,17 @@ export const getLogisticaColor = (fase) => {
 
 export const renderError = (renderLayout, msg, navigateTo) => {
     renderLayout(`
-      <div class="glass-card" style="border:1px solid var(--primary-red); text-align:center; padding:4rem;">
-         <h2>Error de Sincronización</h2>
-         <p>${msg}</p>
-         <button id="btn-err-settings" class="btn-primary" style="margin-top: 1rem;">Ajustar Configuración</button>
+      <div style="display:flex; align-items:center; justify-content:center; min-height:60vh; padding:2rem;">
+        <div class="glass-card" style="border:1px solid rgba(230,57,70,0.3); text-align:center; padding:4rem; max-width:600px; width:100%; position:relative; overflow:hidden;">
+           <div style="position:absolute; top:0; left:0; width:100%; height:4px; background:var(--primary-red);"></div>
+           <div style="font-size:4rem; margin-bottom:1.5rem; filter:drop-shadow(0 0 10px rgba(230,57,70,0.4));">🚫</div>
+           <h2 style="color:var(--primary-red); font-weight:800; font-size:1.8rem; margin-bottom:1rem;">Error de Sincronización</h2>
+           <p style="font-size:1.05rem; opacity:0.8; line-height:1.6; margin-bottom:2.5rem;">${msg}</p>
+           <div style="display:flex; gap:12px; justify-content:center;">
+              <button id="btn-err-settings" class="btn-primary" style="padding:12px 25px;">Ajustar Configuración</button>
+              <button onclick="window.location.reload()" class="btn-secondary" style="padding:12px 25px;">Reintentar</button>
+           </div>
+        </div>
       </div>
     `);
     
@@ -102,6 +109,8 @@ export const showToast = (message, type = 'success') => {
         setTimeout(() => toast.remove(), 400);
     }, 3500);
 };
+
+window.showToast = showToast;
 
 export const uploadImageToSupabase = async (file) => {
     return new Promise(async (resolve, reject) => {
@@ -224,64 +233,43 @@ export const openKPIDetailModal = (title, subtitle, itemsHtml) => {
     if (!mod) {
         mod = document.createElement('div');
         mod.id = 'kpi-detail-modal';
-        mod.className = 'modal-overlay';
+        mod.className = 'modal-container'; // Reuse the global container class if available or just styling
+        mod.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:var(--modal-overlay); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); z-index:9999; display:none; align-items:center; justify-content:center;';
         mod.innerHTML = `
-            <div class="modal-content" id="modal-content" style="max-width: 600px; padding: 2rem;">
-                <div class="kpi-modal-header">
+            <div class="modal-content" style="width:700px; max-width:94%;">
+                <div class="modal-header">
                     <div>
-                        <h2 class="kpi-modal-title" id="kpi-modal-title"></h2>
-                        <div class="kpi-modal-subtitle" id="kpi-modal-subtitle"></div>
+                        <h2 class="modal-title" id="kpi-modal-title"></h2>
+                        <p class="modal-subtitle" id="kpi-modal-subtitle" style="margin-top:5px;"></p>
                     </div>
-                    <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').classList.remove('active')" style="background:transparent; border:none; font-size:1.5rem; color:var(--text-muted); cursor:pointer;">&times;</button>
+                    <button onclick="document.getElementById('kpi-detail-modal').style.display='none'" class="modal-close">&times;</button>
                 </div>
                 
-                <div class="kpi-modal-toolbar">
-                    <span style="font-size: 0.8rem; color: var(--text-faint);">Se muestran los detalles más recientes de este indicador.</span>
+                <div class="modal-body">
+                    <div id="kpi-modal-list" style="display:flex; flex-direction:column; gap:12px;">
+                        <!-- Items injected here -->
+                    </div>
                 </div>
-                
-                <div class="kpi-modal-list" id="kpi-modal-list">
-                    <!-- Items injected here -->
+
+                <div class="modal-footer">
+                    <button class="btn-secondary" onclick="document.getElementById('kpi-detail-modal').style.display='none'">Cerrar</button>
                 </div>
             </div>
         `;
         document.body.appendChild(mod);
     }
     
-    document.getElementById('kpi-modal-title').innerHTML = title;
-    document.getElementById('kpi-modal-subtitle').innerHTML = subtitle;
-    document.getElementById('kpi-modal-list').innerHTML = itemsHtml || '<div style="padding: 2rem; text-align: center; opacity: 0.5;">No hay detalles disponibles</div>';
+    document.getElementById('kpi-modal-title').innerText = title;
+    document.getElementById('kpi-modal-subtitle').innerText = subtitle;
+    document.getElementById('kpi-modal-list').innerHTML = itemsHtml || '<div style="padding:3rem; text-align:center; opacity:0.4;">No hay detalles disponibles para este período</div>';
     
-    requestAnimationFrame(() => {
-        mod.classList.add('active');
-    });
+    mod.style.display = 'flex';
 };
 
 window.openComprobanteViewer = openComprobanteViewer;
 window.openKPIDetailModal = openKPIDetailModal;
 
-/**
- * Muestra un cuadro de confirmación personalizado con estilo de la app.
- */
-export const showCustomConfirm = (title, message, onConfirm, onCancel) => {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:9999;';
-    overlay.innerHTML = `
-        <div style="background:var(--bg-main);border:1px solid var(--brand-magenta);border-radius:16px;padding:2rem;max-width:400px;text-align:center;box-shadow:0 0 20px rgba(229,19,101,0.3);">
-            <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
-            <h3 style="margin-bottom:1rem;color:var(--text-main);">${title}</h3>
-            <p style="opacity:0.8;margin-bottom:1.5rem;font-size:0.9rem;">${message}</p>
-            <div style="display:flex;gap:10px;">
-                <button id="btn-cfm-yes" class="btn-primary" style="flex:1;padding:10px;">Confirmar</button>
-                <button id="btn-cfm-no" style="flex:1;padding:10px;background:none;border:1px solid var(--glass-border);color:var(--text-main);border-radius:8px;">Cancelar</button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#btn-cfm-yes').onclick = () => { onConfirm(); document.body.removeChild(overlay); };
-    overlay.querySelector('#btn-cfm-no').onclick = () => { if(onCancel) onCancel(); document.body.removeChild(overlay); };
-};
 
-window.showCustomConfirm = showCustomConfirm;
 
 /**
  * Divide un array en sub-conjuntos para paginación.

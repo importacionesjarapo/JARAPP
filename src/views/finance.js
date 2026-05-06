@@ -443,19 +443,21 @@ export const renderFinance = async (renderLayout, navigateTo) => {
 
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Finanzas...</div>`);
 
-    const [gastosList, ventasList, comprasList, logisticaList] = await Promise.all([
+    const [gastosList, ventasList, comprasList, logisticaList, configList] = await Promise.all([
         db.fetchData('Gastos'),
         db.fetchData('Ventas'),
         db.fetchData('Compras'),
         db.fetchData('Logistica'),
+        db.fetchData('Configuracion'),
     ]);
+    const configData = configList?.error ? [] : (configList || []);
 
     const gastos   = gastosList.error  ? [] : gastosList;
     const ventas   = ventasList.error  ? [] : ventasList;
     const compras  = comprasList.error ? [] : comprasList;
     const logistica= logisticaList.error ? [] : logisticaList;
 
-    _finCache = { gastos, ventas, compras, logistica };
+    _finCache = { gastos, ventas, compras, logistica, config: configData };
 
     const applyFinFilter = () => {
         const _s = _finStartDate ? new Date(_finStartDate + 'T00:00:00') : null;
@@ -665,22 +667,26 @@ export const renderFinance = async (renderLayout, navigateTo) => {
         <div class="purchase-view-switcher">
             <button class="pv-tab fin-main-tab${_finActiveMain==='ingresos'?' active':''}" data-main="ingresos" onclick="window.switchFinMain('ingresos')">🟢 Ingresos</button>
             <button class="pv-tab fin-main-tab${_finActiveMain==='egresos'?' active':''}" data-main="egresos" onclick="window.switchFinMain('egresos')">🔴 Egresos</button>
+            <button class="pv-tab fin-main-tab${_finActiveMain==='rentabilidad'?' active':''}" data-main="rentabilidad" onclick="window.switchFinMain('rentabilidad')">📈 Rentabilidad</button>
+            <button class="pv-tab fin-main-tab${_finActiveMain==='ganancias'?' active':''}" data-main="ganancias" onclick="window.switchFinMain('ganancias')">👩‍💼 Ganancias Analista</button>
         </div>
-        <div class="purchase-view-switcher" id="fin-sub-tabs">
+        ${(_finActiveMain==='ingresos'||_finActiveMain==='egresos') ? `<div class="purchase-view-switcher" id="fin-sub-tabs">
             ${(_finActiveMain === 'ingresos' ? ingSubTabs : egrSubTabs).map(t => `
             <button class="pv-tab fin-sub-tab${t.id===(_finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView)?' active':''}" data-sub="${t.id}" onclick="window.switchFinSub('${t.id}')">
                 ${t.icon} ${t.label}
             </button>`).join('')}
-        </div>
+        </div>` : '<div id="fin-sub-tabs"></div>'}
     </div>
 
     <div id="fin-panel">
-        ${getFinPanelHTML(_finActiveMain, (_finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView), {
+        ${_finActiveMain === 'rentabilidad' ? renderRentabilidad(localVentasFiltered, _finCache.compras, _finCache.logistica) :
+          _finActiveMain === 'ganancias' ? renderGananciasAnalista(localVentasFiltered, _finCache.config, _finCache.compras) :
+          getFinPanelHTML(_finActiveMain, (_finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView), {
             ventas: _finActiveMain === 'ingresos' ? pagedList : localVentasFiltered,
             gastos: _finActiveMain === 'egresos' ? pagedList.filter(x => !x.es_compra) : localGastosFiltered,
             compras: _finActiveMain === 'egresos' ? pagedList.filter(x => x.es_compra) : localComprasFiltered,
             logistica: _finCache.logistica
-        })}
+          })}
     </div>
     ${(_finActiveMain === 'ingresos' ? _finActiveIngView === 'tabla' : _finActiveEgrView === 'tabla') ? renderPagination(currentList.length, _page, _rpp, 'finance') : ''}`;
 
@@ -700,20 +706,33 @@ function _reloadFinSubTabs() {
         { id:'tipo',     icon:'🗂️', label:'Por Tipo' },
         { id:'timeline', icon:'📅', label:'Timeline' },
     ];
+    const container = document.getElementById('fin-sub-tabs');
+    if (!container) return;
+    if (_finActiveMain !== 'ingresos' && _finActiveMain !== 'egresos') {
+        container.innerHTML = '';
+        return;
+    }
     const tabs = _finActiveMain === 'ingresos' ? ingSubTabs : egrSubTabs;
     const activeSubView = _finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView;
-    const container = document.getElementById('fin-sub-tabs');
-    if (container) {
-        container.innerHTML = tabs.map(t => `
-            <button class="pv-tab fin-sub-tab${t.id===activeSubView?' active':''}" data-sub="${t.id}" onclick="window.switchFinSub('${t.id}')">
-                ${t.icon} ${t.label}
-            </button>`).join('');
-    }
+    container.innerHTML = tabs.map(t => `
+        <button class="pv-tab fin-sub-tab${t.id===activeSubView?' active':''}" data-sub="${t.id}" onclick="window.switchFinSub('${t.id}')">
+            ${t.icon} ${t.label}
+        </button>`).join('');
 }
 
 function _reloadFinPanel() {
     const panel = document.getElementById('fin-panel');
     if (!panel || !_finCache) return;
+    if (_finActiveMain === 'rentabilidad') {
+        panel.innerHTML = renderRentabilidad(localVentasFiltered, _finCache.compras, _finCache.logistica);
+        setTimeout(() => attachRentabilidadButtons(), 100);
+        return;
+    }
+    if (_finActiveMain === 'ganancias') {
+        panel.innerHTML = renderGananciasAnalista(localVentasFiltered, _finCache.config, _finCache.compras);
+        setTimeout(() => attachGananciasButtons(), 100);
+        return;
+    }
     const sub = _finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView;
     panel.innerHTML = getFinPanelHTML(_finActiveMain, sub, {
         gastos: localGastosFiltered,
@@ -730,16 +749,29 @@ function attachFinSearch() {
     if (!fp) return;
     fp.oninput = (e) => {
         const k = e.target.value.toLowerCase().trim();
-        const sel = _finActiveMain === 'ingresos' ? '.fin-income-row' : '.fin-expense-row';
+
+        if (_finActiveMain === 'rentabilidad' || _finActiveMain === 'ganancias') {
+            // Generic search: target rows with fin-table-row class
+            let vis = 0;
+            document.querySelectorAll('.fin-table-row').forEach(r => {
+                const m = !k || (r.getAttribute('data-text')||'').toLowerCase().includes(k);
+                r.style.display = m ? '' : 'none';
+                if (m) vis++;
+            });
+            return;
+        }
+
+        // Ingresos / Egresos
+        const sel     = _finActiveMain === 'ingresos' ? '.fin-income-row' : '.fin-expense-row';
         const emptyId = _finActiveMain === 'ingresos' ? 'fin-income-empty' : 'fin-expense-empty';
         let vis = 0;
         document.querySelectorAll(sel).forEach(r => {
-            const m = (r.getAttribute('data-text')||'').toLowerCase().includes(k);
+            const m = !k || (r.getAttribute('data-text')||'').toLowerCase().includes(k);
             r.style.display = m ? '' : 'none';
             if (m) vis++;
         });
         const em = document.getElementById(emptyId);
-        if (em) em.style.display = vis===0&&k.length>0 ? '' : 'none';
+        if (em) em.style.display = vis===0 && k.length>0 ? '' : 'none';
     };
 }
 function attachGroupToggles() {
@@ -747,6 +779,334 @@ function attachGroupToggles() {
         if (!el.classList.contains('open')) el.classList.add('open');
     });
 }
+
+// ─── Rentabilidad: per-sale profitability table ────────────────────────────────
+const renderRentabilidad = (ventas, compras, logistica) => {
+    const sorted = [...ventas].reverse();
+    if (sorted.length === 0) {
+        return `<div class="purchase-view-panel"><div style="text-align:center;padding:4rem;opacity:0.5;">Sin ventas registradas en el período.</div></div>`;
+    }
+    const rows = sorted.map(v => {
+        const valVenta   = parseFloat(v.valor_total_cop || 0);
+        const ganCalc    = parseFloat(v.ganancia_calculada || 0);
+        const envioInt   = parseFloat(v.valor_envio_internacional || 0);
+        const envioCol   = parseFloat(v.envio_colombia || 0);
+        const gastoComp  = (() => {
+            const comp = compras.find(c => c.id?.toString() === v.compra_id?.toString() || c.venta_id?.toString() === v.id?.toString());
+            return parseFloat(comp?.costo_cop || 0);
+        })();
+        const extraItems = (() => { try { return JSON.parse(v.items_rentabilidad || '[]'); } catch { return []; } })();
+        const extras     = extraItems.reduce((a, x) => a + (parseFloat(x.valor) || 0), 0);
+        const totalCostos= gastoComp + envioInt + envioCol + extras;
+        const ganReal    = valVenta - totalCostos;
+        const margen     = valVenta > 0 ? ((ganReal / valVenta) * 100).toFixed(1) : 0;
+        const fase       = getLogisticaFase(v.id, logistica, v.estado_orden || 'Sin registro');
+        const sf = `${v.id.toString().slice(-4)} ${normDate(v.fecha)||''} ${v.tipo_venta||''} ${fase}`;
+        return `
+        <tr class="fin-table-row" data-text="${sf.replace(/"/g,'&quot;')}">
+            <td style="font-weight:700;">${normDate(v.fecha) || 'N/A'}</td>
+            <td><div class="cell-title">Orden #${v.id.toString().slice(-4)}</div><span class="cell-subtitle">${v.tipo_venta||'Venta'}</span></td>
+            <td><span class="status-badge" style="background:${getLogisticaColor(fase)};font-size:0.65rem;">${fase}</span></td>
+            <td class="text-right"><span class="cell-price">${formatCOP(valVenta)}</span></td>
+            <td class="text-right" style="color:var(--info-blue);">${formatCOP(ganCalc)}</td>
+            <td class="text-right" style="color:${ganReal>=0?'var(--success-green)':'var(--primary-red)'}; font-weight:700;">${formatCOP(ganReal)}</td>
+            <td class="text-center" style="color:${margen>=0?'var(--success-green)':'var(--primary-red)'};">${margen}%</td>
+            <td class="text-center">
+                <button class="btn-action" style="font-size:0.72rem;padding:5px 10px;" onclick="window.openRentabilidadModal('${v.id}')">🔍 Detalle</button>
+            </td>
+        </tr>`;
+    }).join('');
+
+
+    const totVenta = sorted.reduce((a,v)=>a+parseFloat(v.valor_total_cop||0),0);
+    const totCalc  = sorted.reduce((a,v)=>a+parseFloat(v.ganancia_calculada||0),0);
+    return `
+    <div class="purchase-view-panel">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem;">
+            <div class="glass-card" style="padding:1rem;text-align:center;">
+                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💵 Facturación Total</div>
+                <div style="font-size:1.3rem;font-weight:900;color:var(--info-blue);">${formatCOP(totVenta)}</div>
+            </div>
+            <div class="glass-card" style="padding:1rem;text-align:center;">
+                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🎯 Ganancia Calculada Total</div>
+                <div style="font-size:1.3rem;font-weight:900;color:var(--success-green);">${formatCOP(totCalc)}</div>
+            </div>
+            <div class="glass-card" style="padding:1rem;text-align:center;">
+                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">📋 Ventas Analizadas</div>
+                <div style="font-size:1.3rem;font-weight:900;color:var(--text-main);">${sorted.length}</div>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead><tr>
+                    <th style="min-width:110px;">Fecha</th>
+                    <th style="min-width:160px;">Referencia</th>
+                    <th style="min-width:160px;">Fase</th>
+                    <th class="text-right" style="min-width:150px;">Valor Venta</th>
+                    <th class="text-right" style="min-width:150px;">G. Calculada</th>
+                    <th class="text-right" style="min-width:150px;">G. Real (est.)</th>
+                    <th class="text-center" style="min-width:80px;">Margen</th>
+                    <th class="text-center" style="min-width:100px;">Análisis</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+    </div>`;
+};
+
+function attachRentabilidadButtons() { /* buttons rendered inline */ }
+
+window.openRentabilidadModal = async (ventaId) => {
+    const container = document.getElementById('modal-container');
+    const content   = document.getElementById('modal-content');
+    if (!container || !content) return;
+    content.innerHTML = `<div style="text-align:center;padding:3rem;"><div class="loader"></div> Cargando análisis...</div>`;
+    container.style.display = 'flex';
+
+    const ventasFull = _finCache?.ventas || await db.fetchData('Ventas');
+    const v = ventasFull.find(x => x.id?.toString() === ventaId?.toString());
+    if (!v) { content.innerHTML = `<p>Venta no encontrada.</p>`; return; }
+
+    const compras  = _finCache?.compras || [];
+    const logistica= _finCache?.logistica || [];
+    const comp     = compras.find(c => c.id?.toString() === v.compra_id?.toString() || c.venta_id?.toString() === v.id?.toString());
+
+    const valVenta  = parseFloat(v.valor_total_cop || 0);
+    const ganCalc   = parseFloat(v.ganancia_calculada || 0);
+    const gastoComp = parseFloat(comp?.costo_cop || 0);
+    const envioInt  = parseFloat(v.valor_envio_internacional || 0);
+    const envioCol  = parseFloat(v.envio_colombia || 0);
+    let items = (() => { try { return JSON.parse(v.items_rentabilidad || '[]'); } catch { return []; } })();
+
+    const calcOtros = () => items.reduce((a, x) => a + (parseFloat(x.valor) || 0), 0);
+    const calcReal  = () => valVenta - gastoComp - envioInt - envioCol - calcOtros();
+
+    const renderItems = () => items.map((it, i) => `
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+            <input value="${it.concepto||''}" placeholder="Concepto" oninput="window.updateRentItem(${i},'concepto',this.value)"
+                style="flex:1;background:var(--glass-hover);border:1px solid var(--glass-border);border-radius:8px;padding:7px 10px;color:var(--text-main);font-size:0.82rem;">
+            <input type="number" value="${it.valor||0}" placeholder="0" oninput="window.updateRentItem(${i},'valor',parseFloat(this.value)||0)"
+                style="width:110px;background:var(--glass-hover);border:1px solid var(--glass-border);border-radius:8px;padding:7px 10px;color:var(--text-main);font-size:0.82rem;">
+            <button onclick="window.removeRentItem(${i})" style="background:none;border:none;color:var(--primary-red);cursor:pointer;font-size:1.2rem;padding:0;">×</button>
+        </div>`).join('');
+
+    const costRow = (icon, label, sub, val) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0.8rem;border-bottom:1px solid var(--glass-border);">
+            <div><span style="margin-right:8px;">${icon}</span><span style="font-size:0.82rem;font-weight:600;">${label}</span><div style="font-size:0.7rem;opacity:0.5;margin-left:24px;">${sub}</div></div>
+            <span style="font-size:0.9rem;font-weight:700;color:var(--primary-red);">-${formatCOP(val)}</span>
+        </div>`;
+
+    const ganReal = calcReal();
+    const diff    = ganReal - ganCalc;
+
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <div><h2 class="modal-title">📊 Análisis de Rentabilidad</h2><p class="modal-subtitle">Orden #${v.id.toString().slice(-4)} · ${v.tipo_venta||'Encargo'}</p></div>
+                <button onclick="window.closeModal()" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1.5rem;">
+                    <div style="background:var(--glass-hover);padding:1rem 1.2rem;border-radius:12px;border:1px solid var(--glass-border);">
+                        <div style="font-size:0.68rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💵 Valor Total de Venta</div>
+                        <div style="font-size:1.3rem;font-weight:900;">${formatCOP(valVenta)}</div>
+                    </div>
+                    <div style="background:rgba(37,99,235,0.08);padding:1rem 1.2rem;border-radius:12px;border:1px solid rgba(37,99,235,0.25);">
+                        <div style="font-size:0.68rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">🎯 Ganancia Calculada</div>
+                        <div style="font-size:1.3rem;font-weight:900;color:var(--info-blue);">${formatCOP(ganCalc)}</div>
+                    </div>
+                </div>
+                ${costRow('🛒','Gasto de Compra EEUU','Costo real del producto en Compras USA',gastoComp)}
+                ${costRow('✈️','Envío Internacional','Peso × Valor Libra × TRM',envioInt)}
+                ${costRow('🚚','Envío Local Colombia','Costo despacho al cliente',envioCol)}
+                <div style="background:rgba(230,57,70,0.04);border:1px solid rgba(230,57,70,0.15);border-radius:10px;padding:1rem;margin-top:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="font-size:0.82rem;font-weight:700;">🧾 Otros Costos</span>
+                        <span id="rent-otros-total" style="font-size:1rem;font-weight:800;color:var(--primary-red);">-${formatCOP(calcOtros())}</span>
+                    </div>
+                    <div id="rent-items-list">${renderItems()}</div>
+                    <button onclick="window.addRentItem()" style="width:100%;margin-top:8px;padding:9px;font-weight:700;font-size:0.82rem;background:rgba(230,57,70,0.08);border:1px dashed rgba(230,57,70,0.4);border-radius:8px;color:var(--primary-red);cursor:pointer;">+ Agregar Costo</button>
+                </div>
+                <div id="rent-real-block" style="margin-top:1.2rem;padding:1.2rem 1.5rem;border-radius:14px;background:${ganReal>=0?'rgba(6,214,160,0.08)':'rgba(230,57,70,0.08)'};border:2px solid ${ganReal>=0?'var(--success-green)':'var(--primary-red)'};display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.7;margin-bottom:4px;">✅ Ganancia Real</div>
+                        <div id="rent-diff-val" style="font-size:0.75rem;font-weight:600;color:${diff>=0?'var(--success-green)':'#f59e0b'};">${diff>=0?'+':''}${formatCOP(diff)} vs calculada</div>
+                    </div>
+                    <div id="rent-real-val" style="font-size:2rem;font-weight:900;color:${ganReal>=0?'var(--success-green)':'var(--primary-red)'};">${formatCOP(ganReal)}</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="window.closeModal()" class="btn-secondary">Cancelar</button>
+                <button id="btn-save-rent" class="btn-primary">💾 Guardar Análisis</button>
+            </div>
+        </div>`;
+
+    const refreshSummary = () => {
+        const otros = calcOtros();
+        const real  = calcReal();
+        const d     = real - ganCalc;
+        document.getElementById('rent-otros-total').textContent = `-${formatCOP(otros)}`;
+        document.getElementById('rent-real-val').textContent    = formatCOP(real);
+        document.getElementById('rent-real-val').style.color    = real>=0?'var(--success-green)':'var(--primary-red)';
+        document.getElementById('rent-diff-val').textContent    = `${d>=0?'+':''}${formatCOP(d)} vs calculada`;
+        document.getElementById('rent-diff-val').style.color    = d>=0?'var(--success-green)':'#f59e0b';
+        const blk = document.getElementById('rent-real-block');
+        if (blk) { blk.style.background=real>=0?'rgba(6,214,160,0.08)':'rgba(230,57,70,0.08)'; blk.style.borderColor=real>=0?'var(--success-green)':'var(--primary-red)'; }
+    };
+    window.updateRentItem = (idx,key,val)=>{ items[idx][key]=val; refreshSummary(); };
+    window.removeRentItem = (idx)=>{ items.splice(idx,1); document.getElementById('rent-items-list').innerHTML=renderItems(); refreshSummary(); };
+    window.addRentItem    = ()=>{ items.push({concepto:'',valor:0}); document.getElementById('rent-items-list').innerHTML=renderItems(); refreshSummary(); };
+
+    document.getElementById('btn-save-rent').onclick = async () => {
+        const btn = document.getElementById('btn-save-rent');
+        btn.disabled=true; btn.innerText='Guardando...';
+        try {
+            v.items_rentabilidad = JSON.stringify(items);
+            await db.postData('Ventas', v, 'UPDATE');
+            showToast('✅ Análisis guardado');
+            window.closeModal();
+            _finCache = null;
+            renderFinance(_finRenderLayout, _finNavigateTo);
+        } catch(e) { showToast(e.message,'error'); btn.disabled=false; btn.innerText='Reintentar'; }
+    };
+};
+
+// ─── Ganancias Analista de Ventas ──────────────────────────────────────────────
+const renderGananciasAnalista = (ventas, configList, compras = []) => {
+    const cfg       = Array.isArray(configList) ? configList : [];
+    const pctParam  = cfg.find(p => p.clave === 'PctGananciaAnalista');
+    const pct       = pctParam ? (parseFloat(pctParam.valor) || 0) : 0;
+
+    // Stored toggle overrides (localStorage fallback for missing DB column)
+    const _toggKey  = 'gan_aplica_analista';
+    let   _toggMap  = {};
+    try { _toggMap = JSON.parse(localStorage.getItem(_toggKey) || '{}'); } catch { _toggMap = {}; }
+
+    const rows = [...ventas].reverse().map(v => {
+        const valVenta  = parseFloat(v.valor_total_cop || 0);
+        const ganCalc   = parseFloat(v.ganancia_calculada || 0);
+        const envioInt  = parseFloat(v.valor_envio_internacional || 0);
+        const envioCol  = parseFloat(v.envio_colombia || 0);
+        const gastoComp = (() => {
+            const comp = (compras||[]).find(c => c.id?.toString() === v.compra_id?.toString() || c.venta_id?.toString() === v.id?.toString());
+            return parseFloat(comp?.costo_cop || 0);
+        })();
+        const extraItems= (() => { try { return JSON.parse(v.items_rentabilidad||'[]'); } catch { return []; } })();
+        const extras    = extraItems.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
+        const ganReal   = valVenta - gastoComp - envioInt - envioCol - extras;
+        const pctDec    = pct / 100;
+        const ganCalcAnalista = ganCalc * pctDec;
+        const ganRealAnalista = ganReal * pctDec;
+        const vid = v.id?.toString();
+        const aplica = vid in _toggMap ? _toggMap[vid]
+                     : (v.ganancia_aplica_analista !== false && v.ganancia_aplica_analista !== 'false');
+        return { v, valVenta, ganCalc, ganReal, ganCalcAnalista, ganRealAnalista, aplica };
+    });
+
+    const totalCalcAnalista = rows.filter(r=>r.aplica).reduce((a,r)=>a+r.ganCalcAnalista,0);
+    const totalRealAnalista = rows.filter(r=>r.aplica).reduce((a,r)=>a+r.ganRealAnalista,0);
+    const totalAplican      = rows.filter(r=>r.aplica).length;
+
+    const tableRows = rows.map(({ v, valVenta, ganCalc, ganReal, ganCalcAnalista, ganRealAnalista, aplica }) => {
+        const sf = `${v.id.toString().slice(-4)} ${normDate(v.fecha)||''} ${v.tipo_venta||''} orden analista`;
+        return `
+        <tr class="fin-table-row ${aplica?'':'gan-row-muted'}" data-text="${sf.replace(/"/g,'&quot;')}">
+            <td style="font-weight:700;">${normDate(v.fecha)||'N/A'}</td>
+            <td><div class="cell-title">Orden #${v.id.toString().slice(-4)}</div><span class="cell-subtitle">${v.tipo_venta||'Venta'}</span></td>
+            <td class="text-right"><span class="cell-price">${formatCOP(valVenta)}</span></td>
+            <td class="text-right" style="color:var(--info-blue);">${formatCOP(ganCalc)}</td>
+            <td class="text-right" style="color:${ganReal>=0?'var(--success-green)':'var(--primary-red)'};">${formatCOP(ganReal)}</td>
+            <td class="text-center" style="color:var(--warning-orange);font-weight:700;">${pct}%</td>
+            <td class="text-right" style="color:var(--info-blue);">${aplica?formatCOP(ganCalcAnalista):'—'}</td>
+            <td class="text-right" style="color:${ganRealAnalista>=0?'var(--success-green)':'var(--primary-red)'};">${aplica?formatCOP(ganRealAnalista):'—'}</td>
+            <td class="text-center">
+                <label class="toggle-switch" style="margin:0;" title="${aplica?'Desactivar':'Activar'} para suma de analista">
+                    <input type="checkbox" ${aplica?'checked':''} onchange="window.toggleGananciaAnalista('${v.id}', this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </td>
+        </tr>`;
+    }).join('');
+
+    return `
+    <div class="purchase-view-panel">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem;">
+            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--success-green);">
+                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">✅ Total Ganancias Analista (Calculada)</div>
+                <div style="font-size:1.4rem;font-weight:900;color:var(--success-green);">${formatCOP(totalCalcAnalista)}</div>
+                <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Basado en ganancia calculada × ${pct}%</div>
+            </div>
+            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--info-blue);">
+                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">💰 Total Ganancias Analista (Real)</div>
+                <div style="font-size:1.4rem;font-weight:900;color:var(--info-blue);">${formatCOP(totalRealAnalista)}</div>
+                <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Basado en ganancia real × ${pct}%</div>
+            </div>
+            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--warning-orange);">
+                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📋 Ventas que Aplican</div>
+                <div style="font-size:1.4rem;font-weight:900;color:var(--warning-orange);">${totalAplican} / ${rows.length}</div>
+                <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">% Comisión configurado: <strong>${pct}%</strong></div>
+            </div>
+        </div>
+        ${pct === 0 ? `<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:1rem;margin-bottom:1rem;font-size:0.85rem;"><strong>⚠️ Atención:</strong> El porcentaje de ganancia del analista está en 0%. Configúralo en <strong>Parámetros → % Ganancia Analista</strong>.</div>` : ''}
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead><tr>
+                    <th style="min-width:110px;">Fecha</th>
+                    <th style="min-width:160px;">Venta</th>
+                    <th class="text-right" style="min-width:140px;">Valor Venta</th>
+                    <th class="text-right" style="min-width:140px;">G. Calculada</th>
+                    <th class="text-right" style="min-width:140px;">G. Real</th>
+                    <th class="text-center" style="min-width:80px;">% Analista</th>
+                    <th class="text-right" style="min-width:140px;">G. Calc. Analista</th>
+                    <th class="text-right" style="min-width:140px;">G. Real Analista</th>
+                    <th class="text-center" style="min-width:110px;">Aplica Analista</th>
+                </tr></thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        </div>
+    </div>
+    <style>
+        .gan-row-muted td { opacity: 0.45; }
+        .toggle-switch { position:relative; display:inline-block; width:42px; height:22px; }
+        .toggle-switch input { opacity:0; width:0; height:0; }
+        .toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:var(--glass-border); border-radius:22px; transition:.3s; }
+        .toggle-slider:before { position:absolute; content:""; height:16px; width:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+        .toggle-switch input:checked + .toggle-slider { background:var(--success-green); }
+        .toggle-switch input:checked + .toggle-slider:before { transform:translateX(20px); }
+    </style>`;
+};
+
+function attachGananciasButtons() { /* toggles rendered inline */ }
+
+window.toggleGananciaAnalista = async (ventaId, checked) => {
+    if (!_finCache) return;
+    const v = _finCache.ventas.find(x => x.id?.toString() === ventaId?.toString());
+    if (!v) return;
+
+    // Always update local cache immediately
+    v.ganancia_aplica_analista = checked;
+
+    // Persist in localStorage as primary fallback
+    const _toggKey = 'gan_aplica_analista';
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem(_toggKey) || '{}'); } catch { map = {}; }
+    map[ventaId.toString()] = checked;
+    localStorage.setItem(_toggKey, JSON.stringify(map));
+
+    // Try to persist in DB (column may not exist yet)
+    try {
+        await db.postData('Ventas', v, 'UPDATE');
+    } catch(e) {
+        // Column probably missing — localStorage fallback is active
+        if (e.message?.includes('ganancia_aplica_analista')) {
+            showToast('⚠️ Cambio guardado localmente. Agrega la columna "ganancia_aplica_analista" (boolean) a la tabla Ventas en Supabase para persistencia completa.', 'info');
+        } else {
+            showToast(e.message, 'error');
+        }
+    }
+    showToast(checked ? '✅ Venta incluida para analista' : '❌ Venta excluida de analista');
+    _reloadFinPanel();
+};
 
 // ─── Create Finance Modal (unchanged logic) ────────────────────────────────────
 export const createFinanceModal = async (navigateTo) => {

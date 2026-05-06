@@ -1,5 +1,6 @@
 import { db } from '../db.js';
-import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { auth } from '../auth.js';
+import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase } from '../utils.js';
 
 // ─── Cached data (persists across view switches without re-fetching) ───────────
 let _cache = null;
@@ -58,10 +59,10 @@ const renderPendingAlert = (pendientes, productos) => {
                         <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
                         <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
                     </div>
-                    <button onclick="window.modalCompra('${p.id}')"
+                    ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
                         class="btn-primary" style="font-size:0.75rem; padding:7px 12px;">
                         Comprar Ahora
-                    </button>
+                    </button>` : ''}
                 </div>`;
             }).join('')}
         </div>
@@ -587,51 +588,61 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         const container = document.getElementById('modal-container');
         const content = document.getElementById('modal-content');
         content.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem; border-bottom:1px solid var(--glass-border); padding-bottom:1rem;">
-                <div>
-                   <h2 style="margin:0; color:var(--primary-red);">COMPRA #${c.id.toString().slice(-4)}</h2>
-                   <span style="opacity:0.6; font-size:0.8rem;">Fecha Pedido: ${c.fecha_pedido || 'N/A'}</span>
+            <div class="modal-content modal-wide">
+                <div class="modal-header">
+                    <div>
+                       <h2 class="modal-title">COMPRA #${c.id.toString().slice(-4)}</h2>
+                       <span class="modal-subtitle">Fecha Pedido: ${c.fecha_pedido || 'N/A'}</span>
+                    </div>
+                    <button onclick="window.closeModal()" class="modal-close">&times;</button>
                 </div>
-                <button onclick="window.closeModal()" style="background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer;">&times;</button>
-            </div>
+                
+                <div class="modal-body">
+                    <h4 class="form-section-title">Especificaciones del Producto</h4>
+                    <div style="display:flex; gap:15px; align-items:center; background:var(--surface-1); padding:1.5rem; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:1.5rem;">
+                       <div style="width:80px; height:80px; border-radius:8px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center;">
+                           ${imageUrl ? `<img src="${imageUrl}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem; text-align:center;">SIN<br>FOTO</span>'}
+                       </div>
+                       <div style="flex:1;">
+                           <div style="font-weight:700; font-size:1.1rem; color:var(--text-main);">${pData.nombre_producto || 'Producto Stock General'}</div>
+                           <div style="display:flex; gap:8px; align-items:center; margin-top:6px; font-size:0.8rem;">
+                               <span style="opacity:0.7;">Tienda/Proveedor: <strong>${c.proveedor || pData.tienda_cotizacion || 'N/A'}</strong></span>
+                               ${pData.talla ? `<span style="background:var(--primary-red); color:#fff; padding:2px 6px; border-radius:4px; font-weight:700;">Talla: ${pData.talla} ${pData.genero ? `(${pData.genero})` : ''}</span>` : ''}
+                           </div>
+                       </div>
+                    </div>
 
-            <h4 style="margin:0 0 10px 0; opacity:0.5; text-transform:uppercase; font-size:0.75rem; letter-spacing:1px;">Especificaciones del Producto</h4>
-            <div style="display:flex; gap:15px; align-items:center; background:rgba(255,255,255,0.03); padding:1.5rem; border-radius:12px; border:1px solid var(--glass-border); margin-bottom:1.5rem;">
-               <div style="width:80px; height:80px; border-radius:8px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center;">
-                   ${imageUrl ? `<img src="${imageUrl}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem; text-align:center;">SIN<br>FOTO</span>'}
-               </div>
-               <div style="flex:1;">
-                   <div style="font-weight:700; font-size:1.1rem; color:var(--text-main);">${pData.nombre_producto || 'Producto Stock General'}</div>
-                   <div style="display:flex; gap:8px; align-items:center; margin-top:6px; font-size:0.8rem;">
-                       <span style="opacity:0.7;">Tienda/Proveedor: <strong>${c.proveedor || pData.tienda_cotizacion || 'N/A'}</strong></span>
-                       ${pData.talla ? `<span style="background:var(--primary-red); color:#fff; padding:2px 6px; border-radius:4px; font-weight:700;">Talla: ${pData.talla} ${pData.genero ? `(${pData.genero})` : ''}</span>` : ''}
-                   </div>
-               </div>
-            </div>
+                    <h4 class="form-section-title">Detalles de la Operación</h4>
+                    <div class="form-grid-2" style="background:var(--glass-hover); padding:1.5rem; border-radius:12px; border:1px solid var(--glass-border);">
+                        <div>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">📦 Relación Comercial</p>
+                            <strong style="font-size:1.1rem; color:${c.venta_id ? '#FFB703' : 'var(--success-green)'};">${c.venta_id ? `Encargo #${c.venta_id.toString().slice(-4)}` : 'Stock Importación'}</strong>
+                        </div>
+                        <div>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">👤 Destinatario Original</p>
+                            <strong style="font-size:1.1rem;">${clientName}</strong>
+                        </div>
+                        <div>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">📊 Fase Logística Real</p>
+                            <span style="font-size:0.85rem; font-weight:700; padding:5px 12px; border-radius:10px; background:${faseCol}; color:#fff; display:inline-block; line-height:1.5;">${fase}</span>
+                        </div>
+                        <div>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">💸 Costo USD Asumido</p>
+                            <strong style="font-size:1.3rem; color:var(--primary-red);">${formatUSD(c.costo_usd || 0)}</strong>
+                        </div>
+                        ${(vData && (auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas')) ? `
+                        <div>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; color:#FFB703; opacity:0.8;">✈️ Envío Int. (Calculado)</p>
+                            <strong style="font-size:1.3rem; color:#FFB703;">${formatCOP(vData.valor_envio_internacional || 0)}</strong>
+                        </div>
+                        ` : ''}
+                        ${pData.link_producto ? `<div style="grid-column: span 2; margin-top:5px;"><a href="${pData.link_producto}" target="_blank" style="display:inline-block; font-size:0.8rem; padding:8px 16px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.2); text-decoration:none;">🔗 Validar Enlace Original del Producto</a></div>` : ''}
+                    </div>
+                </div>
 
-            <h4 style="margin:0 0 10px 0; opacity:0.5; text-transform:uppercase; font-size:0.75rem; letter-spacing:1px;">Detalles de la Operación</h4>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem; background:var(--glass-hover); padding:1.5rem; border-radius:12px; border:1px solid var(--glass-border);">
-                <div>
-                    <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">📦 Relación Comercial</p>
-                    <strong style="font-size:1.1rem; color:${c.venta_id ? '#FFB703' : 'var(--success-green)'};">${c.venta_id ? `Encargo #${c.venta_id.toString().slice(-4)}` : 'Stock Importación'}</strong>
+                <div class="modal-footer">
+                   <button class="btn-primary" onclick="window.closeModal()">Cerrar Detalles</button>
                 </div>
-                <div>
-                    <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">👤 Destinatario Original</p>
-                    <strong style="font-size:1.1rem;">${clientName}</strong>
-                </div>
-                <div>
-                    <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">📊 Fase Logística Real</p>
-                    <span style="font-size:0.85rem; font-weight:700; padding:5px 12px; border-radius:10px; background:${faseCol}; color:#fff; display:inline-block; line-height:1.5;">${fase}</span>
-                </div>
-                <div>
-                    <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">💸 Costo USD Asumido</p>
-                    <strong style="font-size:1.3rem; color:var(--primary-red);">${formatUSD(c.costo_usd || 0)}</strong>
-                </div>
-                ${pData.link_producto ? `<div style="grid-column: span 2; margin-top:5px;"><a href="${pData.link_producto}" target="_blank" style="display:inline-block; font-size:0.8rem; padding:8px 16px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.2); text-decoration:none;">🔗 Validar Enlace Original del Producto</a></div>` : ''}
-            </div>
-
-            <div style="text-align:center; margin-top:1.5rem;">
-               <button class="btn-primary" onclick="window.closeModal()">Cerrar Detalles</button>
             </div>
         `;
         container.style.display = 'flex';
@@ -667,7 +678,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
                 <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyPurDateFilter()">Filtrar</button>
             </div>
             <button class="btn-excel" onclick="window.exportPurExcel()">📥 Excel</button>
-            <button class="btn-primary" onclick="window.modalCompra()">+ Registrar Compra</button>
+            <input type="text" id="find-it" placeholder="Buscar compra o producto..." style="background:var(--input-bg);border:1px solid var(--glass-border);padding:10px 15px;border-radius:12px;color:var(--text-main);width:230px;outline:none;">
+            ${auth.canEdit('purchases') ? `<button class="btn-primary" onclick="window.modalCompra()">+ Registrar Compra</button>` : ''}
         </div>
       </div>
 
@@ -755,68 +767,101 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
     const content = document.getElementById('modal-content');
 
     content.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:1.5rem; border-bottom:1px solid var(--glass-border); padding-bottom:1rem;">
-            <h2 style="margin:0; color:var(--primary-red);">Registrar Nueva Compra USA</h2>
-            <button onclick="window.closeModal()" style="background:none; border:none; color:var(--text-main); font-size:1.5rem; cursor:pointer;">&times;</button>
-        </div>
-
-        <form id="purchase-form" onsubmit="return false;">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
-                <div>
-                    <label style="display:block; margin-bottom:6px; font-size:0.8rem; opacity:0.7;">Tipo de Compra *</label>
-                    <select id="pc-tipo" class="form-input" onchange="window.togglePurchaseType()" required>
-                        <option value="encargo">Encargo (Vinculado a Cliente)</option>
-                        <option value="stock">Stock Propio (Sin cliente)</option>
-                    </select>
-                </div>
-                <div id="pc-encargo-section">
-                    <label style="display:block; margin-bottom:6px; font-size:0.8rem; opacity:0.7;">Orden de Encargo *</label>
-                    <select id="pc-venta-select" class="form-input">
-                        <option value="">-- Seleccionar Encargo --</option>
-                        ${encargos.map(v => {
-                            const prod = productos.find(p => p.id?.toString() === v.producto_id?.toString());
-                            return `<option value="${v.id}" ${ventaIdPrefill && ventaIdPrefill.toString() === v.id.toString() ? 'selected' : ''}>${prod ? prod.nombre_producto : 'Prod #'+v.producto_id} — Orden #${v.id.toString().slice(-4)}</option>`;
-                        }).join('')}
-                    </select>
-                </div>
-                <div>
-                    <label style="display:block; margin-bottom:6px; font-size:0.8rem; opacity:0.7;">Proveedor / Tienda *</label>
-                    <input type="text" id="pc-proveedor" class="form-input" placeholder="Ej: Nike.com, FootLocker..." required>
-                </div>
-                <div>
-                    <label style="display:block; margin-bottom:6px; font-size:0.8rem; opacity:0.7;">Costo en USD *</label>
-                    <input type="number" id="pc-costo" class="form-input" placeholder="0.00" step="0.01" required>
-                </div>
-                <div id="pc-stock-section" style="display:none;">
-                    <label style="display:block; margin-bottom:6px; font-size:0.8rem; opacity:0.7;">Producto Vinculado</label>
-                    <select id="pc-producto-select" class="form-input">
-                        <option value="">-- Sin Producto --</option>
-                        ${(productos || []).map(p => `<option value="${p.id}">${p.marca} ${p.nombre_producto}</option>`).join('')}
-                    </select>
-                </div>
-                <div>
-                    <label style="display:block; margin-bottom:6px; font-size:0.8rem; opacity:0.7;">Fecha Pedido</label>
-                    <input type="date" id="pc-fecha" class="form-input" value="${new Date().toISOString().split('T')[0]}">
-                </div>
-                <div>
-                    <label style="display:block; margin-bottom:6px; font-size:0.8rem; opacity:0.7;">Estado Inicial</label>
-                    <select id="pc-estado" class="form-input">
-                        <option value="Comprado en tienda EEUU">Comprado en tienda EEUU</option>
-                        <option value="En tránsito USA">En tránsito USA</option>
-                        <option value="Bodega USA">Bodega USA</option>
-                    </select>
-                </div>
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Registrar Nueva Compra USA</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
             </div>
+            
+            <form id="purchase-form" onsubmit="return false;">
+                <div class="modal-body">
+                    <div class="form-grid-2" style="margin-bottom: 2rem; background: var(--surface-1); padding: 2rem; border-radius: 16px; border: 1px solid var(--border-base);">
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Compra *</label>
+                            <select id="pc-tipo" onchange="window.togglePurchaseType()" required>
+                                <option value="encargo">Encargo (Vinculado a Cliente)</option>
+                                <option value="stock">Stock Propio (Sin cliente)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" id="pc-encargo-section">
+                            <label class="form-label">Orden de Encargo *</label>
+                            <select id="pc-venta-select">
+                                <option value="">-- Seleccionar Encargo --</option>
+                                ${encargos.map(v => {
+                                    const prod = productos.find(p => p.id?.toString() === v.producto_id?.toString());
+                                    return `<option value="${v.id}" ${ventaIdPrefill && ventaIdPrefill.toString() === v.id.toString() ? 'selected' : ''}>${prod ? prod.nombre_producto : 'Prod #'+v.producto_id} — Orden #${v.id.toString().slice(-4)}</option>`;
+                                }).join('')}
+                            </select>
+                        </div>
 
-            <div id="pc-error" style="color:var(--primary-red); font-size:0.8rem; margin-bottom:1rem; display:none;"></div>
+                        <div class="form-group" id="pc-stock-section" style="display:none;">
+                            <label class="form-label">Producto Vinculado *</label>
+                            <select id="pc-producto-select">
+                                <option value="">-- Sin Producto --</option>
+                                ${(productos || []).map(p => `<option value="${p.id}">${p.marca} ${p.nombre_producto}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
 
-            <div style="display:flex; justify-content:flex-end; gap:10px;">
-                <button type="button" class="btn-action" onclick="window.closeModal()">Cancelar</button>
-                <button type="submit" class="btn-primary" onclick="window.submitPurchase()">Guardar Compra</button>
-            </div>
-        </form>
-    `;
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Proveedor / Tienda *</label>
+                            <input type="text" id="pc-proveedor" placeholder="Ej: Nike.com, FootLocker..." required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Costo en USD *</label>
+                            <input type="number" id="pc-costo" placeholder="0.00" step="0.01" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Valor descontado banco (COP)</label>
+                            <input type="number" id="pc-costo-cop" placeholder="0" step="1">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Comprobante de Pago</label>
+                            ${buildComprobanteUploadHTML('comp-purchase-file')}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Fecha Compra *</label>
+                            <input type="date" id="pc-fecha" value="${new Date().toISOString().split('T')[0]}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Número de Factura *</label>
+                            <input type="text" id="pc-num-factura" placeholder="Ej. SHOP-9988" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Código producto en factura (Opcional)</label>
+                            <input type="text" id="pc-codigo-factura" placeholder="Ej. SKU-7766">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Estado Inicial</label>
+                            <select id="pc-estado">
+                                <option value="Comprado en tienda EEUU">Comprado en tienda EEUU</option>
+                                <option value="En tránsito USA">En tránsito USA</option>
+                                <option value="Bodega USA">Bodega USA</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="pc-error" style="display:none; color:var(--primary-red); background:rgba(229,19,101,0.1); padding:10px; border-radius:8px; font-size:0.85rem; margin-top:1rem; text-align:center; font-weight:600;"></div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-action" style="padding:10px 25px;" onclick="window.closeModal()">Cancelar</button>
+                    <button type="button" class="btn-primary" style="padding:10px 30px;" onclick="window.submitPurchase()">Guardar Compra</button>
+                </div>
+            </form>
+        </div>`;
     container.style.display = 'flex';
+    
+    setTimeout(() => { attachComprobanteInput('comp-purchase-file'); }, 100);
 
     window.togglePurchaseType = () => {
         const tipo = document.getElementById('pc-tipo').value;
@@ -828,13 +873,18 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
         const tipo = document.getElementById('pc-tipo').value;
         const proveedor = document.getElementById('pc-proveedor').value.trim();
         const costo = parseFloat(document.getElementById('pc-costo').value);
-        const fecha = document.getElementById('pc-fecha').value;
+        const costoCop = parseFloat(document.getElementById('pc-costo-cop').value) || 0;
+        const compFileInput = document.getElementById('comp-purchase-file');
+        const compFile = compFileInput && compFileInput.files[0] ? compFileInput.files[0] : null;
+        const fechaComp = document.getElementById('pc-fecha').value;
+        const numFact = document.getElementById('pc-num-factura').value;
+        const codFact = document.getElementById('pc-codigo-factura').value;
         const estado = document.getElementById('pc-estado').value;
         const ventaId = tipo === 'encargo' ? document.getElementById('pc-venta-select').value : null;
         const productoId = tipo === 'stock' ? document.getElementById('pc-producto-select').value : null;
 
         const errEl = document.getElementById('pc-error');
-        if (!proveedor || isNaN(costo) || costo <= 0) {
+        if (!proveedor || isNaN(costo) || costo <= 0 || !fechaComp || !numFact) {
             errEl.textContent = 'Completa los campos obligatorios correctamente.';
             errEl.style.display = '';
             return;
@@ -846,32 +896,77 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
         }
         errEl.style.display = 'none';
 
-        const payload = { proveedor, costo_usd: costo, fecha_pedido: fecha, estado_compra: estado };
-        if (ventaId) payload.venta_id = ventaId;
+        const btn = document.querySelector('#purchase-form .btn-primary');
+        const oldText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Guardando...';
 
-        if (tipo === 'encargo' && ventaId) {
-            const ventaTarget = encargos.find(v => v.id.toString() === ventaId);
-            if (ventaTarget) payload.producto_id = ventaTarget.producto_id;
-        } else if (productoId) {
-            payload.producto_id = productoId;
-        }
+        try {
+            if (compFile) {
+                btn.textContent = 'Subiendo comprobante...';
+            }
+            const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile) : "";
 
-        const result = await db.insertRecord('Compras', payload);
-        if (result.error) {
-            errEl.textContent = 'Error al guardar: ' + (result.error.message || result.error);
+            const payload = { 
+                id: Date.now().toString(),
+                proveedor, 
+                costo_usd: costo,
+                costo_cop: costoCop,
+                comprobante_url: comprobanteUrl,
+                fecha_pedido: fechaComp,
+                fecha_compra: fechaComp,
+                numero_factura: numFact,
+                codigo_producto_factura: codFact,
+                estado_compra: estado 
+            };
+            if (ventaId) payload.venta_id = ventaId;
+
+            if (tipo === 'encargo' && ventaId) {
+                const ventaTarget = encargos.find(v => v.id.toString() === ventaId);
+                if (ventaTarget) payload.producto_id = ventaTarget.producto_id;
+            } else if (productoId) {
+                payload.producto_id = productoId;
+            }
+
+            await db.postData('Compras', payload, 'INSERT');
+
+            if (tipo === 'encargo' && ventaId) {
+                await db.postData('Ventas', { id: ventaId, estado_orden: 'Comprado en tienda EEUU' }, 'UPDATE');
+                
+                // --- Registro Automático en Logística ---
+                const logisticaList = await db.fetchData('Logistica');
+                const listLog = Array.isArray(logisticaList) ? logisticaList : [];
+                const yaEnLogistica = listLog.some(l => l.venta_id?.toString() === ventaId.toString());
+                
+                if (!yaEnLogistica) {
+                    const payloadLogistica = {
+                        id: Date.now().toString() + 'LOG',
+                        venta_id: ventaId,
+                        compra_id: payload.id,
+                        fase: '1. Comprado (Esperando Tracking Local USA)',
+                        ubicacion: 'USA',
+                        historial: JSON.stringify([{
+                            fase: '1. Comprado (Esperando Tracking Local USA)',
+                            fecha: new Date().toLocaleString('es-CO'),
+                            notas: 'Generado automáticamente desde Registro de Compra.'
+                        }]),
+                        fecha_actualizacion: new Date().toISOString()
+                    };
+                    await db.postData('Logistica', payloadLogistica, 'INSERT');
+                }
+            }
+
+            showToast('✅ Compra registrada correctamente.');
+            window.closeModal();
+            _cache = null;
+            _currentView = 'tabla';
+            renderPurchases(_renderLayoutFn, navigateTo);
+        } catch (err) {
+            errEl.textContent = 'Error al guardar: ' + err.message;
             errEl.style.display = '';
-            return;
+            btn.disabled = false;
+            btn.textContent = oldText;
         }
-
-        if (tipo === 'encargo' && ventaId) {
-            await db.updateRecord('Ventas', ventaId, { estado_orden: 'Comprado en tienda EEUU' });
-        }
-
-        showToast('✅ Compra registrada correctamente.');
-        window.closeModal();
-        _cache = null;
-        _currentView = 'tabla';
-        renderPurchases(_renderLayoutFn, navigateTo);
     };
 
     if (ventaIdPrefill) {

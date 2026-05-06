@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 import { formatCOP, downloadExcel } from '../utils.js';
 import Chart from 'chart.js/auto';
 
@@ -525,14 +526,14 @@ window.exportDashExcel = () => {
     v.forEach(x  => rows.push({ Fecha:(x.fecha||'').split('T')[0],  Tipo:'Venta',      Concepto:`Orden #${x.id?.toString().slice(-4)}`, 'Total COP': parseFloat(x.valor_total_cop||0) }));
     g.forEach(x  => rows.push({ Fecha:(x.fecha||'').split('T')[0],  Tipo:'Gasto',       Concepto:x.concepto||x.tipo_gasto,              'Total COP':-parseFloat(x.valor_cop||x.valor_origen||0) }));
     cp.forEach(x => rows.push({ Fecha:(x.fecha_pedido||x.fecha_registro||'').split('T')[0], Tipo:'Compra USA', Concepto:x.proveedor, 'Total COP':-parseFloat(x.costo_cop||0) }));
-    if (!rows.length) return alert('Sin datos en el período');
+    if (!rows.length) return window.showToast('Sin datos en el período', 'error');
     downloadExcel(rows, `Balance_Maestro_${new Date().toISOString().split('T')[0]}`);
 };
 
 window.exportCurrentReport = () => {
     if (!_dashCache) return;
     const rpt = _getComputedReport();
-    if (!rpt || !rpt.tableRows.length) return alert('Sin datos para exportar');
+    if (!rpt || !rpt.tableRows.length) return window.showToast('Sin datos para exportar', 'error');
     const rows = rpt.tableRows.map(row => {
         const obj = {};
         rpt.tableColumns.forEach((col, i) => { const cell = row[i]; obj[col] = typeof cell==='object' ? cell.val : cell; });
@@ -635,7 +636,13 @@ const _renderDashboardBody = () => {
           { label:'Total Egresos', val:formatCOP(totalEgresos),    icon:'📤', color:C.red,                      sub:'Gastos + Compras' },
           { label:'Balance Caja',  val:formatCOP(balance),         icon:'💰', color:balance>=0?C.green:C.red,   sub:'Cobrado − Egresos' },
           { label:'Margen Neto',   val:`${margen}%`,               icon:'📈', color:margen>0?C.cyan:C.red,      sub:`${logsActivos.length} env. activos` },
-        ].map(k => `
+        ].filter(k => {
+            if (!auth.canAccess('feat_money')) {
+                // The 'ventas' role should not see money KPIs on the dashboard.
+                return false; // All current dashboard KPIs are money-related
+            }
+            return true;
+        }).map(k => `
           <div class="bi-kpi-card" style="border-top:3px solid ${k.color}; cursor:pointer; transition:transform 0.2s;" onclick="window.openDashboardKPI('${k.label}')" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
             <div class="bkc-icon">${k.icon}</div>
             <div class="bkc-val" style="color:${k.color};">${k.val}</div>

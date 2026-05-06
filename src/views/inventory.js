@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate } from '../utils.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
@@ -35,13 +36,18 @@ const renderInvKPI = (list) => {
     const valorCatalogo = list.reduce((a,p)=>a+(parseFloat(p.precio_cop)||0),0);
     const marcas      = new Set(list.map(p=>p.marca).filter(Boolean)).size;
 
-    const kpis = [
+    let kpis = [
         { icon:'📦', value: list.length,              label:'Total Productos',     color:'var(--info-blue)' },
         { icon:'✅', value: disponibles,               label:'Disponibles MDE',    color:'var(--success-green)' },
         { icon:'✈️', value: transito,                  label:'En Tránsito/Encargo',color:'var(--warning-orange)' },
         { icon:'💰', value: formatCOP(valorCatalogo), label:'Valor Catálogo',     color:'var(--brand-green)' },
         { icon:'🏷️', value: marcas,                    label:'Marcas Únicas',      color:'var(--primary-red)' },
     ];
+
+    if (!auth.canAccess('feat_money')) {
+        kpis = kpis.filter(k => k.label !== 'Valor Catálogo');
+    }
+
     return `
     <div class="kpi-strip">
         ${kpis.map(k=>`
@@ -150,14 +156,19 @@ const renderViewGrid = (list) => `
                 </div>
                 <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
                     <span style="opacity:0.6;font-size:0.75rem;">Costo: ${formatUSD(p.precio_usd)}</span>
-                    <span style="font-weight:700;">${formatCOP(p.precio_cop)}</span>
+                    <div style="text-align:right;">
+                        <span style="font-weight:700;display:block;">${formatCOP(p.precio_cop)}</span>
+                        ${(venta && (window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas')) ? `
+                        <span style="font-size:0.65rem;color:#FFB703;font-weight:700;">Envío: ${formatCOP(venta.valor_envio_internacional || 0)}</span>
+                        ` : ''}
+                    </div>
                 </div>
                 <div style="background:var(--glass-hover);padding:8px;border-radius:8px;font-size:0.72rem;display:flex;justify-content:space-between;margin-bottom:10px;">
                     <span>MDE: ${p.stock_medellin}</span><span style="opacity:0.4;">USA: ${p.stock_miami}</span>
                 </div>
                 <div style="display:flex;gap:8px;">
                     <button class="btn-action" onclick="window.modalViewProduct('${p.id}')">👁️ Detalles</button>
-                    <button class="btn-action" onclick="window.modalProducto('${p.id}')">Editar</button>
+                    ${auth.canEdit('inventory') ? `<button class="btn-action" onclick="window.modalProducto('${p.id}')">Editar</button>` : ''}
                 </div>
             </div>`;
         }).join('')}
@@ -181,6 +192,9 @@ const renderViewTabla = (list) => `
                 <th class="text-center" style="min-width:100px;">Stock USA</th>
                 <th class="text-right" style="min-width:120px;">Costo USD</th>
                 <th class="text-right" style="min-width:145px;">Precio Venta</th>
+                ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
+                <th class="text-right" style="min-width:130px;">Envío Int.</th>
+                ` : ''}
                 <th class="text-right" style="min-width:100px;">Acciones</th>
             </tr></thead>
             <tbody>
@@ -208,10 +222,13 @@ const renderViewTabla = (list) => `
                     <td class="text-center" style="opacity:0.65;">${p.stock_miami??'—'}</td>
                     <td class="text-right" style="font-family:monospace;font-size:0.85rem;opacity:0.75;">${formatUSD(p.precio_usd)}</td>
                     <td class="text-right cell-price" style="color:var(--success-green);">${formatCOP(p.precio_cop)}</td>
+                    ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
+                    <td class="text-right" style="color:#FFB703;font-weight:700;">${venta && venta.valor_envio_internacional ? formatCOP(venta.valor_envio_internacional) : '$0'}</td>
+                    ` : ''}
                     <td class="td-actions">
                         <div class="td-actions-group">
                             <button class="btn-action" onclick="window.modalViewProduct('${p.id}')" title="Ver">👁️</button>
-                            <button class="btn-action" onclick="window.modalProducto('${p.id}')" title="Editar">✏️</button>
+                            ${auth.canEdit('inventory') ? `<button class="btn-action" onclick="window.modalProducto('${p.id}')" title="Editar">✏️</button>` : ''}
                         </div>
                     </td>
                 </tr>`;
@@ -357,7 +374,7 @@ const renderViewPrecios = (list) => {
                         <td class="td-actions">
                             <div class="td-actions-group">
                                 <button class="btn-action" onclick="window.modalViewProduct('${p.id}')">👁️</button>
-                                <button class="btn-action" onclick="window.modalProducto('${p.id}')">✏️</button>
+                                ${auth.canEdit('inventory') ? `<button class="btn-action" onclick="window.modalProducto('${p.id}')">✏️</button>` : ''}
                             </div>
                         </td>
                     </tr>`;
@@ -488,7 +505,7 @@ export const renderInventory = async (renderLayout, navigateTo) => {
         <div style="display:flex;gap:10px;align-items:center;">
             <button class="btn-excel" onclick="window.exportInvExcel()">📥 Excel</button>
             <input type="text" id="find-prod" placeholder="Marca, modelo, SKU..." style="background:var(--glass-hover);padding:10px 15px;border-radius:12px;color:var(--text-main);border:1px solid var(--glass-border);width:220px;outline:none;">
-            <button class="btn-primary" onclick="window.modalProducto()" style="padding:10px 15px;">+ Producto</button>
+            ${auth.canEdit('inventory') ? `<button class="btn-primary" onclick="window.modalProducto()" style="padding:10px 15px;">+ Producto</button>` : ''}
         </div>
     </div>
 
@@ -532,23 +549,78 @@ window.modalViewSaleDetail = (ventaId) => {
     const total=parseInt(v.valor_total_cop||0);
     const fase=getLogisticaFase(v.id,globalLogisticaCache,v.estado_orden||'Sin registro');
     const faseColor=getLogisticaColor(fase);
-    content.innerHTML=`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;border-bottom:1px solid var(--glass-border);padding-bottom:1rem;">
-            <div><h2 style="margin:0;color:var(--primary-red);">ORDEN #${v.id.toString().slice(-4)}</h2><span style="opacity:0.6;font-size:0.8rem;">${String(v.fecha||'').split('T')[0]}</span></div>
-            <button onclick="window.closeModal()" style="background:none;border:none;color:var(--text-main);font-size:1.5rem;cursor:pointer;">&times;</button>
+    content.innerHTML = `
+        <div class="modal-content">
+        <div class="modal-header">
+            <div>
+                <h2 class="modal-title">ORDEN #${v.id.toString().slice(-4)}</h2>
+                <p class="modal-subtitle">${String(v.fecha || '').split('T')[0]}</p>
+            </div>
+            <button onclick="window.closeModal()" class="modal-close">&times;</button>
         </div>
-        ${producto?`<div style="display:flex;gap:1.5rem;background:var(--glass-hover);padding:1.5rem;border-radius:12px;border:1px solid var(--glass-border);align-items:center;margin-bottom:1.5rem;"><div style="width:140px;height:140px;background:var(--input-bg);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${producto.url_imagen?`<img src="${producto.url_imagen}" style="width:100%;height:100%;object-fit:cover;">`:'<span style="opacity:0.2;">FOTO</span>'}</div><div style="flex:1;"><span style="color:var(--primary-red);font-size:0.8rem;font-weight:700;">${producto.marca}</span><h3 style="margin:8px 0;">${producto.nombre_producto}</h3><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;">Talla: <strong>${producto.talla||'N/A'}</strong></span><span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;">Gen: <strong>${producto.genero||'N/A'}</strong></span></div></div></div>`:'<div style="padding:1.5rem;background:var(--glass-hover);text-align:center;border-radius:12px;opacity:0.5;margin-bottom:1.5rem;">Producto desvinculado</div>'}
-        <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;">
-            <div style="background:var(--input-bg);padding:1rem;border-radius:12px;display:flex;justify-content:space-around;">
-                <div style="text-align:center;"><p style="margin:0;font-size:0.7rem;opacity:0.6;">TOTAL</p><strong style="font-size:1.1rem;">${formatCOP(total)}</strong></div>
-                <div style="text-align:center;"><p style="margin:0;font-size:0.7rem;opacity:0.6;">ABONADO</p><strong style="font-size:1.1rem;color:var(--success-green);">${formatCOP(abonado)}</strong></div>
-                <div style="text-align:center;"><p style="margin:0;font-size:0.7rem;opacity:0.6;">SALDO</p><strong style="font-size:1.5rem;color:${saldo>0?'var(--primary-red)':'var(--success-green)'};">${saldo===0?'PAGADO':formatCOP(saldo)}</strong></div>
+        
+        <div class="modal-body">
+            ${producto ? `
+            <div style="display:flex; gap:1.5rem; background:var(--glass-hover); padding:1.5rem; border-radius:12px; border:1px solid var(--glass-border); align-items:center; margin-bottom:1.5rem;">
+                <div style="width:140px; height:140px; background:var(--input-bg); border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    ${producto.url_imagen ? `<img src="${producto.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.2;">FOTO</span>'}
+                </div>
+                <div style="flex:1;">
+                    <span style="color:var(--primary-red); font-size:0.8rem; font-weight:700;">${producto.marca}</span>
+                    <h3 style="margin:8px 0;">${producto.nombre_producto}</h3>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                        <span style="font-size:0.8rem; padding:5px 10px; background:var(--glass-bg); border-radius:6px;">Talla: <strong>${producto.talla || 'N/A'}</strong></span>
+                        <span style="font-size:0.8rem; padding:5px 10px; background:var(--glass-bg); border-radius:6px;">Gen: <strong>${producto.genero || 'N/A'}</strong></span>
+                    </div>
+                </div>
             </div>
-            <div style="background:var(--glass-hover);padding:1rem;border-radius:12px;border:1px solid var(--glass-border);display:flex;justify-content:space-between;align-items:center;">
-                <div>${cliente?`<p style="margin:0;font-weight:700;">${cliente.nombre}</p><p style="margin:4px 0 0;opacity:0.6;font-size:0.85rem;">${cliente.whatsapp||''}</p>`:'Cliente no encontrado'}</div>
-                <span style="font-size:0.75rem;padding:6px 12px;border-radius:15px;font-weight:700;color:#fff;background:${faseColor};">${fase}</span>
+            ` : '<div style="padding:1.5rem; background:var(--glass-hover); text-align:center; border-radius:12px; opacity:0.5; margin-bottom:1.5rem;">Producto desvinculado</div>'}
+
+            <div class="form-grid">
+                <div style="background:var(--input-bg); padding:1.2rem; border-radius:12px; display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.75rem; opacity:0.6;">TOTAL</span>
+                        <strong style="font-size:1.1rem;">${formatCOP(total)}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.75rem; opacity:0.6;">ABONADO</span>
+                        <strong style="font-size:1.1rem; color:var(--success-green);">${formatCOP(abonado)}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px solid var(--glass-border);">
+                        <span style="font-size:0.75rem; opacity:0.6;">SALDO</span>
+                        <strong style="font-size:1.3rem; color:${saldo > 0 ? 'var(--primary-red)' : 'var(--success-green)'};">${saldo === 0 ? 'PAGADO' : formatCOP(saldo)}</strong>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:1rem;">
+                    <div style="background:var(--glass-hover); padding:1rem; border-radius:12px; border:1px solid var(--glass-border);">
+                        <p style="margin:0; font-size:0.75rem; opacity:0.6; margin-bottom:4px;">CLIENTE</p>
+                        ${cliente ? `
+                            <p style="margin:0; font-weight:700;">${cliente.nombre}</p>
+                            <p style="margin:4px 0 0; opacity:0.6; font-size:0.85rem;">${cliente.whatsapp || ''}</p>
+                        ` : '<p style="margin:0;">Cliente no encontrado</p>'}
+                    </div>
+                    <div style="background:var(--glass-hover); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.75rem; opacity:0.6;">ESTADO LOGÍSTICO</span>
+                        <span style="font-size:0.75rem; padding:6px 12px; border-radius:15px; font-weight:700; color:#fff; background:${faseColor};">${fase}</span>
+                    </div>
+                </div>
             </div>
+
+            ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') ? `
+            <div style="margin-top:1.5rem; background:rgba(255,183,3,0.05); padding:1rem; border-radius:12px; border:1px solid rgba(255,183,3,0.2); display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:#FFB703; font-weight:700;">COSTO ENVÍO INTERNACIONAL</span>
+                <strong style="font-size:1.1rem; color:#FFB703;">${formatCOP(v.valor_envio_internacional || 0)}</strong>
+            </div>
+            ` : ''}
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
+        </div>
         </div>`;
+    container.style.display = 'flex';
+
     container.style.display='flex';
 };
 
@@ -558,36 +630,85 @@ window.modalViewProduct = (id) => {
     if (!p) return showToast('Producto no encontrado','error');
     const container=document.getElementById('modal-container');
     const content  =document.getElementById('modal-content');
-    content.innerHTML=`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;border-bottom:1px solid var(--glass-border);padding-bottom:1rem;">
-            <div><h2 style="margin:0;color:var(--primary-red);">${p.marca}</h2><span style="opacity:0.6;font-size:0.8rem;">SKU: ${p.sku||'N/A'}</span></div>
-            <button onclick="window.closeModal()" style="background:none;border:none;color:var(--text-main);font-size:1.5rem;cursor:pointer;">&times;</button>
+    content.innerHTML = `
+        <div class="modal-content">
+        <div class="modal-header">
+            <div>
+                <h2 class="modal-title">${p.marca}</h2>
+                <p class="modal-subtitle">SKU: ${p.sku || 'N/A'}</p>
+            </div>
+            <button onclick="window.closeModal()" class="modal-close">&times;</button>
         </div>
-        <div style="display:flex;gap:1.5rem;background:var(--glass-hover);padding:1.5rem;border-radius:12px;border:1px solid var(--glass-border);align-items:center;margin-bottom:1.5rem;">
-           <div style="width:150px;height:150px;background:var(--input-bg);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
-              ${p.url_imagen?`<img src="${p.url_imagen}" style="width:100%;height:100%;object-fit:cover;">`:'<span style="opacity:0.2;">FOTO</span>'}
-           </div>
-           <div style="flex:1;">
-              <span style="background:${p.estado_producto?.includes('Disponible')?'var(--success-green)':p.estado_producto?.includes('Pendiente')||p.estado_producto?.includes('compra')?'var(--primary-red)':p.estado_producto?.includes('Tránsito')||p.estado_producto?.includes('Comprado')?'#FFB703':p.estado_producto?.includes('Entregado')?'var(--info-blue)':'var(--text-faint)'};font-size:0.7rem;padding:4px 10px;border-radius:15px;font-weight:700;text-transform:uppercase;color:#fff;">${p.estado_producto||'Disponible'}</span>
-              <h3 style="margin:8px 0;font-size:1.4rem;">${p.nombre_producto}</h3>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-                 <span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;">T: <strong>${p.talla||'N/A'}</strong></span>
-                 <span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;">G: <strong>${p.genero||'N/A'}</strong></span>
-                 <span style="font-size:0.8rem;padding:5px 10px;background:var(--glass-bg);border-radius:6px;">${p.categoria||'N/A'}</span>
-              </div>
-              ${p.link_producto?`<div style="margin-top:10px;"><a href="${p.link_producto}" target="_blank" style="font-size:0.8rem;padding:6px 12px;background:rgba(6,214,160,0.1);color:var(--success-green);text-decoration:none;border-radius:6px;border:1px solid rgba(6,214,160,0.2);">🔗 Ver Producto Original</a></div>`:''}
-           </div>
+        
+        <div class="modal-body">
+            <div style="display:flex; gap:1.5rem; background:var(--glass-hover); padding:1.5rem; border-radius:12px; border:1px solid var(--glass-border); align-items:center; margin-bottom:1.5rem;">
+                <div style="width:150px; height:150px; background:var(--input-bg); border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;">
+                    ${p.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.2;">FOTO</span>'}
+                </div>
+                <div style="flex:1;">
+                    <span style="background:${p.estado_producto?.includes('Disponible') ? 'var(--success-green)' : p.estado_producto?.includes('Pendiente') || p.estado_producto?.includes('compra') ? 'var(--primary-red)' : p.estado_producto?.includes('Tránsito') || p.estado_producto?.includes('Comprado') ? '#FFB703' : p.estado_producto?.includes('Entregado') ? 'var(--info-blue)' : 'var(--text-faint)'}; font-size:0.7rem; padding:4px 10px; border-radius:15px; font-weight:700; text-transform:uppercase; color:#fff;">${p.estado_producto || 'Disponible'}</span>
+                    <h3 style="margin:8px 0; font-size:1.4rem;">${p.nombre_producto}</h3>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+                        <span style="font-size:0.8rem; padding:5px 10px; background:var(--glass-bg); border-radius:6px;">T: <strong>${p.talla || 'N/A'}</strong></span>
+                        <span style="font-size:0.8rem; padding:5px 10px; background:var(--glass-bg); border-radius:6px;">G: <strong>${p.genero || 'N/A'}</strong></span>
+                        <span style="font-size:0.8rem; padding:5px 10px; background:var(--glass-bg); border-radius:6px;">${p.categoria || 'N/A'}</span>
+                    </div>
+                    ${p.link_producto ? `<div style="margin-top:12px;"><a href="${p.link_producto}" target="_blank" style="font-size:0.8rem; padding:8px 14px; background:rgba(6,214,160,0.1); color:var(--success-green); text-decoration:none; border-radius:8px; border:1px solid rgba(6,214,160,0.2); display:inline-block;">🔗 Ver Producto Original</a></div>` : ''}
+                </div>
+            </div>
+
+            <div class="form-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:1.5rem;">
+                <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; flex-direction:column;">
+                    <span style="font-size:0.75rem; opacity:0.6; margin-bottom:4px;">📍 Stock MDE</span>
+                    <strong style="font-size:1.1rem;">${p.stock_medellin || '0'} Ud(s)</strong>
+                </div>
+                <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; flex-direction:column;">
+                    <span style="font-size:0.75rem; opacity:0.6; margin-bottom:4px;">✈️ Stock USA</span>
+                    <strong style="font-size:1.1rem; color:#FFB703;">${p.stock_miami || '0'} Ud(s)</strong>
+                </div>
+                <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; flex-direction:column;">
+                    <span style="font-size:0.75rem; opacity:0.6; margin-bottom:4px;">🏭 Tienda Origen</span>
+                    <strong style="font-size:1.1rem;">${p.tienda_cotizacion || 'N/A'}</strong>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div style="background:rgba(230,57,70,0.05); padding:1.2rem; border-radius:12px; border:1px solid rgba(230,57,70,0.2); display:flex; flex-direction:column;">
+                    <span style="font-size:0.75rem; color:var(--primary-red); margin-bottom:4px;">📉 Costo</span>
+                    <strong style="font-size:1.3rem; color:var(--primary-red);">${formatUSD(p.precio_usd)}</strong>
+                </div>
+                <div style="background:rgba(6,214,160,0.05); padding:1.2rem; border-radius:12px; border:1px solid rgba(6,214,160,0.2); display:flex; flex-direction:column;">
+                    <span style="font-size:0.75rem; color:var(--success-green); margin-bottom:4px;">📈 Precio Venta</span>
+                    <strong style="font-size:1.3rem; color:var(--success-green);">${formatCOP(p.precio_cop)}</strong>
+                </div>
+            </div>
+
+            ${(() => {
+                const v = globalSalesCache.find(sale => sale.producto_id?.toString() === p.id.toString());
+                if (v && (window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas')) {
+                    return `
+                    <div class="form-grid" style="margin-top:1.5rem; background:rgba(255,183,3,0.05); padding:1.2rem; border-radius:12px; border:1px solid rgba(255,183,3,0.2);">
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="font-size:0.75rem; color:#FFB703; margin-bottom:4px;">✈️ Envío Int. (Calculado)</span>
+                            <strong style="font-size:1.2rem; color:#FFB703;">${formatCOP(v.valor_envio_internacional || 0)}</strong>
+                        </div>
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="font-size:0.75rem; color:#FFB703; margin-bottom:4px;">📈 TRM Cotizada</span>
+                            <strong style="font-size:1.2rem; color:#FFB703;">${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}</strong>
+                        </div>
+                    </div>`;
+                }
+                return '';
+            })()}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
-            <div style="background:var(--input-bg);padding:1rem;border-radius:12px;border:1px solid var(--glass-border);display:flex;flex-direction:column;"><span style="font-size:0.75rem;opacity:0.6;margin-bottom:4px;">📍 Stock MDE</span><strong style="font-size:1.1rem;">${p.stock_medellin||'0'} Ud(s)</strong></div>
-            <div style="background:var(--input-bg);padding:1rem;border-radius:12px;border:1px solid var(--glass-border);display:flex;flex-direction:column;"><span style="font-size:0.75rem;opacity:0.6;margin-bottom:4px;">✈️ Stock USA</span><strong style="font-size:1.1rem;color:#FFB703;">${p.stock_miami||'0'} Ud(s)</strong></div>
-            <div style="background:var(--input-bg);padding:1rem;border-radius:12px;border:1px solid var(--glass-border);display:flex;flex-direction:column;"><span style="font-size:0.75rem;opacity:0.6;margin-bottom:4px;">🏭 Tienda Origen</span><strong style="font-size:1.1rem;">${p.tienda_cotizacion||'N/A'}</strong></div>
+
+        <div class="modal-footer" style="justify-content:flex-end;">
+            <button type="button" class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
+            ${auth.canEdit('inventory') ? `<button type="button" class="btn-primary" onclick="window.closeModal(); window.modalProducto('${p.id}');">Editar Producto</button>` : ''}
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-            <div style="background:rgba(230,57,70,0.05);padding:1rem;border-radius:12px;border:1px solid rgba(230,57,70,0.2);display:flex;flex-direction:column;"><span style="font-size:0.75rem;color:var(--primary-red);margin-bottom:4px;">📉 Costo</span><strong style="font-size:1.1rem;color:var(--primary-red);">${formatUSD(p.precio_usd)}</strong></div>
-            <div style="background:rgba(6,214,160,0.05);padding:1rem;border-radius:12px;border:1px solid rgba(6,214,160,0.2);display:flex;flex-direction:column;"><span style="font-size:0.75rem;color:var(--success-green);margin-bottom:4px;">📈 Precio Venta</span><strong style="font-size:1.1rem;color:var(--success-green);">${formatCOP(p.precio_cop)}</strong></div>
-        </div>
-        <div style="text-align:center;"><button class="btn-primary" onclick="window.closeModal();window.modalProducto('${p.id}')">✏️ Editar Ficha</button></div>`;
+        </div>`;
+    container.style.display = 'flex';
+
     container.style.display='flex';
 };
 
@@ -602,49 +723,109 @@ export const createProductModal = async (id, navigateTo) => {
     const cfg=await db.fetchData('Configuracion');
     const getConfig=(key)=>cfg.error?[]:cfg.filter(c=>c.clave===key).map(c=>c.valor);
     const mrcs=getConfig('Marca'),cats=getConfig('Categoria'),gens=getConfig('Genero'),tnds=getConfig('Tienda');
-    content.innerHTML=`
-        <h2 style="margin-bottom:1.5rem;">Control de Inventario</h2>
-        <form id="form-prod" style="display:flex;flex-direction:column;gap:1.2rem;">
-            <div><label>Estado del Producto</label>
-               <select name="est" style="width:100%;padding:14px;border-radius:12px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);margin-top:5px;outline:none;box-sizing:border-box;">
-                   <option value="Disponible entrega inmediata" ${data.estado_producto==='Disponible entrega inmediata'?'selected':''}>Disponible entrega inmediata</option>
-                   <option value="Pendiente de compra" ${data.estado_producto==='Pendiente de compra'?'selected':''}>Pendiente de compra (USA)</option>
-                   <option value="Producto Vendido" ${data.estado_producto==='Producto Vendido'?'selected':''}>Producto Vendido</option>
-                   <option value="Entregado" ${data.estado_producto==='Entregado'?'selected':''}>Entregado (Cliente Final)</option>
-               </select>
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>${id ? 'Editar Producto' : 'Nuevo Producto Stock'}</h2>
+                <button onclick="window.closeModal()" class="modal-close">&times;</button>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-               <div><label>Modelo / Nombre Exacto</label><input type="text" name="nom" value="${data.nombre_producto}" required></div>
-               <div><label>SKU / Ref</label><input type="text" name="sku" value="${data.sku}" required></div>
+            
+            <form id="form-prod">
+                <div class="modal-body">
+                    <div class="form-grid-2" style="margin-bottom: 2rem; background: var(--surface-1); padding: 1.5rem; border-radius: 16px; border: 1px solid var(--border-base);">
+                        <div class="form-group">
+                            <label class="form-label">Estado Actual del Producto</label>
+                            <select name="est" class="form-select" style="font-weight:700; color:var(--brand-magenta);">
+                                <option value="Disponible entrega inmediata" ${data.estado_producto === 'Disponible entrega inmediata' ? 'selected' : ''}>Disponible entrega inmediata</option>
+                                <option value="Pendiente de compra" ${data.estado_producto === 'Pendiente de compra' ? 'selected' : ''}>Pendiente de compra (USA)</option>
+                                <option value="Producto Vendido" ${data.estado_producto === 'Producto Vendido' ? 'selected' : ''}>Producto Vendido</option>
+                                <option value="Entregado" ${data.estado_producto === 'Entregado' ? 'selected' : ''}>Entregado (Cliente Final)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                <div class="form-grid-3">
+                    <div class="form-group">
+                        <label class="form-label">Modelo / Nombre Exacto</label>
+                        <input type="text" name="nom" value="${data.nombre_producto}" required placeholder="Ej. Air Jordan 1 Retro">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SKU / Ref</label>
+                        <input type="text" name="sku" value="${data.sku}" required placeholder="Ej. 555088-101">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Marca</label>
+                        <select name="mrc" required>
+                            <option value="" disabled ${!data.marca ? 'selected' : ''}>Seleccione Marca...</option>
+                            ${mrcs.map(m => `<option value="${m}" ${data.marca === m ? 'selected' : ''}>${m}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Categoría</label>
+                        <select name="cat" required>
+                            <option value="" disabled ${!data.categoria ? 'selected' : ''}>Seleccione Categoría...</option>
+                            ${cats.map(c => `<option value="${c}" ${data.categoria === c ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Género</label>
+                        <select name="gen" required>
+                            <option value="" disabled ${!data.genero ? 'selected' : ''}>Género...</option>
+                            ${gens.map(g => `<option value="${g}" ${data.genero === g ? 'selected' : ''}>${g}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Talla (Opcional)</label>
+                        <input type="text" name="tal" value="${data.talla || ''}" placeholder="Ej: 9US / M">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Origen/Tienda</label>
+                        <select name="ori" required>
+                            <option value="" disabled ${!data.tienda_cotizacion ? 'selected' : ''}>Tienda...</option>
+                            ${tnds.map(t => `<option value="${t}" ${data.tienda_cotizacion === t ? 'selected' : ''}>${t}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Venta Final (COP)</label>
+                        <input type="number" name="pcop" value="${data.precio_cop}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Costo (USD)</label>
+                        <input type="number" step="0.01" name="pusd" value="${data.precio_usd}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Stock MDE Física</label>
+                        <input type="number" name="smde" value="${data.stock_medellin}" required>
+                    </div>
+                    <div class="form-group" style="grid-column: span 3;">
+                        <label class="form-label">Link del Producto (URL)</label>
+                        <input type="url" name="link" value="${data.link_producto || ''}" placeholder="https://...">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Fotografía del Producto</label>
+                    <div style="display:flex; gap:1rem; align-items:flex-start;">
+                        <div id="img-preview" style="width:80px; height:80px; background:var(--input-bg); border-radius:12px; border:1px solid var(--glass-border); overflow:hidden; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            ${data.url_imagen ? `<img src="${data.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.2; font-size:0.6rem;">SIN FOTO</span>'}
+                        </div>
+                        <div style="flex:1;">
+                            <input type="file" id="file-img" accept="image/*" class="file-input">
+                            <p style="font-size:0.7rem; opacity:0.5; margin-top:5px;">Sube una imagen clara del producto para el catálogo.</p>
+                        </div>
+                    </div>
+                    <input type="hidden" name="img" id="hidden-img-url" value="${data.url_imagen}">
+                </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-               <div><label>Marca</label><select name="mrc" required style="width:100%;padding:14px;border-radius:12px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);outline:none;"><option value="" disabled ${!data.marca?'selected':''}>Seleccione Marca...</option>${mrcs.map(m=>`<option value="${m}" ${data.marca===m?'selected':''}>${m}</option>`).join('')}</select></div>
-               <div><label>Categoría</label><select name="cat" required style="width:100%;padding:14px;border-radius:12px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);outline:none;"><option value="" disabled ${!data.categoria?'selected':''}>Seleccione Categoría...</option>${cats.map(c=>`<option value="${c}" ${data.categoria===c?'selected':''}>${c}</option>`).join('')}</select></div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+                <button type="submit" class="btn-primary">Guardar Producto</button>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;background:var(--glass-hover);padding:10px;border-radius:12px;">
-               <div><label>Género</label><select name="gen" required style="width:100%;padding:10px;border-radius:8px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);outline:none;"><option value="" disabled ${!data.genero?'selected':''}>Género...</option>${gens.map(g=>`<option value="${g}" ${data.genero===g?'selected':''}>${g}</option>`).join('')}</select></div>
-               <div><label>Talla (Opcional)</label><input type="text" name="tal" value="${data.talla||''}" placeholder="Ej: 9US / M" style="padding:10px;"></div>
-               <div><label>Origen/Tienda</label><select name="ori" required style="width:100%;padding:10px;border-radius:8px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);outline:none;"><option value="" disabled ${!data.tienda_cotizacion?'selected':''}>Tienda...</option>${tnds.map(t=>`<option value="${t}" ${data.tienda_cotizacion===t?'selected':''}>${t}</option>`).join('')}</select></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-               <div><label>Venta Final (COP)</label><input type="number" name="pcop" value="${data.precio_cop}" required></div>
-               <div><label>Costo (USD)</label><input type="number" step="0.01" name="pusd" value="${data.precio_usd}" required></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-               <div><label>Stock MDE Física</label><input type="number" name="smde" value="${data.stock_medellin}" required></div>
-               <div><label>Link del Producto (URL)</label><input type="url" name="link" value="${data.link_producto||''}" placeholder="https://..."></div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:5px;background:var(--input-bg);padding:1rem;border-radius:12px;">
-               <label>Fotografía del Producto</label>
-               <input type="file" id="file-img" accept="image/*" style="padding:10px;background:var(--input-bg);border-radius:12px;border:1px dashed rgba(255,255,255,0.2);">
-               <div id="img-preview" style="height:60px;border-radius:8px;display:flex;overflow:hidden;align-items:flex-start;margin-top:5px;">${data.url_imagen?`<img src="${data.url_imagen}" style="height:100%;object-fit:cover;border-radius:6px;">`:'<span style="font-size:0.65rem;opacity:0.5;padding:5px;">Ninguna subida.</span>'}</div>
-               <input type="hidden" name="img" id="hidden-img-url" value="${data.url_imagen}">
-            </div>
-            <div style="display:flex;gap:15px;margin-top:1.5rem;">
-               <button type="submit" class="btn-primary" style="flex:1;">Guardar Cambios</button>
-               <button type="button" onclick="window.closeModal()" style="flex:1;background:none;border:1px solid var(--glass-border);color:var(--text-main);border-radius:16px;">Volver</button>
-            </div>
-        </form>`;
+        </form>
+    </div>`;
+    container.style.display = 'flex';
+
     container.style.display='flex';
     const fi=document.getElementById('file-img'),pv=document.getElementById('img-preview');
     fi.onchange=(e)=>{ const f=e.target.files[0]; if(f){const r=new FileReader();r.onload=(re)=>{pv.innerHTML=`<img src="${re.target.result}" style="height:100%;object-fit:cover;border-radius:6px;">`};r.readAsDataURL(f)} };

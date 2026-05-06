@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -13,6 +13,7 @@ import { renderPurchases, createPurchaseModal } from './views/purchases.js';
 import { renderFinance, createFinanceModal } from './views/finance.js';
 import { renderLogistics, createLogisticsModal } from './views/logistics.js';
 import { renderParams } from './views/params.js';
+import { renderCalculadora } from './views/calculadora.js';
 import { renderLogin } from './views/login.js';
 import { renderAdmin } from './views/admin.js';
 
@@ -20,6 +21,7 @@ import { renderAdmin } from './views/admin.js';
 const savedTheme = localStorage.getItem('theme') || 'dark';
 document.documentElement.setAttribute('data-theme', savedTheme);
 
+window.auth = auth;
 /**
  * Jarapo Admin - Aplicación Operativa Medellín (v3.0.0 · Auth + RBAC)
  */
@@ -38,12 +40,13 @@ const NAV_ITEMS = [
   { view: 'inventory',  icon: 'package',           label: 'Inventario',         module: 'inventory'  },
   { view: 'sales',      icon: 'shopping-cart',     label: 'Ventas',             module: 'sales'      },
   { view: 'purchases',  icon: 'globe',             label: 'Compras USA',        module: 'purchases'  },
-  { view: 'logistics',  icon: 'truck',             label: 'Seguimientos',       module: 'logistics'  },
+  { view: 'logistics',  icon: 'truck',             label: 'Seguimientos',       module: 'logistics'    },
   { divider: true },
-  { view: 'finance',    icon: 'activity',          label: 'Gastos y Finanzas',  module: 'finance'    },
+  { view: 'finance',    icon: 'activity',          label: 'Gastos y Finanzas',  module: 'finance'      },
+  { view: 'calculadora',icon: 'calculator',        label: 'Calculadora Precios',module: 'calculadora'  },
   { divider: true },
-  { view: 'params',     icon: 'settings-2',        label: 'Parametrización',    module: 'params'     },
-  { view: 'settings',   icon: 'settings',          label: 'Configuración',      module: null, always: true },
+  { view: 'params',     icon: 'settings-2',        label: 'Parametrización',    module: 'params'       },
+  { view: 'settings',   icon: 'settings',          label: 'Configuración',      module: null, adminOnly: true },
 ];
 
 const logoUrl = () => localStorage.getItem('GLOBAL_LOGO_URL') || '/logo.png';
@@ -61,12 +64,8 @@ export const renderLayout = (contentHTML) => {
   const navHTML = NAV_ITEMS.map(item => {
     if (item.divider) return `<div class="nav-divider"></div>`;
 
-    // Configuración siempre visible
-    if (item.always) {
-      return `<div class="nav-item ${state.currentView === item.view ? 'active' : ''}" data-view="${item.view}">
-        <i data-lucide="${item.icon}"></i> <span>${item.label}</span>
-      </div>`;
-    }
+    // adminOnly filters
+    if (item.adminOnly && profileLoaded && !auth.isAdmin()) return '';
 
     // Admin solo para rol admin (solo filtrar si el perfil está cargado)
     if (item.view === 'admin' && profileLoaded && !auth.isAdmin()) return '';
@@ -157,9 +156,14 @@ export const renderLayout = (contentHTML) => {
       <div id="module-view">${contentHTML}</div>
     </main>
 
-    <div id="modal-container" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--modal-overlay); z-index:9999; justify-content:center; align-items:center;">
-       <div id="modal-content" class="glass-card" style="width:620px; max-width:96%; padding:2.5rem; overflow-y:auto; max-height:92vh;">
-          <!-- Inyección Formulario -->
+    <div id="modal-container" style="display:none;">
+       <div id="modal-content">
+          <!-- Inyección Dinámica de Modales -->
+       </div>
+    </div>
+
+    <div id="custom-dialog-container" style="display:none;">
+       <div id="custom-dialog-content" class="glass-card">
        </div>
     </div>
   `;
@@ -171,7 +175,7 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator }
     });
     
     // Theme Toggle
@@ -182,11 +186,9 @@ export const renderLayout = (contentHTML) => {
           const newTheme = isLight ? 'dark' : 'light';
           document.documentElement.setAttribute('data-theme', newTheme);
           localStorage.setItem('theme', newTheme);
-          themeBtn.innerHTML = `
-             <i data-lucide="${newTheme === 'light' ? 'moon' : 'sun'}"></i>
-             <span>${newTheme === 'light' ? 'Oscuro' : 'Claro'}</span>
-          `;
-          createIcons({ icons: { Moon, Sun }});
+          // Re-renderizar el módulo actual para que los colores se actualicen
+          const currentView = state.currentView || localStorage.getItem('JARAPP_VIEW') || 'dashboard';
+          navigateTo(currentView);
        };
     }
     
@@ -210,7 +212,8 @@ export const renderLayout = (contentHTML) => {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
       logoutBtn.onclick = async () => {
-        if (!confirm('¿Cerrar sesión?')) return;
+        const ok = await window.customConfirm('Cerrar sesión', '¿Estás seguro de que deseas salir?');
+        if (!ok) return;
         await auth.logout();
         bootApp();
       };
@@ -222,6 +225,7 @@ export const renderLayout = (contentHTML) => {
 
 export const navigateTo = (view) => {
   state.currentView = view;
+  localStorage.setItem('JARAPP_VIEW', view); // Persistir vista actual
 
   // Guard: Supabase no configurado → settings
   if (!state.isLoggedIn && view !== 'settings') {
@@ -235,11 +239,17 @@ export const navigateTo = (view) => {
     return;
   }
 
+  // Guard: configuración solo para admin si ya está logueado
+  if (view === 'settings' && state.isLoggedIn && !auth.isAdmin()) {
+    navigateTo('dashboard');
+    return;
+  }
+
   // Guard: verificar permiso de acceso al módulo
   const moduleMap = {
     clients: 'clients', inventory: 'inventory', sales: 'sales',
     purchases: 'purchases', logistics: 'logistics', finance: 'finance',
-    params: 'params'
+    params: 'params', calculadora: 'calculadora'
   };
   
   if (moduleMap[view] && !auth.canAccess(moduleMap[view])) {
@@ -259,23 +269,24 @@ export const navigateTo = (view) => {
 
   // Routing Map
   switch(view) {
-    case 'dashboard': renderDashboard(renderLayout, renderErrorInternal); break;
-    case 'inventory': renderInventory(renderLayout, navigateTo); break;
-    case 'clients': renderClients(renderLayout, navigateTo); break;
-    case 'sales': renderSales(renderLayout, navigateTo); break;
-    case 'purchases': renderPurchases(renderLayout, navigateTo); break;
-    case 'finance': renderFinance(renderLayout, navigateTo); break;
-    case 'logistics': renderLogistics(renderLayout, navigateTo); break;
-    case 'params': renderParams(renderLayout, navigateTo); break;
-    case 'settings': renderSettingsView(renderLayout, navigateTo); break;
-    case 'admin': renderAdmin(renderLayout, navigateTo); break;
+    case 'dashboard':    renderDashboard(renderLayout, renderErrorInternal); break;
+    case 'inventory':    renderInventory(renderLayout, navigateTo); break;
+    case 'clients':      renderClients(renderLayout, navigateTo); break;
+    case 'sales':        renderSales(renderLayout, navigateTo); break;
+    case 'purchases':    renderPurchases(renderLayout, navigateTo); break;
+    case 'finance':      renderFinance(renderLayout, navigateTo); break;
+    case 'logistics':    renderLogistics(renderLayout, navigateTo); break;
+    case 'params':       renderParams(renderLayout, navigateTo); break;
+    case 'calculadora':  renderCalculadora(renderLayout, navigateTo); break;
+    case 'settings':     renderSettingsView(renderLayout, navigateTo); break;
+    case 'admin':        renderAdmin(renderLayout, navigateTo); break;
     default: renderPlaceholder(view); break;
   }
   
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator }
     });
   }, 200);
 };
@@ -296,6 +307,57 @@ window.modalCompra = (ventaId) => createPurchaseModal(navigateTo, ventaId);
 window.modalGasto = () => createFinanceModal(navigateTo);
 window.modalLogistica = (id) => createLogisticsModal(id, navigateTo);
 window._navigateTo = navigateTo;
+
+window.customAlert = (title, message, type = 'warning') => {
+    return new Promise((resolve) => {
+        const container = document.getElementById('custom-dialog-container');
+        const content = document.getElementById('custom-dialog-content');
+        let iconHtml = '⚠️';
+        let color = 'var(--warning-orange)';
+        if (type === 'error') { iconHtml = '❌'; color = 'var(--primary-red)'; }
+        if (type === 'success') { iconHtml = '✅'; color = 'var(--success-green)'; }
+        
+        content.innerHTML = `
+            <div style="font-size:4rem; margin-bottom:1.5rem; filter:drop-shadow(0 0 10px ${color}44);">${iconHtml}</div>
+            <h3 style="color:${color}; font-weight:800; font-size:1.6rem; margin-bottom:1rem;">${title}</h3>
+            <p style="opacity:0.8; font-size:1.05rem; line-height:1.6; margin-bottom:2.5rem; white-space:pre-wrap; color:var(--text-main);">${message}</p>
+            <button class="btn-primary" style="width:100%; padding:14px; font-size:1rem;" id="dialog-btn-ok">Entendido</button>
+        `;
+        container.style.display = 'flex';
+        
+        document.getElementById('dialog-btn-ok').onclick = () => {
+            container.style.display = 'none';
+            resolve(true);
+        };
+    });
+};
+
+window.customConfirm = (title, message) => {
+    return new Promise((resolve) => {
+        const container = document.getElementById('custom-dialog-container');
+        const content = document.getElementById('custom-dialog-content');
+        
+        content.innerHTML = `
+            <div style="font-size:4rem; margin-bottom:1.5rem; filter:drop-shadow(0 0 10px rgba(76,201,240,0.3));">❓</div>
+            <h3 style="color:var(--text-main); font-weight:800; font-size:1.6rem; margin-bottom:1rem;">${title}</h3>
+            <p style="opacity:0.8; font-size:1.05rem; line-height:1.6; margin-bottom:2.5rem; white-space:pre-wrap;">${message}</p>
+            <div style="display:flex; gap:12px; width:100%;">
+                <button class="btn-secondary" style="flex:1; padding:14px;" id="dialog-btn-cancel">Cancelar</button>
+                <button class="btn-primary" style="flex:1; padding:14px;" id="dialog-btn-ok">Confirmar</button>
+            </div>
+        `;
+        container.style.display = 'flex';
+        
+        document.getElementById('dialog-btn-ok').onclick = () => {
+            container.style.display = 'none';
+            resolve(true);
+        };
+        document.getElementById('dialog-btn-cancel').onclick = () => {
+            container.style.display = 'none';
+            resolve(false);
+        };
+    });
+};
 
 // Pagination Handlers
 window.changePage = (view, page) => {

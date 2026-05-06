@@ -8,34 +8,42 @@ import { createClient } from '@supabase/supabase-js';
 export const ROLE_TEMPLATES = {
   admin: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
-    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'edit', admin: true
+    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'edit',
+    calculadora: 'edit', admin: true, feat_money: true, feat_usa: true
   },
   gerente: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
-    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'view', admin: false
+    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'view',
+    calculadora: 'edit', admin: false, feat_money: true, feat_usa: true
   },
   ventas: {
     dashboard: true, clients: 'edit', inventory: 'view', sales: 'edit',
-    purchases: false, logistics: 'view', finance: false, params: false, admin: false
+    purchases: false, logistics: 'view', finance: false, params: false,
+    calculadora: 'edit', admin: false, feat_money: false, feat_usa: false
   },
   logistica: {
     dashboard: true, clients: 'view', inventory: 'edit', sales: 'view',
-    purchases: 'edit', logistics: 'edit', finance: false, params: false, admin: false
+    purchases: 'edit', logistics: 'edit', finance: false, params: false,
+    calculadora: 'view', admin: false, feat_money: false, feat_usa: true
   },
   finanzas: {
     dashboard: true, clients: 'view', inventory: 'view', sales: 'view',
-    purchases: 'view', logistics: 'view', finance: 'edit', params: false, admin: false
+    purchases: 'view', logistics: 'view', finance: 'edit', params: false,
+    calculadora: 'view', admin: false, feat_money: true, feat_usa: false
   },
   viewer: {
     dashboard: true, clients: false, inventory: false, sales: false,
-    purchases: false, logistics: false, finance: false, params: false, admin: false
+    purchases: false, logistics: false, finance: false, params: false,
+    calculadora: false, admin: false, feat_money: false, feat_usa: false
   }
 };
 
 export const MODULE_LABELS = {
   dashboard: 'Dashboard', clients: 'Clientes', inventory: 'Inventario',
   sales: 'Ventas', purchases: 'Compras USA', logistics: 'Seguimientos',
-  finance: 'Gastos y Finanzas', params: 'Parametrización', admin: 'Administración'
+  finance: 'Gastos y Finanzas', params: 'Parametrización',
+  calculadora: 'Calculadora de Precios', admin: 'Administración',
+  feat_money: 'Ver Tarjetas de Dinero', feat_usa: 'Ver Submódulo EEUU'
 };
 
 export const ROLE_LABELS = {
@@ -345,8 +353,12 @@ class Auth {
     const client = this._getClient();
     if (!client) throw new Error('Supabase no configurado.');
     if (!this.isAdmin()) throw new Error('Solo el administrador puede hacer esto.');
+    
+    // NOTA: No podemos usar client.auth.admin.updateUserById en el frontend
+    // porque requiere la Service Role Key de Supabase (por seguridad, el frontend solo tiene la Anon Key).
+    // Usaremos un RPC (Procedimiento Almacenado) que se ejecutará del lado del servidor.
     const { error } = await withTimeout(
-      client.auth.admin.updateUserById(userId, { password: newPassword }),
+      client.rpc('admin_reset_password', { target_user_id: userId, new_password: newPassword }),
       10000, 'Timeout al cambiar contraseña'
     );
     if (error) throw new Error(this._translateError(error.message));

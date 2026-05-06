@@ -4,12 +4,17 @@
  */
 
 import { auth, ROLE_TEMPLATES, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from '../auth.js';
+import { loadCalcConfig, saveCalcConfig, CALC_DEFAULT_CONFIG } from './calculadora.js';
+import { showToast } from '../utils.js';
+
+let _adminActiveTab = 'usuarios'; // 'usuarios' | 'calculadora'
 
 export const renderAdmin = async (renderLayout, navigateTo) => {
   renderLayout(`<div class="admin-loading"><div class="loader"></div><p>Cargando panel administrativo...</p></div>`);
 
   let users = [];
   let loadError = null;
+  let calcConfig = null;
 
   try {
     users = await auth.getAllUsers();
@@ -17,77 +22,91 @@ export const renderAdmin = async (renderLayout, navigateTo) => {
     loadError = err.message;
   }
 
-  const html = buildAdminHTML(users, loadError);
+  try {
+    calcConfig = await loadCalcConfig();
+  } catch (err) {
+    console.warn('[Admin] Error cargando config calc:', err.message);
+    calcConfig = JSON.parse(JSON.stringify(CALC_DEFAULT_CONFIG));
+  }
+
+  const html = buildAdminHTML(users, loadError, calcConfig);
   renderLayout(html);
-  bindAdminEvents(users, navigateTo, renderLayout);
+  bindAdminEvents(users, navigateTo, renderLayout, calcConfig);
 };
 
 // ── HTML Builder ────────────────────────────────────────────
 
-function buildAdminHTML(users, error) {
+function buildAdminHTML(users, error, calcConfig) {
   return `
     <div class="module-header">
       <div>
-        <p class="module-tag">ADMINISTRACIÓN · RBAC</p>
-        <h2 class="module-title">Control de Acceso</h2>
+        <p class="module-tag">ADMINISTRACIÓN · SISTEMA</p>
+        <h2 class="module-title">Panel de Administración</h2>
       </div>
-      <button class="btn-primary" id="admin-new-user-btn">+ Crear Usuario</button>
+      ${_adminActiveTab === 'usuarios' ? `<button class="btn-primary" id="admin-new-user-btn">+ Crear Usuario</button>` : ''}
     </div>
 
-    ${error ? `<div class="admin-error-banner">⚠ Error al cargar usuarios: ${error}</div>` : ''}
-
-    <!-- KPI Strip -->
-    <div class="kpi-grid" style="margin-bottom:1.5rem;">
-      ${buildAdminKPIs(users)}
+    <!-- Tabs -->
+    <div class="purchase-view-switcher" style="margin-bottom:1.5rem;">
+      <button class="pv-tab ${_adminActiveTab === 'usuarios' ? 'active' : ''}" id="admin-tab-usuarios">
+        👥 Control de Acceso
+      </button>
+      <button class="pv-tab ${_adminActiveTab === 'calculadora' ? 'active' : ''}" id="admin-tab-calculadora">
+        🧭 Administración Calculadora
+      </button>
     </div>
 
-    <!-- Tabla de usuarios -->
-    <div class="glass-card" style="padding:0; overflow:hidden;">
-      <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border-base); display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:2px;">Usuarios del Sistema</h3>
-          <p style="font-size:0.72rem; color:var(--text-faint);">${users.length} usuarios registrados</p>
+    <!-- Panel Usuarios -->
+    <div id="admin-panel-usuarios" style="display:${_adminActiveTab === 'usuarios' ? 'block' : 'none'}">
+      ${error ? `<div class="admin-error-banner">⚠ Error al cargar usuarios: ${error}</div>` : ''}
+      <div class="kpi-grid" style="margin-bottom:1.5rem;">
+        ${buildAdminKPIs(users)}
+      </div>
+      <div class="glass-card" style="padding:0; overflow:hidden;">
+        <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border-base); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:2px;">Usuarios del Sistema</h3>
+            <p style="font-size:0.72rem; color:var(--text-faint);">${users.length} usuarios registrados</p>
+          </div>
+          <div class="admin-filter-bar">
+            <input type="text" id="admin-search" class="admin-search-input" placeholder="Buscar usuario..." />
+            <select id="admin-role-filter" class="admin-filter-select">
+              <option value="">Todos los roles</option>
+              <option value="admin">Administrador</option>
+              <option value="gerente">Gerente</option>
+              <option value="ventas">Ventas</option>
+              <option value="logistica">Logística</option>
+              <option value="finanzas">Finanzas</option>
+              <option value="viewer">Solo Lectura</option>
+            </select>
+          </div>
         </div>
-        <div class="admin-filter-bar">
-          <input type="text" id="admin-search" class="admin-search-input" placeholder="Buscar usuario..." />
-          <select id="admin-role-filter" class="admin-filter-select">
-            <option value="">Todos los roles</option>
-            <option value="admin">Administrador</option>
-            <option value="gerente">Gerente</option>
-            <option value="ventas">Ventas</option>
-            <option value="logistica">Logística</option>
-            <option value="finanzas">Finanzas</option>
-            <option value="viewer">Solo Lectura</option>
-          </select>
+        <div class="table-wrapper" style="border-radius:0; border:none; box-shadow:none;">
+          <table class="data-table" id="admin-users-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th class="text-center">Módulos</th>
+                <th class="text-center">Estado</th>
+                <th class="text-center">Registrado</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-tbody">
+              ${buildUsersRows(users)}
+            </tbody>
+          </table>
         </div>
-      </div>
-
-      <div class="table-wrapper" style="border-radius:0; border:none; box-shadow:none;">
-        <table class="data-table" id="admin-users-table">
-          <thead>
-            <tr>
-              <th>Usuario</th>
-              <th>Email</th>
-              <th>Rol</th>
-              <th class="text-center">Módulos</th>
-              <th class="text-center">Estado</th>
-              <th class="text-center">Registrado</th>
-              <th class="text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="admin-users-tbody">
-            ${buildUsersRows(users)}
-          </tbody>
-        </table>
       </div>
     </div>
 
-    <!-- Modal de creación/edición de usuario -->
-    <div id="admin-user-modal" class="admin-modal-overlay" style="display:none;">
-      <div class="admin-modal-panel">
-        <div class="admin-modal-accent"></div>
-        <div id="admin-modal-body"><!-- Inyectado dinámicamente --></div>
-      </div>
+    <!-- Panel Calculadora -->
+    <div id="admin-panel-calculadora" style="display:${_adminActiveTab === 'calculadora' ? 'block' : 'none'}">
+      ${buildCalcAdminPanel(calcConfig)}
+    </div>
+
     </div>
   `;
 }
@@ -188,9 +207,151 @@ function buildUsersRows(users) {
   }).join('');
 }
 
+// ── Panel Administración Calculadora ──────────────────────────
+
+function buildCalcAdminPanel(config) {
+  if (!config) return `<div class="admin-error-banner">⚠ No se pudo cargar la configuración.</div>`;
+  const refTrm = parseFloat(localStorage.getItem('CALC_TRM') || '4200');
+  const valLibraCopCalc = ((config.valorLibraUsd || 0) * refTrm).toLocaleString('es-CO');
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:1.5rem;">
+      <!-- KPI resumen config -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <p class="card-label">Tax USA</p>
+          <p class="card-value" style="color:var(--info-blue);font-size:1.4rem;">${config.taxUsa}%</p>
+          <p class="card-trend">Sobre precio base USD</p>
+        </div>
+        <div class="kpi-card">
+          <p class="card-label">Valor Libra USD</p>
+          <p class="card-value" style="color:var(--warning-orange);font-size:1.4rem;">$${config.valorLibraUsd || 0} USD</p>
+          <p class="card-trend">= $${valLibraCopCalc} COP (ref. TRM ${refTrm.toLocaleString('es-CO')})</p>
+        </div>
+        <div class="kpi-card">
+          <p class="card-label">Comisión TC</p>
+          <p class="card-value" style="color:var(--brand-magenta);font-size:1.4rem;">${config.comisionTC}%</p>
+          <p class="card-trend">Pasarela de pago</p>
+        </div>
+        <div class="kpi-card">
+          <p class="card-label">Domicilio</p>
+          <p class="card-value" style="color:var(--success-green);font-size:1.2rem;">$${(config.costoDomicilio||0).toLocaleString('es-CO')}</p>
+          <p class="card-trend">COP costo envío local</p>
+        </div>
+      </div>
+
+      <!-- Valores globales -->
+      <div class="glass-card" style="padding:1.5rem;">
+        <h3 style="font-size:0.85rem;font-weight:700;margin-bottom:1.2rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">1. Valores Globales</h3>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;">
+
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Tax USA (%)</label>
+            <input type="number" id="calc-cfg-taxUsa" value="${config.taxUsa || 0}"
+              style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;">
+          </div>
+
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Comisión Pasarela (%)</label>
+            <input type="number" id="calc-cfg-comisionTC" value="${config.comisionTC || 0}"
+              style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;">
+          </div>
+
+          <!-- Valor Libra USD — editable -->
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;color:var(--warning-orange);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">
+              ⭐ Valor Libra (USD)
+            </label>
+            <input type="number" id="calc-cfg-valorLibraUsd" value="${config.valorLibraUsd || 0}"
+              step="0.5"
+              style="width:100%;background:var(--input-bg);border:1px solid var(--warning-orange);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;">
+            <p style="font-size:0.68rem;color:var(--text-faint);margin-top:4px;">Costo de flete por libra en dólares</p>
+          </div>
+
+          <!-- Valor Libra COP — auto-calculado -->
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">
+              Valor Libra (COP) — Auto
+            </label>
+            <div style="position:relative;">
+              <input type="text" id="calc-cfg-valorLibra-display" value="$ ${valLibraCopCalc}" readonly
+                style="width:100%;background:var(--surface-2);border:1px dashed var(--glass-border);color:var(--text-muted);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;cursor:default;">
+              <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:0.65rem;color:var(--text-faint);font-weight:600;">TRM × USD</span>
+            </div>
+            <p style="font-size:0.68rem;color:var(--text-faint);margin-top:4px;">Calculado automáticamente con TRM de referencia</p>
+          </div>
+
+          <!-- TRM Referencia (solo display) -->
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">TRM de Referencia</label>
+            <input type="number" id="calc-cfg-refTrm" value="${refTrm}"
+              style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;">
+            <p style="font-size:0.68rem;color:var(--text-faint);margin-top:4px;">Usada para previsualizar el Valor Libra COP</p>
+          </div>
+
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Costo Domicilio (COP)</label>
+            <input type="number" id="calc-cfg-costoDomicilio" value="${config.costoDomicilio || 0}"
+              style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;">
+          </div>
+
+        </div>
+      </div>
+
+
+      <!-- Matriz categorías -->
+      <div class="glass-card" style="padding:0;overflow:hidden;">
+        <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border-base);">
+          <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">2. Matriz de Pesos y Ganancias</h3>
+        </div>
+        <div class="table-wrapper" style="border-radius:0;border:none;box-shadow:none;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th class="text-center">Peso (Lbs)</th>
+                <th class="text-center">Ganancia (COP)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${Object.entries(config.categorias).map(([key, cat]) => `
+                <tr>
+                  <td><span style="font-weight:700;">${cat.label}</span></td>
+                  <td class="text-center">
+                    <input type="number" id="calc-cat-peso-${key}" value="${cat.peso || 0}"
+                      style="width:80px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
+                  </td>
+                  <td class="text-center">
+                    <input type="number" id="calc-cat-gan-${key}" value="${cat.ganancia || 0}"
+                      style="width:120px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Botón guardar -->
+      <div style="display:flex;justify-content:flex-end;">
+        <button id="calc-cfg-save-btn" class="btn-primary" style="padding:12px 32px;font-size:0.95rem;">💾 Guardar Configuración</button>
+      </div>
+    </div>
+  `;
+}
+
 // ── Event Binding ───────────────────────────────────────────
 
-function bindAdminEvents(users, navigateTo, renderLayout) {
+function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
+  // ── Tabs --
+  document.getElementById('admin-tab-usuarios')?.addEventListener('click', () => {
+    _adminActiveTab = 'usuarios';
+    renderAdmin(renderLayout, navigateTo);
+  });
+  document.getElementById('admin-tab-calculadora')?.addEventListener('click', () => {
+    _adminActiveTab = 'calculadora';
+    renderAdmin(renderLayout, navigateTo);
+  });
   // Botón nuevo usuario
   document.getElementById('admin-new-user-btn')?.addEventListener('click', () => {
     openUserModal(null, users, navigateTo, renderLayout);
@@ -217,7 +378,7 @@ function bindAdminEvents(users, navigateTo, renderLayout) {
       // Refresh
       renderAdmin(renderLayout, navigateTo);
     } catch (err) {
-      alert('Error: ' + err.message);
+      window.showToast('Error: ' + err.message, 'error');
     }
   };
 
@@ -228,7 +389,51 @@ function bindAdminEvents(users, navigateTo, renderLayout) {
   window.adminViewLogs = (userId, userName) => {
     openLogsModal(userId, userName);
   };
+
+  // ── Guardar config calculadora ──────────────────────────────
+  document.getElementById('calc-cfg-save-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('calc-cfg-save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    try {
+      const valorLibraUsd = parseFloat(document.getElementById('calc-cfg-valorLibraUsd')?.value) || 0;
+      const refTrm        = parseFloat(document.getElementById('calc-cfg-refTrm')?.value) || 4200;
+      const newConfig = {
+        taxUsa:         parseFloat(document.getElementById('calc-cfg-taxUsa')?.value) || 0,
+        comisionTC:     parseFloat(document.getElementById('calc-cfg-comisionTC')?.value) || 0,
+        valorLibraUsd,
+        valorLibra:     valorLibraUsd * refTrm,   // COP calculado = USD × TRM referencia
+        costoDomicilio: parseFloat(document.getElementById('calc-cfg-costoDomicilio')?.value) || 0,
+        categorias: {}
+      };
+      Object.keys(calcConfig.categorias).forEach(key => {
+        newConfig.categorias[key] = {
+          ...calcConfig.categorias[key],
+          peso:     parseFloat(document.getElementById(`calc-cat-peso-${key}`)?.value) || 0,
+          ganancia: parseFloat(document.getElementById(`calc-cat-gan-${key}`)?.value) || 0,
+        };
+      });
+      await saveCalcConfig(newConfig);
+      showToast('✅ Configuración de calculadora guardada exitosamente', 'success');
+      setTimeout(() => renderAdmin(renderLayout, navigateTo), 800);
+    } catch (err) {
+      showToast('Error al guardar: ' + err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = '💾 Guardar Configuración';
+    }
+  });
+
+  // ── Auto-cálculo Valor Libra COP en tiempo real ──────────────
+  const updateLibraCOP = () => {
+    const usd = parseFloat(document.getElementById('calc-cfg-valorLibraUsd')?.value) || 0;
+    const trm = parseFloat(document.getElementById('calc-cfg-refTrm')?.value) || 0;
+    const display = document.getElementById('calc-cfg-valorLibra-display');
+    if (display) display.value = `$ ${(usd * trm).toLocaleString('es-CO')}`;
+  };
+  document.getElementById('calc-cfg-valorLibraUsd')?.addEventListener('input', updateLibraCOP);
+  document.getElementById('calc-cfg-refTrm')?.addEventListener('input', updateLibraCOP);
 }
+
 
 function filterTable(search, role) {
   const rows = document.querySelectorAll('#admin-users-tbody tr[data-user-id]');
@@ -246,120 +451,91 @@ function filterTable(search, role) {
 
 function openUserModal(user, allUsers, navigateTo, renderLayout) {
   const isEdit = !!user;
-  const modal = document.getElementById('admin-user-modal');
-  const body = document.getElementById('admin-modal-body');
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
   
   const currentPerms = user?.permissions || ROLE_TEMPLATES.viewer;
   const currentRole = user?.role || 'viewer';
 
-  body.innerHTML = `
-    <div class="admin-modal-header">
-      <div>
-        <h3>${isEdit ? `Editar: ${user.full_name}` : 'Crear Nuevo Usuario'}</h3>
-        <p style="font-size:0.78rem; color:var(--text-faint); margin-top:4px;">
-          ${isEdit ? user.email : 'El usuario recibirá acceso con las credenciales definidas'}
-        </p>
+  content.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2>${isEdit ? `Editar: ${user.full_name}` : 'Crear Usuario'}</h2>
+          <p style="opacity:0.6; font-size:0.9rem;">
+            ${isEdit ? user.email : 'Configura las credenciales y permisos del nuevo integrante.'}
+          </p>
+        </div>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
       </div>
-      <button class="admin-modal-close" id="admin-modal-close-btn">✕</button>
-    </div>
 
-    <div class="admin-modal-content">
-      ${!isEdit ? `
-        <div class="admin-form-section">
-          <h4 class="admin-section-title">Datos de acceso</h4>
-          <div class="admin-form-grid">
-            <div class="login-field">
-              <label class="login-label">Nombre completo</label>
-              <input type="text" id="new-user-name" class="login-input" placeholder="Nombre Apellido"
-                autocomplete="off" autocorrect="off" autocapitalize="off" />
-            </div>
-            <div class="login-field">
-              <label class="login-label">Correo electrónico</label>
-              <input type="text" inputmode="email" id="new-user-email" class="login-input"
-                placeholder="usuario@email.com" autocomplete="off" autocorrect="off"
-                autocapitalize="off" spellcheck="false" />
-            </div>
-            <div class="login-field" style="grid-column:1/-1;">
-              <label class="login-label">Contraseña inicial</label>
-              <div class="login-input-wrap">
-                <input type="password" id="new-user-password" class="login-input"
-                  placeholder="Mínimo 6 caracteres" autocomplete="new-password"
-                  style="padding-left:14px; padding-right:42px;" />
-                <button type="button" class="login-eye-btn" id="toggle-new-password" title="Ver/Ocultar">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </button>
+      <div class="modal-body">
+        <div class="admin-modal-scroll-area" style="display:flex; flex-direction:column; gap:2rem;">
+          ${!isEdit ? `
+            <div class="admin-form-section">
+              <h4 class="admin-section-title" style="margin-bottom:1rem; font-size:0.85rem; text-transform:uppercase; color:var(--brand-magenta); letter-spacing:1px;">1. Datos de acceso</h4>
+              <div class="form-grid">
+                <div class="form-group" style="grid-column: span 6;">
+                  <label>Nombre completo</label>
+                  <input type="text" id="new-user-name" placeholder="Ej: Juan Pérez" autocomplete="off" />
+                </div>
+                <div class="form-group" style="grid-column: span 6;">
+                  <label>Correo electrónico</label>
+                  <input type="email" id="new-user-email" placeholder="juan@jarapo.com" autocomplete="off" />
+                </div>
+                <div class="form-group" style="grid-column: span 12;">
+                  <label>Contraseña inicial</label>
+                  <div style="position:relative;">
+                    <input type="password" id="new-user-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" style="padding-right:45px;" />
+                    <button type="button" id="toggle-new-password" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-faint); cursor:pointer;">👁️</button>
+                  </div>
+                </div>
               </div>
             </div>
+          ` : ''}
+
+          <div class="admin-form-section">
+            <h4 class="admin-section-title" style="margin-bottom:1rem; font-size:0.85rem; text-transform:uppercase; color:var(--brand-magenta); letter-spacing:1px;">2. Rol del usuario</h4>
+            <div class="admin-role-selector" id="admin-role-selector" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
+              ${Object.entries(ROLE_LABELS).map(([key, label]) => `
+                <button 
+                  type="button"
+                  class="admin-role-btn ${currentRole === key ? 'selected' : ''}"
+                  data-role="${key}"
+                  style="padding:12px; border-radius:12px; border:1px solid var(--glass-border); background:var(--glass-hover); color:var(--text-main); cursor:pointer; display:flex; align-items:center; gap:8px; font-weight:600; transition:0.2s;"
+                >
+                  <span style="width:8px; height:8px; border-radius:50%; background:${ROLE_COLORS[key]}"></span>
+                  ${label}
+                </button>
+              `).join('')}
+            </div>
           </div>
-        </div>
-      ` : ''}
 
-      <div class="admin-form-section">
-        <h4 class="admin-section-title">Rol del usuario</h4>
-        <div class="admin-role-selector" id="admin-role-selector">
-          ${Object.entries(ROLE_LABELS).map(([key, label]) => `
-            <button 
-              type="button"
-              class="admin-role-btn ${currentRole === key ? 'selected' : ''}"
-              data-role="${key}"
-              style="--role-color:${ROLE_COLORS[key]}"
-            >
-              <span class="admin-role-dot" style="background:${ROLE_COLORS[key]}"></span>
-              ${label}
-            </button>
-          `).join('')}
+          <div class="admin-form-section">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+              <h4 class="admin-section-title" style="margin:0; font-size:0.85rem; text-transform:uppercase; color:var(--brand-magenta); letter-spacing:1px;">3. Permisos de Módulos</h4>
+              <span style="font-size:0.75rem; opacity:0.5;">La plantilla de rol se aplica al seleccionar</span>
+            </div>
+            <div id="admin-perms-grid" style="display:flex; flex-direction:column; gap:8px;">
+              ${buildPermsGrid(currentPerms)}
+            </div>
+          </div>
+
+          <div id="admin-modal-alert" class="login-alert" style="display:none; margin-top:1rem;"></div>
         </div>
       </div>
 
-      <div class="admin-form-section">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-          <h4 class="admin-section-title" style="margin:0;">Permisos por módulo</h4>
-          <span style="font-size:0.72rem; color:var(--text-faint);">Selecciona el rol para aplicar plantilla</span>
-        </div>
-        <div class="admin-perms-grid" id="admin-perms-grid">
-          ${buildPermsGrid(currentPerms)}
-        </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button class="btn-primary" id="admin-modal-save-btn" style="padding:12px 30px;">
+          ${isEdit ? 'Guardar Cambios' : 'Crear Usuario'}
+        </button>
       </div>
-
-      <div id="admin-modal-alert" class="login-alert" style="display:none;"></div>
-    </div>
-
-    <div class="admin-modal-footer">
-      <button class="btn-action" id="admin-modal-cancel-btn">Cancelar</button>
-      <button class="btn-primary" id="admin-modal-save-btn">
-        ${isEdit ? 'Guardar cambios' : 'Crear usuario'}
-      </button>
     </div>
   `;
 
-  modal.style.display = 'flex';
-  setTimeout(() => {
-    modal.classList.add('admin-modal-visible');
-    // Limpiar campos del browser para evitar autocomplete con datos anteriores
-    const emailInp = document.getElementById('new-user-email');
-    const nameInp  = document.getElementById('new-user-name');
-    const passInp  = document.getElementById('new-user-password');
-    if (emailInp) emailInp.value = '';
-    if (nameInp)  nameInp.value = '';
-    if (passInp)  passInp.value = '';
-    // Toggle contraseña en modal crear usuario
-    document.getElementById('toggle-new-password')?.addEventListener('click', () => {
-      const inp = document.getElementById('new-user-password');
-      if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
-    });
-  }, 80);
-
-  // Cerrar modal
-  const closeModal = () => {
-    modal.classList.remove('admin-modal-visible');
-    setTimeout(() => { modal.style.display = 'none'; }, 300);
-  };
-  document.getElementById('admin-modal-close-btn').onclick = closeModal;
-  document.getElementById('admin-modal-cancel-btn').onclick = closeModal;
-  modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+  container.style.display = 'flex';
+  // Manejo de roles y guardado
 
   // Selección de rol → aplica plantilla de permisos
   document.getElementById('admin-role-selector').addEventListener('click', (e) => {
@@ -401,7 +577,7 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
         await auth.createUser(email, password, name, selectedRole, permissions);
       }
 
-      closeModal();
+      window.closeModal();
       // Refresh completo
       setTimeout(() => renderAdmin(renderLayout, navigateTo), 300);
 
@@ -416,25 +592,26 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
 }
 
 function buildPermsGrid(perms) {
-  const modules = ['dashboard','clients','inventory','sales','purchases','logistics','finance','params','admin'];
+  const modules = ['dashboard','clients','inventory','sales','purchases','logistics','finance','calculadora','params','admin','feat_money','feat_usa'];
   
   return modules.map(mod => {
     const perm = perms[mod];
-    const isAdmin = mod === 'admin';
+    const isBoolean = mod === 'admin' || mod === 'dashboard' || mod.startsWith('feat_');
     
     return `
       <div class="admin-perm-row">
         <div class="admin-perm-label">
           <span class="admin-perm-dot ${perm ? 'active' : ''}"></span>
           <span>${MODULE_LABELS[mod]}</span>
-          ${isAdmin ? '<span class="admin-badge-admin">Solo Admin</span>' : ''}
+          ${mod === 'admin' ? '<span class="admin-badge-admin">Solo Admin</span>' : ''}
+          ${mod.startsWith('feat_') ? '<span style="font-size:0.65rem; background:var(--glass-border); padding:2px 6px; border-radius:4px; margin-left:6px;">UI Feature</span>' : ''}
         </div>
         <div class="admin-perm-controls">
-          ${isAdmin ? `
+          ${isBoolean ? `
             <label class="admin-toggle-wrap">
               <input type="checkbox" class="admin-perm-check" data-module="${mod}" data-level="admin" ${perm ? 'checked' : ''} />
               <span class="admin-toggle-slider"></span>
-              <span class="admin-toggle-label">Acceso</span>
+              <span class="admin-toggle-label">Activar</span>
             </label>
           ` : `
             <label class="admin-toggle-wrap">
@@ -474,6 +651,11 @@ function collectPermissions() {
 
   adminChecks.forEach(el => {
     const mod = el.dataset.module;
+    perms[mod] = el.checked;
+  });
+
+  adminChecks.forEach(el => {
+    const mod = el.dataset.module;
     perms[mod] = el.checked ? true : false;
   });
 
@@ -482,75 +664,54 @@ function collectPermissions() {
 }
 
 function openResetPasswordModal(userId, userName) {
-  const modal = document.getElementById('admin-user-modal');
-  const body = document.getElementById('admin-modal-body');
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
 
-  body.innerHTML = `
-    <div class="admin-modal-header">
-      <div>
-        <h3>Restablecer Contraseña</h3>
-        <p style="font-size:0.78rem; color:var(--text-faint); margin-top:4px;">Usuario: <strong>${userName}</strong></p>
-      </div>
-      <button class="admin-modal-close" id="reset-modal-close">✕</button>
-    </div>
-    <div class="admin-modal-content">
-      <div class="login-field">
-        <label class="login-label">Nueva contraseña</label>
-        <div class="login-input-wrap">
-          <input type="password" id="reset-new-password" class="login-input"
-            placeholder="Mínimo 6 caracteres" autocomplete="new-password"
-            style="padding-left:14px; padding-right:42px;" />
-          <button type="button" class="login-eye-btn" id="toggle-reset-1" title="Ver/Ocultar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
+  content.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2>Restablecer Contraseña</h2>
+          <p style="opacity:0.6; font-size:0.9rem;">Usuario: <strong>${userName}</strong></p>
         </div>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
       </div>
-      <div class="login-field">
-        <label class="login-label">Confirmar contraseña</label>
-        <div class="login-input-wrap">
-          <input type="password" id="reset-confirm-password" class="login-input"
-            placeholder="Repetir contraseña" autocomplete="new-password"
-            style="padding-left:14px; padding-right:42px;" />
-          <button type="button" class="login-eye-btn" id="toggle-reset-2" title="Ver/Ocultar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </button>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-group" style="grid-column: span 12;">
+            <label>Nueva contraseña</label>
+            <div style="position:relative;">
+              <input type="password" id="reset-new-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" style="padding-right:45px;" />
+              <button type="button" id="toggle-reset-1" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-faint); cursor:pointer;">👁️</button>
+            </div>
+          </div>
+          <div class="form-group" style="grid-column: span 12;">
+            <label>Confirmar contraseña</label>
+            <div style="position:relative;">
+              <input type="password" id="reset-confirm-password" placeholder="Repetir contraseña" autocomplete="new-password" style="padding-right:45px;" />
+              <button type="button" id="toggle-reset-2" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text-faint); cursor:pointer;">👁️</button>
+            </div>
+          </div>
         </div>
+        <div id="reset-alert" class="login-alert" style="display:none; margin-top:1.5rem;"></div>
       </div>
-      <div id="reset-alert" class="login-alert" style="display:none;"></div>
-    </div>
-    <div class="admin-modal-footer">
-      <button class="btn-action" id="reset-cancel">Cancelar</button>
-      <button class="btn-primary" id="reset-save">Cambiar contraseña</button>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button class="btn-primary" id="reset-save">Cambiar Contraseña</button>
+      </div>
     </div>
   `;
 
-  modal.style.display = 'flex';
-  setTimeout(() => {
-    modal.classList.add('admin-modal-visible');
-    // Toggles de visibilidad de contraseña
-    document.getElementById('toggle-reset-1')?.addEventListener('click', () => {
-      const inp = document.getElementById('reset-new-password');
-      if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
-    });
-    document.getElementById('toggle-reset-2')?.addEventListener('click', () => {
-      const inp = document.getElementById('reset-confirm-password');
-      if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
-    });
-  }, 80);
-
-  const closeModal = () => {
-    modal.classList.remove('admin-modal-visible');
-    setTimeout(() => { modal.style.display = 'none'; }, 300);
-  };
-
-  document.getElementById('reset-modal-close').onclick = closeModal;
-  document.getElementById('reset-cancel').onclick = closeModal;
+  container.style.display = 'flex';
+  // Toggles de visibilidad
+  document.getElementById('toggle-reset-1')?.addEventListener('click', () => {
+    const inp = document.getElementById('reset-new-password');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+  document.getElementById('toggle-reset-2')?.addEventListener('click', () => {
+    const inp = document.getElementById('reset-confirm-password');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
 
   document.getElementById('reset-save').addEventListener('click', async () => {
     const np = document.getElementById('reset-new-password').value;
@@ -578,7 +739,7 @@ function openResetPasswordModal(userId, userName) {
 
     try {
       await auth.resetUserPassword(userId, np);
-      closeModal();
+      window.closeModal();
     } catch (err) {
       alertEl.className = 'login-alert login-alert-error';
       alertEl.textContent = err.message;
@@ -589,36 +750,29 @@ function openResetPasswordModal(userId, userName) {
 
 // ── Modal Historial de Logueos ──────────────────────────────
 async function openLogsModal(userId, userName) {
-  const modal = document.getElementById('admin-user-modal');
-  const body = document.getElementById('admin-modal-body');
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
 
-  body.innerHTML = `
-    <div class="admin-modal-header">
-      <div>
-        <h3>Historial de Accesos</h3>
-        <p style="font-size:0.78rem; color:var(--text-faint); margin-top:4px;">Usuario: <strong>${userName}</strong></p>
+  content.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2>Historial de Accesos</h2>
+          <p style="opacity:0.6; font-size:0.9rem;">Usuario: <strong>${userName}</strong></p>
+        </div>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
       </div>
-      <button class="admin-modal-close" id="logs-modal-close">✕</button>
-    </div>
-    <div class="admin-modal-content">
-      <div id="logs-loading" style="text-align:center; padding:2rem;"><div class="loader"></div><p>Cargando accesos...</p></div>
-      <div id="logs-container" style="display:none; max-height:400px; overflow-y:auto; padding-right:10px;"></div>
-    </div>
-    <div class="admin-modal-footer">
-      <button class="btn-action" id="logs-cancel">Cerrar</button>
+      <div class="modal-body">
+        <div id="logs-loading" style="text-align:center; padding:3rem;"><div class="loader"></div><p style="margin-top:10px; opacity:0.6;">Cargando historial...</p></div>
+        <div id="logs-container" style="display:none; max-height:450px; overflow-y:auto; padding-right:8px; display:flex; flex-direction:column; gap:10px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
+      </div>
     </div>
   `;
 
-  modal.style.display = 'flex';
-  setTimeout(() => { modal.classList.add('admin-modal-visible'); }, 80);
-
-  const closeModal = () => {
-    modal.classList.remove('admin-modal-visible');
-    setTimeout(() => { modal.style.display = 'none'; }, 300);
-  };
-
-  document.getElementById('logs-modal-close').onclick = closeModal;
-  document.getElementById('logs-cancel').onclick = closeModal;
+  container.style.display = 'flex';
 
   // Fetch logs
   try {

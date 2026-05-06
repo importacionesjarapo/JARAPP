@@ -29,8 +29,8 @@ export const renderSettingsView = (renderLayout, navigateTo, msg = null) => {
             btn.onclick = () => {
               const u = document.getElementById('supa-url').value;
               const k = document.getElementById('supa-key').value;
-              if (!u.includes('supabase.co')) return alert("Formato de URL inválido. Asegúrate de copiar el Project URL de Supabase.");
-              if (k.length < 20) return alert("Key inválida. Pega el texto completo del Anon Key.");
+              if (!u.includes('supabase.co')) return window.showToast("Formato de URL inválido. Asegúrate de copiar el Project URL de Supabase.", 'error');
+              if (k.length < 20) return window.showToast("Key inválida. Pega el texto completo del Anon Key.", 'error');
               
               db.setCredentials(u, k);
               
