@@ -3088,7 +3088,9 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
 }
 
 /* ════════════════════════════════════════════════
-  /* Dialog Modal (e.g. Logout Confirmation) */
+   DIALOG MODAL & KPI DETAILS MODAL
+   ════════════════════════════════════════════════ */
+
   #custom-dialog-container {
       position: fixed;
       top: 0;
@@ -3112,8 +3114,6 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
       animation: modalFadeIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
   }
 
-  /* KPI DETAILS MODAL */
-   ════════════════════════════════════════════════ */
 .modal-overlay {
   position: fixed;
   top: 0;
