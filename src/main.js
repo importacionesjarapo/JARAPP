@@ -135,7 +135,11 @@ export const renderLayout = (contentHTML) => {
          </button>
       </div>
       <div class="sidebar-foot">Medellín · ${new Date().getFullYear()}</div>
+     </div>
     </div>
+
+    <!-- Mobile Sidebar Overlay (tap to close) -->
+    <div id="sidebar-overlay"></div>
 
     <main class="main-content">
       <header class="header">
@@ -202,11 +206,25 @@ export const renderLayout = (contentHTML) => {
 
     // Mobile Menu Toggle
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const closeMobileNav = () => {
+        document.body.classList.remove('mobile-nav-open');
+    };
     if (mobileMenuBtn) {
         mobileMenuBtn.onclick = () => {
             document.body.classList.toggle('mobile-nav-open');
         };
     }
+    // Close sidebar when tapping the overlay
+    if (sidebarOverlay) {
+        sidebarOverlay.onclick = closeMobileNav;
+    }
+    // Auto-close sidebar after navigating on mobile
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (window.innerWidth <= 768) closeMobileNav();
+        }, { capture: true });
+    });
 
     // Logout Button
     const logoutBtn = document.getElementById('logout-btn');

@@ -3021,70 +3021,190 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
 /* ════════════════════════════════════════════════
    MOBILE RESPONSIVENESS
    ════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — Complete System
+   ════════════════════════════════════════════════════════ */
+
+/* ── Sidebar Overlay (mobile backdrop) ─────────────── */
+#sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(2px);
+  z-index: 99;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+body.mobile-nav-open #sidebar-overlay {
+  display: block;
+  opacity: 1;
+}
+body.mobile-nav-open {
+  overflow: hidden;
+}
+
+/* ── Tablet (≤ 1024px) ───────────────────────────────*/
+@media (max-width: 1024px) {
+  .kpi-strip { grid-template-columns: repeat(3, 1fr) !important; }
+  .dash-grid-3 { grid-template-columns: 1fr !important; }
+}
+
+/* ── Mobile (≤ 768px) ───────────────────────────────── */
 @media (max-width: 768px) {
+
   /* Sidebar Off-Canvas */
-  .sidebar { 
+  .sidebar {
     left: -100%;
-    transition: left 0.3s ease;
-    width: 250px !important; 
-    box-shadow: 10px 0 20px rgba(0,0,0,0.5);
+    z-index: 100;
+    width: 260px !important;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: none;
   }
-  body.mobile-nav-open .sidebar { 
-    left: 0; 
+  body.mobile-nav-open .sidebar {
+    left: 0;
+    box-shadow: 8px 0 32px rgba(0,0,0,0.5);
   }
-  
-  /* Retirar margin de contenido */
+
+  /* Main content */
   .main-content {
     margin-left: 0 !important;
-    padding: 1.5rem 1rem 2rem;
+    padding: 1rem 0.85rem 5rem;
+    min-height: 100vh;
   }
-  
-  /* Mostrar botón Hamburguesa en el header local */
+
+  /* Show hamburger */
   #mobile-menu-btn {
     display: flex !important;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
   }
-  
-  /* Stack tables elements and specific grids */
+
+  /* Header */
   .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    gap: 10px;
   }
-  
+  .welcome-msg h1 { font-size: 1.2rem; }
+  .welcome-msg p  { font-size: 0.72rem; }
+
   /* KPI Strips */
-  .kpi-strip {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-  
-  /* Dashboard Grids */
+  .kpi-strip { grid-template-columns: repeat(2, 1fr) !important; gap: 0.6rem !important; }
+  .kpi-card { padding: 0.9rem !important; }
+  .kpi-card .kpi-value { font-size: 1.1rem !important; }
+
+  /* Dashboard grids stack */
   .dash-grid-2, .dash-grid-3, .dash-grid-4, .dash-kpi-hero-grid {
     grid-template-columns: 1fr !important;
   }
-  
-  /* Module Top Barras */
+  .dash-span-2 { grid-column: span 1 !important; }
+
+  /* Tables: horizontal scroll */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .data-table { min-width: 580px; }
+  .data-table thead th,
+  .data-table tbody td {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+
+  /* Module filter bar */
   .module-filters-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
   }
-  .module-filters-bar input, .module-filters-bar button {
-    width: 100% !important;
+  .module-filters-bar > * { width: 100% !important; }
+  .date-filter-wrap { flex-wrap: wrap; gap: 6px; }
+  .date-filter-input { flex: 1; min-width: 120px; }
+  #find-sale, #find-finance, #find-client,
+  #find-inventory, #find-purchase, #find-logistic,
+  #find-param { width: 100% !important; font-size: 0.88rem; }
+  .btn-excel { width: 100%; justify-content: center; }
+
+  /* Tab buttons: horizontal scroll */
+  .pv-tabs, .tabs-bar, .tab-group {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    flex-wrap: nowrap !important;
+    padding-bottom: 4px;
+    scrollbar-width: none;
   }
-  .date-filter-wrap {
-    flex-direction: column;
-    align-items: stretch;
+  .pv-tabs::-webkit-scrollbar { display: none; }
+  .pv-tab, .tab-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    padding: 6px 14px;
   }
-  
+
   /* Modals */
   #modal-content {
-    width: 95% !important;
-    padding: 1.5rem !important;
+    width: 96% !important;
+    max-width: 96vw !important;
+    padding: 1.2rem !important;
+    max-height: 92vh;
+    overflow-y: auto;
   }
+  .modal-header { padding: 1rem 1.2rem !important; }
+  .modal-body   { padding: 1rem 1.2rem !important; }
+  .modal-footer { padding: 0.8rem 1.2rem !important; }
+
+  /* Modal forms single column */
+  #modal-content .form-grid-2,
+  #modal-content .form-grid-3,
   #modal-content form > div[style*="grid-template-columns"] {
     grid-template-columns: 1fr !important;
   }
   #modal-content form > div[style*="display:flex"] {
     flex-direction: column !important;
+    gap: 0.75rem !important;
   }
+
+  /* KPI detail modal */
+  .kpi-modal-item { flex-direction: column; gap: 10px; }
+  .kpi-item-right { align-items: flex-start; min-width: unset; }
+
+  /* Purchase / Finance card grids */
+  .purchase-view-panel > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+  .glass-card { padding: 1rem !important; }
+
+  /* Purchase group cards */
+  .purchase-group-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+
+  /* Sidebar logo smaller */
+  .sidebar-logo-ring { width: 80px !important; height: 80px !important; }
+  .sidebar-logo-zone { padding: 1.2rem 1rem 1rem !important; }
+  .sidebar-brand h2  { font-size: 1rem !important; }
+
+  /* Generic inline grid overrides */
+  div[style*="display:grid"][style*="repeat(3"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Very small phones (≤ 390px) ─────────────────────── */
+@media (max-width: 390px) {
+  .kpi-strip { grid-template-columns: 1fr !important; }
+  .welcome-msg h1 { font-size: 1rem; }
+  .main-content { padding: 0.75rem 0.6rem 5rem; }
+  .pv-tab, .tab-btn { font-size: 0.72rem; padding: 5px 10px; }
 }
 
 /* ════════════════════════════════════════════════
