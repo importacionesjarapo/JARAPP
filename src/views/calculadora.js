@@ -150,7 +150,8 @@ function renderCalcView() {
     </div>
   `;
 
-  const breakdownHTML = buildBreakdown(res, isAdmin);
+  const showDesglose = auth.canAccess('feat_calc_desglose');
+  const breakdownHTML = showDesglose ? buildBreakdown(res, auth.isAdmin()) : '';
 
   const html = `
     <div>
@@ -269,10 +270,11 @@ function renderCalcView() {
             </div>
           </div>
 
-          <!-- Desglose -->
+          <!-- Desglose (visible solo si tiene permiso) -->
+          ${showDesglose ? `
           <div id="calc-breakdown" class="glass-card" style="padding:1.5rem;">
             ${breakdownHTML}
-          </div>
+          </div>` : ''}
         </div>
       </div>
     </div>
@@ -339,6 +341,7 @@ function _bindEvents() {
     const breakdownEl = document.getElementById('calc-breakdown');
     if (totalEl)     totalEl.textContent = formatCOP(res.total);
     if (breakdownEl) breakdownEl.innerHTML = buildBreakdown(res, auth.isAdmin());
+
   };
 
   document.getElementById('calc-trm')?.addEventListener('input', recalc);
