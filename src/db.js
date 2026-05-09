@@ -1,11 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
+// ── Credenciales por defecto (anon key - segura para cliente) ──────────────────
+const DEFAULT_SUPA_URL = 'https://vygfsqdveudpzytnnhiq.supabase.co';
+const DEFAULT_SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTk2NjMsImV4cCI6MjA5MDYzNTY2M30.ZfkBk625C6X1Hgs51MRIB5TbRLYoztD1YS-QESL2x9M';
+
 class Database {
   constructor() {
-    // 1. Usar variables de entorno primero (Ej: desde Netlify env vars)
-    // 2. Si no están (desarrollo local sin .env), usar localStorage
-    this.supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL') || '';
-    this.supabaseKey = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY') || '';
+    // Prioridad: 1) Vite env vars (build de Netlify)
+    //            2) localStorage (override manual)
+    //            3) Credenciales hardcoded (fallback siempre disponible)
+    this.supabaseUrl = import.meta.env?.VITE_SUPABASE_URL
+      || localStorage.getItem('JARAPO_SUPA_URL')
+      || DEFAULT_SUPA_URL;
+    this.supabaseKey = import.meta.env?.VITE_SUPABASE_KEY
+      || localStorage.getItem('JARAPO_SUPA_KEY')
+      || DEFAULT_SUPA_KEY;
     this.client = null;
     
     if (this.supabaseUrl && this.supabaseKey) {
@@ -16,6 +25,7 @@ class Database {
       }
     }
   }
+
 
   setCredentials(url, key) {
     this.supabaseUrl = url;

@@ -30,7 +30,8 @@ const mainAppContent = document.querySelector('#app');
 
 const state = {
   currentView: 'dashboard',
-  get isLoggedIn() { return !!(import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL')); }
+  // Siempre conectado — credenciales embebidas en db.js como fallback
+  get isLoggedIn() { return true; }
 };
 
 // ── Nav Items definición (filtrados dinámicamente por permisos) ──
@@ -245,11 +246,7 @@ export const navigateTo = (view) => {
   state.currentView = view;
   localStorage.setItem('JARAPP_VIEW', view); // Persistir vista actual
 
-  // Guard: Supabase no configurado → settings
-  if (!state.isLoggedIn && view !== 'settings') {
-    renderSettingsView(renderLayout, navigateTo, 'Indica la URL de tu base de datos para comenzar.');
-    return;
-  }
+  // (Credenciales siempre disponibles via fallback en db.js)
 
   // Guard: módulo admin solo para admin
   if (view === 'admin' && !auth.isAdmin()) {
