@@ -282,13 +282,14 @@ const renderEgrTabla = (gastos, compras) => {
         <div class="table-wrapper">
             <table class="data-table">
                 <thead><tr>
-                    <th style="min-width:120px;">Fecha</th>
-                    <th style="min-width:240px;">Concepto / Tipo</th>
-                    <th class="text-center" style="min-width:100px;">Moneda</th>
-                    <th style="min-width:160px;">Valor Origen</th>
-                    <th style="min-width:110px;">TRM</th>
-                    <th class="text-right" style="min-width:170px;">Total COP</th>
-                    <th class="text-center" style="min-width:110px;">Comprobante</th>
+                    <th style="min-width:110px;">Fecha Factura</th>
+                    <th style="min-width:120px;">Nº Factura</th>
+                    <th style="min-width:230px;">Concepto / Tipo</th>
+                    <th class="text-center" style="min-width:90px;">Moneda</th>
+                    <th style="min-width:150px;">Valor Origen</th>
+                    <th style="min-width:100px;">TRM</th>
+                    <th class="text-right" style="min-width:160px;">Total COP</th>
+                    <th class="text-center" style="min-width:100px;">Comprobante</th>
                 </tr></thead>
                 <tbody>
                 ${combined.length > 0 ? combined.map(g => {
@@ -301,9 +302,10 @@ const renderEgrTabla = (gastos, compras) => {
                     const compUrl    = (!g.es_compra && g.comprobante_url) ? g.comprobante_url : '';
                     return `
                     <tr class="fin-expense-row" data-text="${sf.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">
-                        <td style="font-weight:700;">${normDate(g.fecha||g.fecha_pedido)||'N/A'}</td>
+                        <td style="font-weight:700;">${normDate(g.fecha_real_factura || g.fecha || g.fecha_pedido) || 'N/A'}</td>
+                        <td><span style="font-family:monospace;font-size:0.8rem;opacity:0.75;">${g.numero_factura || '—'}</span></td>
                         <td>
-                            <div class="cell-title" style="color:${g.es_compra?'var(--info-blue)':'inherit'}; max-width:220px;">${tipoStr}</div>
+                            <div class="cell-title" style="color:${g.es_compra?'var(--info-blue)':'inherit'}; max-width:200px;">${tipoStr}</div>
                             <span class="cell-subtitle">${descStr}</span>
                         </td>
                         <td class="text-center">
@@ -1108,98 +1110,174 @@ window.toggleGananciaAnalista = async (ventaId, checked) => {
     _reloadFinPanel();
 };
 
-// ─── Create Finance Modal (unchanged logic) ────────────────────────────────────
+// ─── Create Finance Modal ──────────────────────────────────────────────────────
 export const createFinanceModal = async (navigateTo) => {
     const container = document.getElementById('modal-container');
-    const content = document.getElementById('modal-content');
+    const content   = document.getElementById('modal-content');
+    const todayISO  = new Date().toISOString().split('T')[0];
+
     content.innerHTML = `
-        <h2 style="margin-bottom:1.5rem;">Registrar Nuevo Gasto</h2>
-        <form id="form-finance-gasto" style="display:flex; flex-direction:column; gap:1.2rem; max-height:70vh; overflow-y:auto; padding-right:1rem;">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-               <div>
-                   <label>Categoría / Tipo de Gasto</label>
-                   <select name="tipo_gasto" required>
-                       <option value="">-- Selecciona --</option>
-                       <option value="Papelería y Oficina">Papelería y Oficina</option>
-                       <option value="Empaques e Insumos (Bolsas)">Empaques e Insumos (Bolsas)</option>
-                       <option value="Campañas Publicitarias (Ads)">Campañas Publicitarias (Ads)</option>
-                       <option value="Logística Externa / Envíos">Logística Externa / Envíos</option>
-                       <option value="Nómina / Administrativo">Nómina / Administrativo</option>
-                       <option value="Servicios Digitales (Hosting, etc)">Servicios Digitales (Hosting, etc)</option>
-                       <option value="Otros Gastos Operativos">Otros Gastos Operativos</option>
-                   </select>
-               </div>
-               <div><label>Concepto Breve</label><input type="text" name="concepto" placeholder="Ej. Lote de 500 bolsas personalizadas" required></div>
+    <div class="modal-content" style="width:min(640px,96vw);">
+      <div class="modal-header">
+        <div>
+          <h2 style="margin:0;">Registrar Nuevo Egreso</h2>
+          <p style="opacity:0.6;font-size:0.85rem;margin:4px 0 0;">Gastos y salidas de caja operativas</p>
+        </div>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="form-finance-gasto" style="display:flex;flex-direction:column;gap:1.2rem;">
+
+          <!-- Fila 1: Categoría + Concepto -->
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Categoría / Tipo de Gasto</label>
+              <select name="tipo_gasto" required>
+                <option value="">-- Selecciona --</option>
+                <option value="Papelería y Oficina">Papelería y Oficina</option>
+                <option value="Empaques e Insumos (Bolsas)">Empaques e Insumos (Bolsas)</option>
+                <option value="Campañas Publicitarias (Ads)">Campañas Publicitarias (Ads)</option>
+                <option value="Logística Externa / Envíos">Logística Externa / Envíos</option>
+                <option value="Nómina / Administrativo">Nómina / Administrativo</option>
+                <option value="Servicios Digitales (Hosting, etc)">Servicios Digitales (Hosting, etc)</option>
+                <option value="Otros Gastos Operativos">Otros Gastos Operativos</option>
+              </select>
             </div>
-            <div style="display:flex; gap:1rem; border-bottom:1px solid var(--glass-border); padding-bottom:1rem;">
-               <label style="flex:1;"><input type="radio" name="moneda" value="COP" checked onchange="window.toggleCurrency(this.value)"> 🇨🇴 Pesos (COP)</label>
-               <label style="flex:1;"><input type="radio" name="moneda" value="USD" onchange="window.toggleCurrency(this.value)"> 🇺🇸 Dólares (USD)</label>
+            <div class="form-group">
+              <label>Concepto / Descripción</label>
+              <input type="text" name="concepto" placeholder="Ej. Lote de 500 bolsas personalizadas" required>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-               <div>
-                  <label id="lbl-valor-origen">Valor Facturado (COP)</label>
-                  <input type="number" step="0.01" name="valor_origen" id="val-origen" required min="0">
-               </div>
-               <div id="box-trm" style="display:none; background:rgba(6,214,160,0.05); border:1px solid rgba(6,214,160,0.2); padding:0.5rem; border-radius:12px;">
-                  <label style="color:var(--success-green);">TRM del día</label>
-                  <input type="number" step="0.01" name="trm" id="val-trm" placeholder="Ej: 4100" style="border-color:var(--success-green);">
-               </div>
+          </div>
+
+          <!-- Fila 2: Número Factura + Fecha Real Factura -->
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label>Número de Factura <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span></label>
+              <input type="text" name="numero_factura" placeholder="Ej. FAC-2025-001">
             </div>
-            <div style="display:none;"><input type="hidden" name="fecha" value="${new Date().toLocaleDateString()}"></div>
-            <div style="background:var(--glass-bg); padding:1rem; border-radius:8px; border:1px dashed var(--glass-border); text-align:center;">
-                <p style="margin:0; font-size:0.75rem; opacity:0.6; text-transform:uppercase;">Impacto Financiero</p>
-                <div id="lbl-total-cop" style="font-size:1.5rem; font-weight:700; color:var(--primary-red); margin-top:5px;">$0</div>
+            <div class="form-group">
+              <label>Fecha Real de la Factura</label>
+              <input type="date" name="fecha_real_factura" value="${todayISO}" required>
             </div>
-            <div>
-               <label style="margin-bottom:6px;display:block;">Comprobante de Pago <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span></label>
-               ${buildComprobanteUploadHTML('comp-egreso-file')}
+          </div>
+
+          <!-- Moneda -->
+          <div style="display:flex;gap:1.5rem;padding:0.8rem 1rem;background:var(--glass-hover);border-radius:12px;border:1px solid var(--glass-border);">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88rem;font-weight:600;">
+              <input type="radio" name="moneda" value="COP" checked onchange="window.toggleCurrency(this.value)">
+              🇨🇴 Pesos (COP)
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88rem;font-weight:600;">
+              <input type="radio" name="moneda" value="USD" onchange="window.toggleCurrency(this.value)">
+              🇺🇸 Dólares (USD)
+            </label>
+          </div>
+
+          <!-- Fila 3: Valor + TRM -->
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label id="lbl-valor-origen">Valor Facturado (COP)</label>
+              <input type="number" step="0.01" name="valor_origen" id="val-origen" required min="0" placeholder="0">
             </div>
-            <div style="display:flex; gap:15px; margin-top:1rem;">
-               <button type="submit" class="btn-primary" style="flex:1;">Registrar Egreso</button>
-               <button type="button" onclick="window.closeModal()" style="flex:1; background:none; border:1px solid var(--glass-border); color:var(--text-main); border-radius:16px;">Cancelar</button>
+            <div class="form-group" id="box-trm" style="display:none;">
+              <label style="color:var(--success-green);">TRM del día</label>
+              <input type="number" step="0.01" name="trm" id="val-trm" placeholder="Ej: 4100" style="border-color:var(--success-green);">
             </div>
-        </form>`;
+          </div>
+
+          <!-- Impacto calculado -->
+          <div style="background:var(--glass-bg);padding:1rem 1.4rem;border-radius:12px;border:1px dashed var(--glass-border);text-align:center;">
+            <p style="margin:0;font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;">Impacto Financiero</p>
+            <div id="lbl-total-cop" style="font-size:1.6rem;font-weight:800;color:var(--primary-red);margin-top:4px;">$0</div>
+          </div>
+
+          <!-- Comprobante -->
+          <div class="form-group">
+            <label>Comprobante de Pago <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span></label>
+            ${buildComprobanteUploadHTML('comp-egreso-file')}
+          </div>
+
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button type="submit" form="form-finance-gasto" id="btn-save-egreso" class="btn-primary">
+          💾 Registrar Egreso
+        </button>
+      </div>
+    </div>`;
+
     container.style.display = 'flex';
 
+    // Currency toggle
     window.toggleCurrency = (val) => {
-        const boxTRM = document.getElementById('box-trm');
+        const boxTRM   = document.getElementById('box-trm');
         const inputTRM = document.getElementById('val-trm');
         const lblValor = document.getElementById('lbl-valor-origen');
-        if (val === 'USD') { boxTRM.style.display='block'; inputTRM.setAttribute('required','true'); lblValor.innerText='Valor Facturado (USD)'; }
-        else { boxTRM.style.display='none'; inputTRM.removeAttribute('required'); inputTRM.value=''; lblValor.innerText='Valor Facturado (COP)'; }
+        if (val === 'USD') {
+            boxTRM.style.display = 'block';
+            inputTRM.setAttribute('required','true');
+            lblValor.innerText = 'Valor Facturado (USD)';
+        } else {
+            boxTRM.style.display = 'none';
+            inputTRM.removeAttribute('required');
+            inputTRM.value = '';
+            lblValor.innerText = 'Valor Facturado (COP)';
+        }
         window.calculateCopt();
     };
+
     window.calculateCopt = () => {
-        const isUSD = document.querySelector('input[name="moneda"]:checked').value === 'USD';
-        const vO = parseFloat(document.getElementById('val-origen').value||0);
-        const trm = parseFloat(document.getElementById('val-trm').value||0);
-        document.getElementById('lbl-total-cop').innerText = formatCOP(isUSD ? vO*trm : vO);
+        const isUSD = document.querySelector('input[name="moneda"]:checked')?.value === 'USD';
+        const vO  = parseFloat(document.getElementById('val-origen')?.value || 0);
+        const trm = parseFloat(document.getElementById('val-trm')?.value || 0);
+        const el  = document.getElementById('lbl-total-cop');
+        if (el) el.innerText = formatCOP(isUSD ? vO * trm : vO);
     };
+
     setTimeout(() => {
-        document.getElementById('val-origen').addEventListener('input', window.calculateCopt);
-        document.getElementById('val-trm').addEventListener('input', window.calculateCopt);
+        document.getElementById('val-origen')?.addEventListener('input', window.calculateCopt);
+        document.getElementById('val-trm')?.addEventListener('input', window.calculateCopt);
         attachComprobanteInput('comp-egreso-file');
     }, 150);
 
     document.getElementById('form-finance-gasto').onsubmit = async (e) => {
         e.preventDefault();
-        const fd = new FormData(e.target);
-        const isUSD = fd.get('moneda') === 'USD';
-        const vO = parseFloat(fd.get('valor_origen'));
-        const trm = isUSD ? parseFloat(fd.get('trm')) : null;
+        const fd       = new FormData(e.target);
+        const isUSD    = fd.get('moneda') === 'USD';
+        const vO       = parseFloat(fd.get('valor_origen'));
+        const trm      = isUSD ? parseFloat(fd.get('trm')) : null;
         const totalCOP = isUSD ? vO * trm : vO;
-        const btn = e.target.querySelector('button[type="submit"]');
-        btn.disabled = true; btn.innerText = 'Sincronizando...';
+        const btn      = document.getElementById('btn-save-egreso');
+        btn.disabled = true; btn.innerText = 'Guardando...';
         try {
             const comprobanteFile = document.getElementById('comp-egreso-file')?.files[0];
             let comprobanteUrl = '';
             if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
-            const payload = { id:Date.now().toString(), tipo_gasto:fd.get('tipo_gasto'), concepto:fd.get('concepto'), moneda:fd.get('moneda'), valor_origen:vO, trm, valor_cop:totalCOP, fecha:new Date().toLocaleDateString(), comprobante_url:comprobanteUrl };
+            const payload = {
+                id:                  Date.now().toString(),
+                tipo_gasto:          fd.get('tipo_gasto'),
+                concepto:            fd.get('concepto'),
+                numero_factura:      fd.get('numero_factura') || null,
+                fecha_real_factura:  fd.get('fecha_real_factura') || null,
+                moneda:              fd.get('moneda'),
+                valor_origen:        vO,
+                trm,
+                valor_cop:           totalCOP,
+                fecha:               new Date().toLocaleDateString(),
+                comprobante_url:     comprobanteUrl
+            };
             await db.postData('Gastos', payload, 'INSERT');
             window.closeModal();
-            showToast('✅ Gasto Operativo Registrado');
+            showToast('✅ Egreso registrado correctamente');
             _finCache = null;
             renderFinance(_finRenderLayout, navigateTo);
-        } catch (err) { showToast(err.message, 'error'); btn.disabled=false; btn.innerText='Reintentar'; }
+        } catch (err) {
+            showToast(err.message, 'error');
+            btn.disabled = false;
+            btn.innerText = '💾 Registrar Egreso';
+        }
     };
 };
