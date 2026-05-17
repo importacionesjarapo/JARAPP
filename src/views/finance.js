@@ -289,7 +289,7 @@ const renderEgrTabla = (gastos, compras) => {
                     <th style="min-width:150px;">Valor Origen</th>
                     <th style="min-width:100px;">TRM</th>
                     <th class="text-right" style="min-width:160px;">Total COP</th>
-                    <th class="text-center" style="min-width:100px;">Comprobante</th>
+                    <th class="text-center" style="min-width:130px;">Acciones</th>
                 </tr></thead>
                 <tbody>
                 ${combined.length > 0 ? combined.map(g => {
@@ -319,8 +319,9 @@ const renderEgrTabla = (gastos, compras) => {
                         <td style="font-family:monospace; font-size:0.85rem;">${isUSD ? formatUSD(valorOr) : formatCOP(valorOr)}</td>
                         <td>${isUSD && g.trm ? `<span style="opacity:0.6; font-size:0.85rem;">$${g.trm}</span>` : '<span style="opacity:0.3">—</span>'}</td>
                         <td class="text-right"><span class="cell-price" style="color:var(--primary-red);">${formatCOP(totalCop)}</span></td>
-                        <td class="text-center">
-                            ${compUrl ? `<button class="comp-thumb-btn" onclick="window.openComprobanteViewer('${compUrl}')">🧾 Ver</button>` : `<span style="opacity:0.25;font-size:0.75rem;">—</span>`}
+                        <td class="text-center" style="display:flex;gap:6px;justify-content:center;align-items:center;">
+                            ${compUrl ? `<button class="comp-thumb-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="window.openComprobanteViewer('${compUrl}')">🧾</button>` : ''}
+                            ${g.es_compra && g.venta_id ? `<button class="btn-action" style="font-size:0.7rem;padding:4px 8px;" onclick="window.modalDetalleVentaGlobal('${g.venta_id}')">👁️ Ver</button>` : (!compUrl ? `<span style="opacity:0.25;font-size:0.75rem;">—</span>`:'')}
                         </td>
                     </tr>`;
                 }).join('') : '<tr class="table-empty-row"><td colspan="7">Sin egresos registrados.</td></tr>'}
@@ -371,7 +372,10 @@ const renderEgrPorTipo = (gastos, compras) => {
                         <div class="purchase-group-row">
                             <span style="flex:1; font-size:0.82rem;">${desc}</span>
                             <span style="font-size:0.72rem; opacity:0.55;">${normDate(item.fecha||item.fecha_pedido)||''}</span>
-                            <span style="font-weight:700; color:var(--primary-red); font-size:0.82rem;">${formatCOP(val)}</span>
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <span style="font-weight:700; color:var(--primary-red); font-size:0.82rem;">${formatCOP(val)}</span>
+                                ${item.es_compra && item.venta_id ? `<button class="btn-action" style="font-size:0.65rem;padding:3px 8px;" onclick="window.modalDetalleVentaGlobal('${item.venta_id}')">👁️</button>` : ''}
+                            </div>
                         </div>`;
                     }).join('')}
                 </div>
@@ -411,7 +415,10 @@ const renderEgrTimeline = (gastos, compras) => {
                             <div class="timeline-item-prov">${tipo}</div>
                             <div class="timeline-item-sub">${desc}</div>
                         </div>
-                        <span class="timeline-item-price" style="color:var(--primary-red);">−${formatCOP(val)}</span>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="timeline-item-price" style="color:var(--primary-red);">−${formatCOP(val)}</span>
+                            ${g.es_compra && g.venta_id ? `<button class="btn-action" style="font-size:0.6rem;padding:2px 6px;" onclick="window.modalDetalleVentaGlobal('${g.venta_id}')">👁️</button>` : ''}
+                        </div>
                     </div>`;
                 }).join('')}
             </div>`).join('')}
