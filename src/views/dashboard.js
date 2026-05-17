@@ -18,6 +18,8 @@ let _dashRenderLayout = null;
 let _currentCategory  = 'finanzas';
 let _currentReportId  = 'fin-pnl';
 let _currentChartType = null;
+let _currentView      = 'monthly';   // 'monthly' | 'explorer'
+let _monthOffset      = 0;           // 0=mes actual, -1=anterior, etc.
 
 // ─── Utilitarios de fecha ─────────────────────────────────────────────────────
 const parseDate = (s) => {
@@ -63,6 +65,23 @@ const groupByMonth = (arr, campo, val) => {
 };
 const fmtM = (v) => `$${(Math.abs(v)/1000000).toFixed(1)}M`;
 const fmtK = (v) => Math.abs(v) >= 1000000 ? fmtM(v) : `$${(Math.abs(v)/1000).toFixed(0)}k`;
+
+// ─── Helpers de mes ───────────────────────────────────────────────────────────
+const getMonthRange = (offset = 0) => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const end   = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0, 23, 59, 59);
+    const label = start.toLocaleString('es-CO', { month: 'long', year: 'numeric' });
+    return { start, end, label: label.charAt(0).toUpperCase() + label.slice(1) };
+};
+const inMonthRange = (item, field, offset) => {
+    const { start, end } = getMonthRange(offset);
+    const dStr = typeof field === 'function' ? field(item) : item[field];
+    const d = parseDate(dStr);
+    if (!d || isNaN(d)) return false;
+    d.setHours(12, 0, 0, 0);
+    return d >= start && d <= end;
+};
 
 // ─── Logística fases ──────────────────────────────────────────────────────────
 const FASES       = ['Comprado','En Tránsito','Bodega USA','Aduana','Bodega Colombia','Entregado'];
@@ -543,6 +562,10 @@ window.exportCurrentReport = () => {
     downloadExcel(rows, `Reporte_${(meta?.label||_currentReportId).replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}`);
 };
 
+window.switchDashView = (v) => { _currentView = v; if (_dashCache) _renderDashboardBody(); };
+window.prevMonth      = () => { _monthOffset--; if (_dashCache) _renderDashboardBody(); };
+window.nextMonth      = () => { if (_monthOffset < 0) { _monthOffset++; if (_dashCache) _renderDashboardBody(); } };
+
 // ─── RENDER PRINCIPAL ─────────────────────────────────────────────────────────
 export const renderDashboard = async (renderLayout, renderError) => {
     _dashRenderLayout = renderLayout;
@@ -576,9 +599,254 @@ const _getComputedReport = () => {
     return computeReports(filtered, _dashCache)[_currentReportId] || null;
 };
 
+// ─── VISTA MENSUAL OPERATIVA ──────────────────────────────────────────────────
+const _renderMonthlyView = (data) => {
+    const { start, end, label: monthLabel } = getMonthRange(_monthOffset);
+    const canSeeMoney = auth.canAccess('feat_money');
+
+    const ventas  = data.ventas.filter(v  => inMonthRange(v,  'fecha',        _monthOffset));
+    const gastos  = data.gastos.filter(g  => inMonthRange(g,  'fecha',        _monthOffset));
+    const compras = data.compras.filter(c => inMonthRange(c, x => x.fecha_pedido||x.fecha_registro, _monthOffset));
+    const abonos  = data.abonos.filter(a  => inMonthRange(a,  'fecha',        _monthOffset));
+
+    // KPIs del mes
+    const totalFacturado  = ventas.reduce((a,v)  => a+parseFloat(v.valor_total_cop||0), 0);
+    const totalCobrado    = ventas.reduce((a,v)  => a+parseFloat(v.abonos_acumulados||0), 0);
+    const totalGastos     = gastos.reduce((a,g)  => a+parseFloat(g.valor_cop||g.valor_origen||0), 0);
+    const totalCompras    = compras.reduce((a,c) => a+parseFloat(c.costo_cop||0), 0);
+    const totalEgresos    = totalGastos + totalCompras;
+    const balance         = totalCobrado - totalEgresos;
+    const margen          = totalCobrado > 0 ? ((balance/totalCobrado)*100).toFixed(1) : '0.0';
+
+    // Helpers
+    const clienteNombre = (cid) => {
+        const c = data.clientes.find(x => x.id?.toString() === cid?.toString());
+        return c?.nombre?.split(' ').slice(0,2).join(' ') || 'N/A';
+    };
+
+    // ALERTAS (sin filtro de mes — toda la cartera activa)
+    const encargosCompradosIds = new Set(data.compras.map(c => c.venta_id?.toString()).filter(Boolean));
+    const encargosConLogIds    = new Set(data.logistica.map(l => l.venta_id?.toString()).filter(Boolean));
+    const alerts = [];
+
+    // 1. Cartera pendiente
+    data.ventas.filter(v => parseFloat(v.saldo_pendiente||0) > 0)
+        .sort((a,b) => parseFloat(b.saldo_pendiente||0) - parseFloat(a.saldo_pendiente||0))
+        .forEach(v => alerts.push({
+            icon:'💸', tipo:'Cartera Pendiente', urgencia:'alta',
+            cliente: clienteNombre(v.cliente_id), orden: v.id?.toString().slice(-4),
+            valor: parseFloat(v.saldo_pendiente||0), ventaId: v.id,
+        }));
+
+    // 2. Encargos pendientes de compra USA
+    data.ventas.filter(v => v.tipo_venta==='Encargo' && v.estado_orden==='Validando Compra EEUU' && !encargosCompradosIds.has(v.id?.toString()))
+        .forEach(v => alerts.push({
+            icon:'📦', tipo:'Compra Pendiente USA', urgencia:'alta',
+            cliente: clienteNombre(v.cliente_id), orden: v.id?.toString().slice(-4),
+            valor: parseFloat(v.valor_total_cop||0), ventaId: v.id,
+        }));
+
+    // 3. Encargos sin registro logístico
+    data.ventas.filter(v => v.tipo_venta==='Encargo' && v.estado_orden!=='Completado Local' && !encargosConLogIds.has(v.id?.toString()))
+        .forEach(v => alerts.push({
+            icon:'🚚', tipo:'Sin Logística Registrada', urgencia:'media',
+            cliente: clienteNombre(v.cliente_id), orden: v.id?.toString().slice(-4),
+            valor: parseFloat(v.valor_total_cop||0), ventaId: v.id,
+        }));
+
+    // Agrupación de alertas por tipo
+    const groupedAlerts = {};
+    alerts.forEach(a => {
+        if (!groupedAlerts[a.tipo]) groupedAlerts[a.tipo] = { alerts: [], icon: a.icon, urgencia: a.urgencia, sum: 0 };
+        groupedAlerts[a.tipo].alerts.push(a);
+        groupedAlerts[a.tipo].sum += a.valor;
+    });
+    const alertTypes = Object.keys(groupedAlerts);
+
+    // PIPELINE LOGÍSTICO
+    const totalLog = data.logistica.length || 1;
+    const fasePipeline = FASES.map((fase, i) => {
+        const count = data.logistica.filter(l => mapFase(l.fase) === fase).length;
+        return { fase, color: FASE_COLORS[i], count, pct: Math.round((count/totalLog)*100) };
+    });
+
+    // Últimas ventas y abonos del mes
+    const recentVentas = [...ventas].sort((a,b) => parseDate(b.fecha)-parseDate(a.fecha)).slice(0,8);
+    const recentAbonos = [...abonos].sort((a,b) => parseDate(b.fecha)-parseDate(a.fecha)).slice(0,6);
+
+    const estadoBadge = (estado='') => {
+        const map = {'Completado Local':'#06D6A0','Entregado':'#06D6A0','Validando Compra EEUU':'#FFB703','En Tránsito':'#4CC9F0','Bodega Colombia':'#A78BFA'};
+        const color = Object.entries(map).find(([k]) => estado.includes(k))?.[1] || '#888';
+        return `<span style="font-size:0.6rem;padding:2px 7px;border-radius:8px;background:${color}22;color:${color};border:1px solid ${color}44;font-weight:700;white-space:nowrap;">${estado||'N/A'}</span>`;
+    };
+
+    const tabHeader = `
+    <div class="bi-header">
+        <div>
+            <span class="page-eyebrow">Dashboard Operativo</span>
+            <h2 class="bi-main-title">Centro de Operaciones JARAPP</h2>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <div style="display:flex;background:var(--surface-2);border-radius:12px;border:1px solid var(--border-base);padding:4px;gap:4px;">
+                <button onclick="window.switchDashView('monthly')" style="padding:6px 16px;border-radius:8px;border:none;cursor:pointer;font-size:0.82rem;font-weight:700;background:var(--primary-red);color:#fff;">🏠 Resumen</button>
+                <button onclick="window.switchDashView('explorer')" style="padding:6px 16px;border-radius:8px;border:none;cursor:pointer;font-size:0.82rem;font-weight:600;background:transparent;color:var(--text-main);opacity:0.65;">📊 Explorador</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border-base);border-radius:12px;padding:4px 12px;">
+                <button onclick="window.prevMonth()" style="background:none;border:none;cursor:pointer;color:var(--text-main);font-size:1.1rem;line-height:1;padding:0 2px;">◄</button>
+                <span style="font-size:0.85rem;font-weight:700;min-width:130px;text-align:center;">${monthLabel}</span>
+                <button onclick="window.nextMonth()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;line-height:1;padding:0 2px;${_monthOffset>=0?'opacity:0.25;pointer-events:none;':''}color:var(--text-main);">►</button>
+            </div>
+        </div>
+    </div>`;
+
+    _dashRenderLayout(`
+    <div class="bi-hub-root">
+        ${tabHeader}
+
+        <!-- KPIs del mes -->
+        ${canSeeMoney ? `
+        <div class="bi-kpi-strip" style="margin-bottom:1.2rem;">
+            ${[
+                {label:'Facturado', val:formatCOP(totalFacturado),  icon:'📊', color:C.blue,                         sub:`${ventas.length} ventas`},
+                {label:'Cobrado',   val:formatCOP(totalCobrado),    icon:'✅', color:C.green,                        sub:`${abonos.length} pagos`},
+                {label:'Egresos',   val:formatCOP(totalEgresos),    icon:'📤', color:C.red,                          sub:`${gastos.length} gs + ${compras.length} cp`},
+                {label:'Balance',   val:formatCOP(balance),         icon:'💰', color:balance>=0?C.green:C.red,       sub:'Cobrado − Egresos'},
+                {label:'Margen',    val:`${margen}%`,               icon:'📈', color:parseFloat(margen)>0?C.cyan:C.red, sub:'del período'},
+            ].map(k=>`
+            <div class="bi-kpi-card" style="border-top:3px solid ${k.color};">
+                <div class="bkc-icon">${k.icon}</div>
+                <div class="bkc-val" style="color:${k.color};">${k.val}</div>
+                <div class="bkc-label">${k.label}</div>
+                <div class="bkc-sub">${k.sub}</div>
+            </div>`).join('')}
+        </div>` : ''}
+
+        <!-- Alertas Agrupadas -->
+        <div style="margin-bottom:1.2rem;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.7rem;">
+                <span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;opacity:0.5;">🚨 Alertas Activas</span>
+                ${alerts.length>0?`<span style="background:var(--primary-red);color:#fff;font-size:0.62rem;font-weight:800;padding:1px 8px;border-radius:20px;">${alerts.length}</span>`:''}
+            </div>
+            ${alertTypes.length===0
+                ? `<div style="background:rgba(6,214,160,0.08);border:1px solid rgba(6,214,160,0.25);border-radius:14px;padding:0.9rem 1.2rem;display:flex;align-items:center;gap:10px;">
+                       <span style="font-size:1.3rem;">✅</span>
+                       <span style="font-size:0.88rem;color:var(--success-green);font-weight:700;">Sin alertas activas — Todo al día</span>
+                   </div>`
+                : `<div style="display:flex;flex-direction:column;gap:0.75rem;">
+                    ${alertTypes.map((tipo, idx)=> {
+                        const g = groupedAlerts[tipo];
+                        const count = g.alerts.length;
+                        const isHigh = g.urgencia==='alta';
+                        const colorMain = isHigh?'var(--primary-red)':'#FFB703';
+                        const colorBg = isHigh?'rgba(230,57,70,0.1)':'rgba(255,183,3,0.15)';
+                        const colorBorder = isHigh?'rgba(230,57,70,0.3)':'rgba(255,183,3,0.25)';
+                        const accordionId = 'dash-acc-alert-'+idx;
+                        return `
+                        <div style="background:var(--surface-2);border:1px solid ${colorBorder};border-left:4px solid ${colorMain};border-radius:12px;overflow:hidden;transition:all 0.2s;">
+                            <div onclick="document.getElementById('${accordionId}').style.display = document.getElementById('${accordionId}').style.display === 'none' ? 'block' : 'none'" style="display:flex;align-items:center;justify-content:space-between;padding:0.8rem 1rem;cursor:pointer;background:rgba(0,0,0,0.02);">
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <span style="font-size:1.1rem;">${g.icon}</span>
+                                    <span style="font-size:0.85rem;font-weight:800;color:${colorMain};">${tipo}</span>
+                                    <span style="background:${colorMain};color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:20px;">${count}</span>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:15px;">
+                                    ${canSeeMoney ? `<span style="font-size:0.85rem;font-weight:700;opacity:0.8;">${formatCOP(g.sum)}</span>` : ''}
+                                    <span style="font-size:0.75rem;opacity:0.5;">▼</span>
+                                </div>
+                            </div>
+                            <div id="${accordionId}" style="display:none;border-top:1px solid ${colorBorder};max-height:280px;overflow-y:auto;background:var(--bg-main);">
+                                ${g.alerts.map(a=>`
+                                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.65rem 1rem;border-bottom:1px solid var(--border-base);">
+                                    <div style="display:flex;align-items:center;gap:8px;">
+                                        <span style="font-size:0.68rem;opacity:0.6;font-family:monospace;font-weight:700;">#${a.orden}</span>
+                                        <span style="font-size:0.75rem;font-weight:600;">${a.cliente}</span>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:12px;">
+                                        ${canSeeMoney ? `<span style="font-size:0.8rem;font-weight:700;color:${colorMain};">${formatCOP(a.valor)}</span>` : ''}
+                                        ${a.ventaId ? `<button onclick="window.modalDetalleVentaGlobal('${a.ventaId}')" style="font-size:0.6rem;padding:4px 12px;background:${colorBg};color:${colorMain};border:none;border-radius:6px;cursor:pointer;font-weight:700;">Ver</button>` : ''}
+                                    </div>
+                                </div>`).join('')}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                   </div>`
+            }
+        </div>
+
+        <!-- Grid: Pipeline Logístico + Ventas del Mes -->
+        <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:1.2rem;margin-bottom:1.2rem;">
+
+            <!-- Pipeline Logístico -->
+            <div style="background:var(--surface-2);border-radius:16px;border:1px solid var(--border-base);padding:1.2rem;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;opacity:0.5;margin-bottom:1rem;">🚚 Pipeline Logístico · ${data.logistica.length} envíos</div>
+                <div style="display:flex;flex-direction:column;gap:0.7rem;">
+                    ${fasePipeline.map(f=>`
+                    <div onclick="window.openDashLogisticsPhase('${f.fase}')" style="cursor:pointer;padding:4px;border-radius:8px;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-main)'" onmouseout="this.style.background='transparent'">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                            <span style="font-size:0.75rem;font-weight:600;color:var(--text-main);">${f.fase}</span>
+                            <span style="font-size:0.78rem;font-weight:800;color:${f.color};">${f.count}</span>
+                        </div>
+                        <div style="height:6px;background:var(--bg-main);border-radius:10px;overflow:hidden;">
+                            <div style="height:100%;width:${f.pct}%;background:${f.color};border-radius:10px;transition:width 0.5s ease;"></div>
+                        </div>
+                    </div>`).join('')}
+                </div>
+            </div>
+
+            <!-- Ventas del Mes -->
+            <div style="background:var(--surface-2);border-radius:16px;border:1px solid var(--border-base);padding:1.2rem;overflow:hidden;">
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;opacity:0.5;margin-bottom:1rem;">📦 Ventas del Mes · ${ventas.length} órdenes</div>
+                ${recentVentas.length===0
+                    ? `<div style="text-align:center;opacity:0.35;padding:2rem 0;font-size:0.85rem;">Sin ventas en este período</div>`
+                    : `<div style="display:flex;flex-direction:column;gap:0.45rem;max-height:260px;overflow-y:auto;">
+                        ${recentVentas.map(v=>`
+                        <div style="display:flex;align-items:center;gap:8px;padding:0.5rem 0.6rem;background:var(--bg-main);border-radius:10px;border:1px solid var(--border-base);">
+                            <div style="flex:1;min-width:0;">
+                                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                                    <span style="font-size:0.78rem;font-weight:700;">Ord #${v.id?.toString().slice(-4)}</span>
+                                    ${estadoBadge(v.estado_orden)}
+                                </div>
+                                <div style="font-size:0.68rem;opacity:0.55;margin-top:1px;">${clienteNombre(v.cliente_id)} · ${v.fecha||''}</div>
+                            </div>
+                            <div style="text-align:right;flex-shrink:0;">
+                                ${canSeeMoney?`<div style="font-size:0.8rem;font-weight:800;color:var(--info-blue);">${formatCOP(v.valor_total_cop)}</div>`:''}
+                                <button onclick="window.modalDetalleVentaGlobal('${v.id}')" style="font-size:0.6rem;padding:2px 7px;border-radius:6px;border:1px solid var(--border-base);background:none;color:var(--text-main);cursor:pointer;margin-top:2px;opacity:0.7;">Ver</button>
+                            </div>
+                        </div>`).join('')}
+                       </div>`
+                }
+            </div>
+        </div>
+
+        <!-- Abonos del Mes -->
+        <div style="background:var(--surface-2);border-radius:16px;border:1px solid var(--border-base);padding:1.2rem;">
+            <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;opacity:0.5;margin-bottom:1rem;">💳 Cobros del Mes · ${abonos.length} pagos · ${canSeeMoney?`Total: ${formatCOP(abonos.reduce((a,x)=>a+parseFloat(x.valor||0),0))}`:'---'}</div>
+            ${recentAbonos.length===0
+                ? `<div style="text-align:center;opacity:0.35;padding:1rem 0;font-size:0.85rem;">Sin cobros registrados en este período</div>`
+                : `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+                    ${recentAbonos.map(ab=>`
+                    <div style="display:flex;align-items:center;gap:8px;background:rgba(6,214,160,0.06);border:1px solid rgba(6,214,160,0.2);border-radius:10px;padding:0.5rem 0.8rem;min-width:200px;flex:1;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:0.7rem;opacity:0.55;">#${ab.venta_id?.toString().slice(-4)} · ${ab.fecha||''}</div>
+                            <div style="font-size:0.68rem;opacity:0.6;">${ab.metodo_pago||'N/A'}</div>
+                        </div>
+                        ${canSeeMoney?`<span style="font-size:0.88rem;font-weight:800;color:var(--success-green);white-space:nowrap;">${formatCOP(ab.valor)}</span>`:''}
+                    </div>`).join('')}
+                   </div>`
+            }
+        </div>
+
+    </div>`);
+};
+
 // ─── RENDERIZADO COMPLETO ─────────────────────────────────────────────────────
 const _renderDashboardBody = () => {
+
     const data = _dashCache;
+
+    // Bifurcar vista
+    if (_currentView === 'monthly') { _renderMonthlyView(data); return; }
+
     const ventas  = applyDateFilter(data.ventas,  'fecha');
     const gastos  = applyDateFilter(data.gastos,  'fecha');
     const compras = applyDateFilter(data.compras, c => c.fecha_pedido || c.fecha_registro);
@@ -615,15 +883,23 @@ const _renderDashboardBody = () => {
               : '📅 Todos los períodos'} &nbsp;·&nbsp; ${new Date().toLocaleString('es-CO',{timeStyle:'short'})}
           </div>
         </div>
-        <div class="module-filters-bar" style="margin:0; flex-wrap:wrap;">
-          <div class="date-filter-wrap">
-            <label>Desde</label>
-            <input type="date" id="dash-date-start" class="date-filter-input" value="${_dashStartDate}">
-            <label style="margin-left:5px;">Hasta</label>
-            <input type="date" id="dash-date-end"   class="date-filter-input" value="${_dashEndDate}">
-            <button class="btn-action" style="padding:5px 13px;font-size:0.8rem;" onclick="window.applyDashDateFilter()">🔍 Filtrar</button>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+          <!-- Tabs de vista -->
+          <div style="display:flex;background:var(--surface-2);border-radius:12px;border:1px solid var(--border-base);padding:4px;gap:4px;">
+            <button onclick="window.switchDashView('monthly')" style="padding:5px 14px;border-radius:8px;border:none;cursor:pointer;font-size:0.8rem;font-weight:600;background:transparent;color:var(--text-main);opacity:0.65;">🏠 Resumen</button>
+            <button onclick="window.switchDashView('explorer')" style="padding:5px 14px;border-radius:8px;border:none;cursor:pointer;font-size:0.8rem;font-weight:700;background:var(--primary-red);color:#fff;">📊 Explorador</button>
           </div>
-          <button class="btn-excel" onclick="window.exportDashExcel()">📥 Balance Maestro</button>
+          <!-- Filtros de fecha -->
+          <div class="module-filters-bar" style="margin:0;flex-wrap:wrap;">
+            <div class="date-filter-wrap">
+              <label>Desde</label>
+              <input type="date" id="dash-date-start" class="date-filter-input" value="${_dashStartDate}">
+              <label style="margin-left:5px;">Hasta</label>
+              <input type="date" id="dash-date-end"   class="date-filter-input" value="${_dashEndDate}">
+              <button class="btn-action" style="padding:5px 13px;font-size:0.8rem;" onclick="window.applyDashDateFilter()">🔍 Filtrar</button>
+            </div>
+            <button class="btn-excel" onclick="window.exportDashExcel()">📥 Balance Maestro</button>
+          </div>
         </div>
       </div>
 
@@ -920,7 +1196,7 @@ window.openDashboardKPI = (kpiName) => {
                 </div>
                 <div class="kpi-item-right">
                     <div class="kpi-item-value" style="color:var(--info-blue);">${formatCOP(x.valor_total_cop)}</div>
-                    <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${x.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');">👁️ Ver</button>
+                    <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleVentaGlobal('${x.id}');">👁️ Ver</button>
                 </div>
             </div>`;
         }).join('');
@@ -953,7 +1229,7 @@ window.openDashboardKPI = (kpiName) => {
                 </div>
                 <div class="kpi-item-right">
                     <div class="kpi-item-value" style="color:var(--primary-red);">${formatCOP(x.saldo_pendiente)}</div>
-                    <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${x.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');">👁️ Ver</button>
+                    <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleVentaGlobal('${x.id}');">👁️ Ver</button>
                 </div>
             </div>`;
         }).join('');
@@ -991,6 +1267,41 @@ window.openDashboardKPI = (kpiName) => {
     } else if (kpiName === 'Balance Caja' || kpiName === 'Margen Neto') {
         itemsHtml = `<div style="padding:2rem;text-align:center;opacity:0.6;">El ${kpiName} es un cálculo derivado. Consulta los reportes gráficos de Finanzas para más detalle.</div>`;
     }
+    
+    window.openKPIDetailModal(title, subtitle, itemsHtml);
+};
+
+window.openDashLogisticsPhase = (fase) => {
+    if (!_dashCache) return;
+    const items = _dashCache.logistica.filter(l => mapFase(l.fase) === fase);
+    const ventasMap = {};
+    _dashCache.ventas.forEach(v => ventasMap[v.id?.toString()] = v);
+
+    const title = `Logística: ${fase}`;
+    const subtitle = `${items.length} órdenes en esta fase.`;
+    
+    if(items.length === 0) {
+        window.openKPIDetailModal(title, subtitle, `<div style="padding:2rem;text-align:center;opacity:0.5;font-weight:600;">No hay envíos en la fase ${fase}</div>`);
+        return;
+    }
+
+    const itemsHtml = items.map(l => {
+        const v = ventasMap[l.venta_id?.toString()] || {};
+        const c = _dashCache.clientes.find(x => x.id?.toString() === v.cliente_id?.toString());
+        const clienteNom = c?.nombre || 'N/A';
+        const date = (l.updated_at||l.fecha_registro||'').split('T')[0];
+        
+        return `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">Orden #${v.id?.toString().slice(-4) || 'N/A'} - ${clienteNom.split(' ').slice(0,2).join(' ')}</div>
+                <div class="kpi-item-subtitle">Actualizado: ${date} | Venta: ${formatCOP(v.valor_total_cop)}</div>
+            </div>
+            <div class="kpi-item-right">
+                <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleVentaGlobal('${v.id}');">👁️ Ver</button>
+            </div>
+        </div>`;
+    }).join('');
     
     window.openKPIDetailModal(title, subtitle, itemsHtml);
 };

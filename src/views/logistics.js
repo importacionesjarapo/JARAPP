@@ -678,7 +678,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
 
             <div class="modal-footer">
                 <button type="button" class="btn-action" style="padding:10px 25px;" onclick="window.closeModal()">Cerrar</button>
-                <button type="submit" id="btn-save-log" class="btn-primary" style="padding:10px 30px;">
+                <button type="button" id="btn-save-log" class="btn-primary" style="padding:10px 30px;" onclick="window._saveLogistica()">
                     ${id ? 'Actualizar Información' : 'Registrar Logística'}
                 </button>
             </div>
@@ -835,10 +835,12 @@ export const createLogisticsModal = async (id, navigateTo) => {
         };
         setupPhotoPreview('usa-foto-input', 'usa-preview', 'usa-ph');
         setupPhotoPreview('col-foto-input', 'col-preview', 'col-ph');
-    }, 150);
 
-    document.getElementById('form-crud').onsubmit = async (e) => {
-        e.preventDefault();
+        const formEl = document.getElementById('form-tracking');
+        if (!formEl) return;
+
+        window._saveLogistica = async () => {
+            const e = { target: formEl, preventDefault: () => {} };
         const fd = new FormData(e.target);
         const nuevaFase = fd.get('fase');
         const vIdCheck = fd.get('venta_id') || data.venta_id || '';
@@ -920,8 +922,8 @@ export const createLogisticsModal = async (id, navigateTo) => {
         // Asegurar que si id_seguimiento_internacional principal no está, use el fallback de int_guia o usa_guia
         payload.id_seguimiento_internacional = fd.get('id_seguimiento_internacional') || payload.int_guia || payload.usa_guia || '';
 
-        const btn = e.target.querySelector('button[type="submit"]');
-        btn.disabled = true; btn.innerHTML = '<i class="loader"></i> Guardando...';
+        const btn = document.getElementById('btn-save-log');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="loader"></i> Guardando...'; }
         
         try {
             const fiUSA = document.getElementById('usa-foto-input');
@@ -1002,6 +1004,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
             btn.innerText = "Reintentar"; 
         }
     };
+    }, 150);
 };
 
 // --- New Submodule: Envíos EEUU a Colombia ---

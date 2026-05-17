@@ -79,7 +79,7 @@ window.openFinanceKPI = (kpiName) => {
             </div>
             <div class="kpi-item-right">
                 <div class="kpi-item-value" style="color:var(--success-green);">${formatCOP(v.abonos_acumulados)}</div>
-                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ver</button>
+                <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleVentaGlobal('${v.id}');" style="margin-top:4px;">👁️ Ver</button>
             </div>
         </div>`).join('');
     } else if (kpiName === 'Facturación Total') {
@@ -94,7 +94,7 @@ window.openFinanceKPI = (kpiName) => {
             </div>
             <div class="kpi-item-right">
                 <div class="kpi-item-value" style="color:var(--info-blue);">${formatCOP(v.valor_total_cop)}</div>
-                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ver</button>
+                <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleVentaGlobal('${v.id}');" style="margin-top:4px;">👁️ Ver</button>
             </div>
         </div>`).join('');
     } else if (kpiName === 'Cartera Pendiente') {
@@ -110,7 +110,7 @@ window.openFinanceKPI = (kpiName) => {
             </div>
             <div class="kpi-item-right">
                 <div class="kpi-item-value" style="color:var(--primary-red);">${formatCOP(v.saldo_pendiente)}</div>
-                <button class="btn-action" onclick="window.modalAbono('${v.id}', ${v.saldo_pendiente}); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">💳 Abonar</button>
+                <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalAbono('${v.id}', ${v.saldo_pendiente});" style="margin-top:4px;">💳 Abonar</button>
             </div>
         </div>`).join('');
     } else if (kpiName === 'Total Egresos') {

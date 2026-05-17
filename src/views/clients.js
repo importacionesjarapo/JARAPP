@@ -111,7 +111,7 @@ window.openClientsKPI = (kpiName) => {
             </div>
             <div class="kpi-item-right">
                 <div class="kpi-item-value" style="font-size:0.9rem;">${metaHtml}</div>
-                <button class="btn-action" onclick="window.modalDetalleCliente('${c.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ficha Cliente</button>
+                <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleCliente('${c.id}');" style="margin-top:4px;">👁️ Ficha Cliente</button>
             </div>
         </div>
         `;

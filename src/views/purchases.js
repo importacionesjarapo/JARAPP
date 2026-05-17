@@ -165,7 +165,7 @@ window.openPurchasesKPI = (kpiName) => {
             </div>
             <div class="kpi-item-right">
                 <div class="kpi-item-value" style="color:var(--primary-red);">${formatUSD(c.costo_usd)}</div>
-                <button class="btn-action" onclick="window.modalDetalleCompra('${c.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Detalles</button>
+                <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleCompra('${c.id}');" style="margin-top:4px;">👁️ Detalles</button>
             </div>
         </div>`;
     }).join('');
@@ -766,6 +766,74 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
 
+    // ─── Helper: generar HTML del banner de referencia ──────────────────
+    const buildEncargoBanner = (ventaId) => {
+        if (!ventaId) return '<div id="pc-encargo-banner" style="display:none;"></div>';
+        const vData = encargos.find(v => v.id.toString() === ventaId.toString());
+        if (!vData) return '<div id="pc-encargo-banner" style="display:none;"></div>';
+        const pData = productos.find(p => p.id?.toString() === vData.producto_id?.toString()) || {};
+        const imgUrl = pData.url_imagen || '';
+        const linkCompra = pData.link_producto || '';
+        const precioUsd = pData.precio_usd || vData.precio_usd_cotizado || '';
+        const precioUsdDisplay = precioUsd ? `$${parseFloat(precioUsd).toFixed(2)} USD` : 'N/A';
+        const precioCop = vData.valor_total_cop ? formatCOP(vData.valor_total_cop) : 'N/A';
+        const talla = pData.talla || 'N/A';
+        const tienda = pData.tienda_cotizacion || 'N/A';
+        const marca = pData.marca || 'N/A';
+        const categoria = pData.categoria || '';
+
+        return `
+        <div id="pc-encargo-banner" style="
+            background: linear-gradient(135deg, rgba(229,19,101,0.07) 0%, rgba(229,19,101,0.02) 100%);
+            border: 1px solid rgba(229,19,101,0.25);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+        ">
+            <!-- Imagen -->
+            <div style="width:110px; height:110px; border-radius:12px; overflow:hidden; background:var(--input-bg); display:flex; align-items:center; justify-content:center; flex-shrink:0; border:2px solid rgba(229,19,101,0.2);">
+                ${imgUrl ? `<img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.3; font-size:0.6rem; text-align:center;">SIN<br>FOTO</span>'}
+            </div>
+            <!-- Datos -->
+            <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.4rem;">
+                    <span style="font-size:0.65rem; text-transform:uppercase; letter-spacing:1px; color:var(--primary-red); font-weight:800;">📋 Referencia del Encargo</span>
+                    <span style="font-size:0.65rem; padding:2px 8px; background:rgba(229,19,101,0.12); color:var(--primary-red); border-radius:20px; font-weight:700;">Orden #${vData.id.toString().slice(-4)}</span>
+                    ${categoria ? `<span style="font-size:0.65rem; padding:2px 8px; background:var(--glass-hover); border-radius:20px; opacity:0.7;">${categoria}</span>` : ''}
+                </div>
+                <div style="font-size:1rem; font-weight:800; color:var(--text-main); margin-bottom:0.8rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${marca !== 'N/A' ? `<span style="color:var(--primary-red); margin-right:6px;">${marca}</span>` : ''}${pData.nombre_producto || 'Sin nombre'}
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.8rem;">
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border); min-width:80px;">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Valor USD</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--success-green);">${precioUsdDisplay}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border); min-width:80px;">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Vendido COP</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--info-blue);">${precioCop}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border);">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Talla</div>
+                        <div style="font-size:0.9rem; font-weight:800;">${talla}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border);">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Tienda</div>
+                        <div style="font-size:0.9rem; font-weight:800;">${tienda}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border);">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Marca</div>
+                        <div style="font-size:0.9rem; font-weight:800;">${marca}</div>
+                    </div>
+                </div>
+                ${linkCompra ? `<a href="${linkCompra}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; padding:6px 14px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.25); text-decoration:none; font-weight:700;">🔗 Abrir URL de Compra</a>` : '<span style="font-size:0.75rem; opacity:0.4;">Sin URL de compra registrada</span>'}
+            </div>
+        </div>`;
+    };
+
     content.innerHTML = `
         <div class="modal-content modal-wide">
             <div class="modal-header">
@@ -775,6 +843,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             
             <form id="purchase-form" onsubmit="return false;">
                 <div class="modal-body">
+                    ${buildEncargoBanner(ventaIdPrefill)}
                     <div class="form-grid-2" style="margin-bottom: 2rem; background: var(--surface-1); padding: 2rem; border-radius: 16px; border: 1px solid var(--border-base);">
                         <div class="form-group">
                             <label class="form-label">Tipo de Compra *</label>
@@ -786,7 +855,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         
                         <div class="form-group" id="pc-encargo-section">
                             <label class="form-label">Orden de Encargo *</label>
-                            <select id="pc-venta-select">
+                            <select id="pc-venta-select" onchange="window.updateEncargoBanner()">
                                 <option value="">-- Seleccionar Encargo --</option>
                                 ${encargos.map(v => {
                                     const prod = productos.find(p => p.id?.toString() === v.producto_id?.toString());
@@ -867,6 +936,72 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
         const tipo = document.getElementById('pc-tipo').value;
         document.getElementById('pc-encargo-section').style.display = tipo === 'encargo' ? '' : 'none';
         document.getElementById('pc-stock-section').style.display = tipo === 'stock' ? '' : 'none';
+        if (tipo === 'stock') {
+            const banner = document.getElementById('pc-encargo-banner');
+            if (banner) banner.style.display = 'none';
+        } else {
+            window.updateEncargoBanner();
+        }
+    };
+
+    window.updateEncargoBanner = () => {
+        const ventaId = document.getElementById('pc-venta-select')?.value;
+        const bannerEl = document.getElementById('pc-encargo-banner');
+        if (!bannerEl) return;
+        if (!ventaId) { bannerEl.style.display = 'none'; return; }
+
+        const vData = encargos.find(v => v.id.toString() === ventaId.toString());
+        if (!vData) { bannerEl.style.display = 'none'; return; }
+
+        const pData = productos.find(p => p.id?.toString() === vData.producto_id?.toString()) || {};
+        const imgUrl = pData.url_imagen || '';
+        const linkCompra = pData.link_producto || '';
+        const precioUsd = pData.precio_usd || vData.precio_usd_cotizado || '';
+        const precioUsdDisplay = precioUsd ? `$${parseFloat(precioUsd).toFixed(2)} USD` : 'N/A';
+        const precioCop = vData.valor_total_cop ? formatCOP(vData.valor_total_cop) : 'N/A';
+        const talla = pData.talla || 'N/A';
+        const tienda = pData.tienda_cotizacion || 'N/A';
+        const marca = pData.marca || 'N/A';
+        const categoria = pData.categoria || '';
+
+        bannerEl.style.display = 'flex';
+        bannerEl.innerHTML = `
+            <div style="width:110px; height:110px; border-radius:12px; overflow:hidden; background:var(--input-bg); display:flex; align-items:center; justify-content:center; flex-shrink:0; border:2px solid rgba(229,19,101,0.2);">
+                ${imgUrl ? `<img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.3; font-size:0.6rem; text-align:center;">SIN<br>FOTO</span>'}
+            </div>
+            <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.4rem;">
+                    <span style="font-size:0.65rem; text-transform:uppercase; letter-spacing:1px; color:var(--primary-red); font-weight:800;">📋 Referencia del Encargo</span>
+                    <span style="font-size:0.65rem; padding:2px 8px; background:rgba(229,19,101,0.12); color:var(--primary-red); border-radius:20px; font-weight:700;">Orden #${vData.id.toString().slice(-4)}</span>
+                    ${categoria ? `<span style="font-size:0.65rem; padding:2px 8px; background:var(--glass-hover); border-radius:20px; opacity:0.7;">${categoria}</span>` : ''}
+                </div>
+                <div style="font-size:1rem; font-weight:800; color:var(--text-main); margin-bottom:0.8rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${marca !== 'N/A' ? `<span style="color:var(--primary-red); margin-right:6px;">${marca}</span>` : ''}${pData.nombre_producto || 'Sin nombre'}
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.8rem;">
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border); min-width:80px;">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Valor USD</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--success-green);">${precioUsdDisplay}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border); min-width:80px;">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Vendido COP</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--info-blue);">${precioCop}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border);">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Talla</div>
+                        <div style="font-size:0.9rem; font-weight:800;">${talla}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border);">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Tienda</div>
+                        <div style="font-size:0.9rem; font-weight:800;">${tienda}</div>
+                    </div>
+                    <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border);">
+                        <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Marca</div>
+                        <div style="font-size:0.9rem; font-weight:800;">${marca}</div>
+                    </div>
+                </div>
+                ${linkCompra ? `<a href="${linkCompra}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; padding:6px 14px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.25); text-decoration:none; font-weight:700;">🔗 Abrir URL de Compra</a>` : '<span style="font-size:0.75rem; opacity:0.4;">Sin URL de compra registrada</span>'}
+            </div>`;
     };
 
     window.submitPurchase = async () => {

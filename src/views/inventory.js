@@ -123,7 +123,7 @@ window.openInventoryKPI = (kpiName) => {
             </div>
             <div class="kpi-item-right">
                 <div class="kpi-item-value">${formatCOP(p.precio_cop)}</div>
-                <button class="btn-action" onclick="window.modalDetalleProducto('${p.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ficha Prod.</button>
+                <button class="btn-action" onclick="document.getElementById('kpi-detail-modal').style.display='none'; window.modalDetalleProducto('${p.id}');" style="margin-top:4px;">👁️ Ficha Prod.</button>
             </div>
         </div>
         `;

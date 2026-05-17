@@ -1256,61 +1256,81 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
             </div>
 
         <div class="modal-body" style="padding-top:1rem;">
-            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:1.2rem; margin-bottom:2rem;">
-                <div style="background:var(--surface-2); padding:1.2rem; border-radius:16px; border:1px solid var(--border-base); text-align:center;">
-                    <span style="font-size:0.7rem; opacity:0.6; text-transform:uppercase; letter-spacing:1px;">Valor Total</span>
-                    <div style="font-size:1.3rem; font-weight:800; margin-top:5px;">${formatCOP(total)}</div>
+
+            <!-- KPIs principales: 3 tarjetas compactas -->
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:0.8rem; margin-bottom:1.2rem;">
+                <div style="background:var(--surface-2); padding:1rem 1.2rem; border-radius:14px; border:1px solid var(--border-base); text-align:center;">
+                    <span style="font-size:0.62rem; opacity:0.5; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:3px;">Valor Total</span>
+                    <div style="font-size:1.2rem; font-weight:800;">${formatCOP(total)}</div>
                 </div>
-                <div style="background:rgba(6,214,160,0.08); padding:1.2rem; border-radius:16px; border:1px solid rgba(6,214,160,0.3); text-align:center;">
-                    <span style="font-size:0.7rem; color:var(--success); text-transform:uppercase; letter-spacing:1px;">Total Abonado</span>
-                    <div style="font-size:1.3rem; font-weight:800; color:var(--success); margin-top:5px;">${formatCOP(abonado)}</div>
+                <div style="background:rgba(6,214,160,0.08); padding:1rem 1.2rem; border-radius:14px; border:1px solid rgba(6,214,160,0.3); text-align:center;">
+                    <span style="font-size:0.62rem; color:var(--success-green); text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:3px;">Total Abonado</span>
+                    <div style="font-size:1.2rem; font-weight:800; color:var(--success-green);">${formatCOP(abonado)}</div>
                 </div>
-                <div style="background:${saldo>0?'var(--brand-magenta-dim)':'rgba(6,214,160,0.08)'}; padding:1.2rem; border-radius:16px; border:1px solid ${saldo>0?'var(--brand-magenta-glow)':'rgba(6,214,160,0.3)'}; text-align:center;">
-                    <span style="font-size:0.7rem; color:${saldo>0?'var(--brand-magenta)':'var(--success)'}; text-transform:uppercase; letter-spacing:1px;">${saldo>0?'Saldo Pendiente':'Estado'}</span>
-                    <div style="font-size:1.3rem; font-weight:800; color:${saldo>0?'var(--brand-magenta)':'var(--success)'}; margin-top:5px;">${saldo===0?'PAGADO':formatCOP(saldo)}</div>
+                <div style="background:${saldo>0?'var(--brand-magenta-dim)':'rgba(6,214,160,0.08)'}; padding:1rem 1.2rem; border-radius:14px; border:1px solid ${saldo>0?'var(--brand-magenta-glow)':'rgba(6,214,160,0.3)'}; text-align:center;">
+                    <span style="font-size:0.62rem; color:${saldo>0?'var(--brand-magenta)':'var(--success-green)'}; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:3px;">${saldo>0?'Saldo Pendiente':'Estado'}</span>
+                    <div style="font-size:1.2rem; font-weight:800; color:${saldo>0?'var(--brand-magenta)':'var(--success-green)'};">${saldo===0?'✅ PAGADO':formatCOP(saldo)}</div>
                 </div>
             </div>
 
-            <div class="form-grid" style="margin-bottom:2rem;">
-                <div class="form-group" style="background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
-                    <span style="font-size:0.65rem; opacity:0.5; text-transform:uppercase;">⚖️ Peso</span>
-                    <div style="font-size:1rem; font-weight:700;">${v.peso_producto || 0} Lbs</div>
-                </div>
-                <div class="form-group" style="background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
-                    <span style="font-size:0.65rem; opacity:0.5; text-transform:uppercase;">📈 TRM Cotizada</span>
-                    <div style="font-size:1rem; font-weight:700;">${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}</div>
-                </div>
-                ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') ? `
-                <div class="form-group full-width" style="background:rgba(255,183,3,0.08); padding:1.2rem; border-radius:16px; border:1px solid rgba(255,183,3,0.3); display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <span style="font-size:0.65rem; color:#FFB703; text-transform:uppercase;">✈️ Envío Internacional</span>
-                        <div style="font-size:1.2rem; font-weight:800; color:#FFB703;">${v.valor_envio_internacional ? formatCOP(v.valor_envio_internacional) : '$0'}</div>
-                    </div>
-                    <div style="text-align:right; opacity:0.6; font-size:0.65rem; color:#FFB703;">
-                        ${v.peso_producto || 0} Lbs × USD $${Math.round((v.valor_envio_internacional || 0) / ((v.peso_producto || 1) * (v.trm_cotizada || 1)))} × ${v.trm_cotizada ? formatCOP(v.trm_cotizada) : '$0'}
-                    </div>
-                </div>` : ''}
+            <!-- Metadatos compactos en chips -->
+            <div style="background:var(--surface-2); border-radius:14px; border:1px solid var(--border-base); padding:0.9rem 1.1rem; margin-bottom:1.2rem; display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center;">
+                <span style="font-size:0.62rem; text-transform:uppercase; letter-spacing:1px; opacity:0.4; margin-right:4px; flex-shrink:0;">Detalles</span>
+
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
+                    📅 ${fechaCorta}
+                </span>
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:${v.tipo_venta==='Encargo'?'rgba(255,183,3,0.12)':'rgba(6,214,160,0.1)'}; border-radius:22px; border:1px solid ${v.tipo_venta==='Encargo'?'rgba(255,183,3,0.3)':'rgba(6,214,160,0.3)'}; font-weight:700; color:${v.tipo_venta==='Encargo'?'#FFB703':'var(--success-green)'}; white-space:nowrap;">
+                    ${v.tipo_venta==='Encargo'?'📦 Encargo':'🛒 Stock'}
+                </span>
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
+                    ⚖️ ${v.peso_producto||0} Lbs
+                </span>
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
+                    📈 TRM ${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}
+                </span>
+                ${producto && producto.precio_usd ? `
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:rgba(6,214,160,0.1); border-radius:22px; border:1px solid rgba(6,214,160,0.3); font-weight:700; color:var(--success-green); white-space:nowrap;">
+                    💵 $${parseFloat(producto.precio_usd).toFixed(2)} USD
+                </span>` : ''}
+                ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') && v.ganancia_calculada ? `
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:rgba(6,214,160,0.1); border-radius:22px; border:1px solid rgba(6,214,160,0.3); font-weight:700; color:var(--success-green); white-space:nowrap;">
+                    📊 ${formatCOP(v.ganancia_calculada)}
+                </span>` : ''}
+                ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') && v.valor_envio_internacional ? `
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:rgba(255,183,3,0.12); border-radius:22px; border:1px solid rgba(255,183,3,0.3); font-weight:700; color:#FFB703; white-space:nowrap;">
+                    ✈️ ${formatCOP(v.valor_envio_internacional)} envío
+                </span>` : ''}
             </div>
 
-            <div class="abono-history-section" style="background:var(--surface-2); border-radius:16px; padding:1.5rem; margin-bottom:2rem; border:1px solid var(--border-base);">
-                <h4 class="abono-history-title" style="margin-bottom:1.5rem; font-size:0.85rem; color:var(--text-main);">📋 Historial de Pagos <span class="abono-count-badge">${abonos.length}</span></h4>
+
+            <div class="abono-history-section" style="background:var(--surface-2); border-radius:14px; padding:1.2rem; margin-bottom:1.2rem; border:1px solid var(--border-base);">
+                <h4 class="abono-history-title" style="margin-bottom:1rem; font-size:0.8rem; color:var(--text-main);">📋 Historial de Pagos <span class="abono-count-badge">${abonos.length}</span></h4>
                 <div class="abono-history-list">${abonosHTML}</div>
             </div>
 
+
             ${producto?`
-            <div style="display:flex; gap:2rem; background:var(--surface-2); padding:2rem; border-radius:20px; border:1px solid var(--border-base); align-items:center; margin-bottom:2rem;">
-                <div style="width:140px; height:140px; background:var(--bg-main); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--border-base); flex-shrink:0;">
-                    ${producto.url_imagen?`<img src="${producto.url_imagen}" style="width:100%; height:100%; object-fit:cover;">`:"<span style='opacity:0.1;'>FOTO</span>"}
-                </div>
-                <div style="flex:1;">
-                    <span style="color:var(--brand-magenta); font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:1px;">${producto.marca}</span>
-                    <h3 style="margin:10px 0; font-size:1.4rem; color:var(--text-main);">${producto.nombre_producto}</h3>
-                    <div style="display:flex; gap:12px; margin-top:15px; flex-wrap:wrap;">
-                        <span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Talla: <strong>${producto.talla||'N/A'}</strong></span>
-                        <span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Género: <strong>${producto.genero||'N/A'}</strong></span>
-                        <span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base); opacity:0.6;">SKU: ${producto.sku}</span>
+            <div style="background:var(--surface-2); padding:1.5rem; border-radius:20px; border:1px solid var(--border-base); margin-bottom:2rem;">
+                <h4 style="margin:0 0 1.2rem 0; font-size:0.65rem; text-transform:uppercase; letter-spacing:1.5px; opacity:0.5; color:var(--text-main);">🛍️ Ficha del Producto</h4>
+                <div style="display:flex; gap:1.5rem; align-items:flex-start;">
+                    <div style="width:120px; height:120px; background:var(--bg-main); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--border-base); flex-shrink:0;">
+                        ${producto.url_imagen?`<img src="${producto.url_imagen}" style="width:100%; height:100%; object-fit:cover;">`:"<span style='opacity:0.1; font-size:0.65rem;'>SIN FOTO</span>"}
                     </div>
-                    ${v.tipo_venta==='Encargo'&&producto.link_producto?`<div style="margin-top:20px;"><a href="${producto.link_producto}" target="_blank" style="font-size:0.8rem; padding:8px 15px; background:rgba(6,214,160,0.1); color:var(--success); text-decoration:none; border-radius:10px; border:1px solid rgba(6,214,160,0.2); font-weight:700;">🔗 Enlace de Compra Original</a></div>`:''}
+                    <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+                            ${producto.marca?`<span style="color:var(--primary-red); font-size:0.78rem; font-weight:800; text-transform:uppercase;">${producto.marca}</span>`:''}
+                            ${producto.categoria?`<span style="font-size:0.65rem; padding:2px 8px; background:var(--glass-hover); border-radius:20px; opacity:0.7;">${producto.categoria}</span>`:''}
+                        </div>
+                        <h3 style="margin:0 0 10px 0; font-size:1.2rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${producto.nombre_producto}</h3>
+                        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                            ${producto.talla?`<span style="font-size:0.72rem; padding:5px 10px; background:var(--primary-red); color:#fff; border-radius:8px; font-weight:700;">Talla ${producto.talla}</span>`:`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Talla: <strong>N/A</strong></span>`}
+                            ${producto.genero?`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Género: <strong>${producto.genero}</strong></span>`:''}
+                            ${producto.tienda_cotizacion?`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">🏪 ${producto.tienda_cotizacion}</span>`:''}
+                            <span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base); opacity:0.6;">SKU: ${producto.sku||'N/A'}</span>
+                        </div>
+                        ${v.tipo_venta==='Encargo'&&producto.link_producto?`<div style="margin-top:15px;"><a href="${producto.link_producto}" target="_blank" style="font-size:0.8rem; padding:8px 15px; background:rgba(6,214,160,0.1); color:var(--success-green); text-decoration:none; border-radius:10px; border:1px solid rgba(6,214,160,0.2); font-weight:700; display:inline-flex; align-items:center; gap:6px;">🔗 Enlace de Compra Original</a></div>`:''}
+                    </div>
                 </div>
             </div>` : '<div style="padding:2rem; background:var(--surface-2); text-align:center; border-radius:20px; border:1px dashed var(--border-base); opacity:0.4; margin-bottom:2rem;">Ficha de producto no disponible</div>'}
 
