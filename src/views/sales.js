@@ -1202,12 +1202,13 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
     const content=document.getElementById('modal-content');
     content.innerHTML=`<div style="text-align:center;padding:3rem;"><div class="loader" style="margin:0 auto 15px auto;"></div> Cargando Ficha del Pedido...</div>`;
     container.style.display='flex';
-    const [ventasData,clientesData,productosData,logisticaData,abonosData]=await Promise.all([
+    const [ventasData,clientesData,productosData,logisticaData,abonosData,comprasData]=await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Clientes'),
         db.fetchData('Productos'),
         db.fetchData('Logistica'),
         db.fetchWhere('Abonos','venta_id', ventaId.toString()),
+        db.fetchData('Compras')
     ]);
     if(ventasData.error){content.innerHTML=`<div style="color:var(--primary-red);padding:2rem;text-align:center;">Error: ${ventasData.error.message||'Desconocido'}</div>`;return;}
     const v=ventasData.find(it=>it.id.toString()===ventaId.toString());
@@ -1216,6 +1217,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
     const producto=!productosData.error?productosData.find(p=>p.id.toString()===v.producto_id?.toString()):null;
     const logista=!logisticaData.error?logisticaData:[];
     const abonos=Array.isArray(abonosData)?abonosData:[];
+    const compra = (!comprasData.error && comprasData.length) ? comprasData.find(c => c.venta_id?.toString() === ventaId.toString() || (v.compra_id && c.id?.toString() === v.compra_id.toString())) : null;
     const estadoLogistica=getLogisticaFase(v.id,logista,v.estado_orden||'Procesando');
     const _faseColor=getLogisticaColor(estadoLogistica);
     const saldo=parseInt(v.saldo_pendiente||0);
@@ -1333,6 +1335,34 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                     </div>
                 </div>
             </div>` : '<div style="padding:2rem; background:var(--surface-2); text-align:center; border-radius:20px; border:1px dashed var(--border-base); opacity:0.4; margin-bottom:2rem;">Ficha de producto no disponible</div>'}
+
+            ${compra?`
+            <div style="background:var(--surface-2); padding:1.5rem; border-radius:20px; border:1px solid rgba(0,180,216,0.3); margin-bottom:2rem; box-shadow:0 4px 15px rgba(0,0,0,0.05);">
+                <h4 style="margin:0 0 1.2rem 0; font-size:0.65rem; text-transform:uppercase; letter-spacing:1.5px; opacity:0.5; color:var(--info-blue);">🇺🇸 Detalles de la Compra</h4>
+                <div style="display:flex; flex-wrap:wrap; gap:1.5rem; align-items:center;">
+                    <div style="flex:1; min-width:250px;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                            <span style="font-size:0.75rem; padding:4px 10px; background:var(--info-blue); color:#fff; border-radius:6px; font-weight:700;">🏪 Tienda: ${compra.proveedor||'N/A'}</span>
+                            <span style="font-size:0.75rem; padding:4px 10px; background:var(--bg-main); border-radius:6px; border:1px solid var(--border-base); font-weight:600;">📅 ${normDate(compra.fecha_pedido)||'N/A'}</span>
+                        </div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+                            <span style="font-size:0.8rem; font-weight:700; color:var(--success-green); background:rgba(6,214,160,0.1); padding:6px 12px; border-radius:8px; border:1px solid rgba(6,214,160,0.2);">USD ${formatUSD(compra.costo_usd||0)}</span>
+                            <span style="font-size:0.8rem; font-weight:700; color:var(--text-main); background:var(--bg-main); padding:6px 12px; border-radius:8px; border:1px solid var(--border-base);">TRM ${compra.trm||'N/A'}</span>
+                            <span style="font-size:0.8rem; font-weight:800; color:var(--primary-red); background:rgba(239,35,60,0.1); padding:6px 12px; border-radius:8px; border:1px solid rgba(239,35,60,0.2);">COP ${formatCOP(compra.costo_cop||0)}</span>
+                        </div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+                            ${compra.numero_seguimiento?`<span style="font-size:0.75rem; padding:4px 10px; border-radius:15px; border:1px solid var(--border-base); background:var(--bg-main); display:inline-flex; align-items:center;">📍 Tracking: <strong>&nbsp;${compra.numero_seguimiento}</strong></span>`:''}
+                            ${compra.numero_factura?`<span style="font-size:0.75rem; padding:4px 10px; border-radius:15px; border:1px solid var(--border-base); background:var(--bg-main); display:inline-flex; align-items:center;">🧾 N° Factura: <strong>&nbsp;${compra.numero_factura}</strong></span>`:''}
+                            ${compra.fecha_real_factura?`<span style="font-size:0.75rem; padding:4px 10px; border-radius:15px; border:1px solid var(--border-base); background:var(--bg-main); display:inline-flex; align-items:center;">🗓️ Fecha Fac: <strong>&nbsp;${normDate(compra.fecha_real_factura)}</strong></span>`:''}
+                            ${compra.estado_compra?`<span style="font-size:0.75rem; padding:4px 10px; border-radius:15px; border:1px solid var(--border-base); background:var(--bg-main); display:inline-flex; align-items:center;">Estado: <strong>&nbsp;${compra.estado_compra}</strong></span>`:''}
+                        </div>
+                    </div>
+                    ${compra.comprobante_url ? `
+                    <div style="flex-shrink:0;">
+                        <button onclick="window.openComprobanteViewer('${compra.comprobante_url}')" style="background:var(--info-blue); color:#fff; border:none; padding:10px 20px; border-radius:10px; font-weight:700; cursor:pointer; font-size:0.85rem; display:flex; align-items:center; gap:8px;">🧾 Ver Recibo</button>
+                    </div>` : ''}
+                </div>
+            </div>` : ''}
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:2rem; background:var(--surface-2); padding:2rem; border-radius:20px; border:1px solid var(--border-base); margin-bottom:2rem;">
                 <div>
