@@ -1,0 +1,162 @@
+/* ============================================================
+   JARAPP — Tokens de Diseño
+   Fuente única de verdad para colores, tipografía y espaciado
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+
+:root {
+  /* ── Brand Jarapo ── */
+  --primary:       #E63946;
+  --primary-dark:  #C1121F;
+  --primary-light: #FCEBEB;
+  --secondary:     #1D3557;
+
+  /* ── Semánticos ── */
+  --success:  #06D6A0;
+  --warning:  #F4A261;
+  --danger:   #E63946;
+  --info:     #457B9D;
+
+  /* ── Derivados semánticos ── */
+  --success-glow: rgba(6, 214, 160, 0.28);
+  --success-dim:  rgba(6, 214, 160, 0.10);
+  --warning-dim:  rgba(244, 162, 97, 0.12);
+  --danger-glow:  rgba(230, 57, 70, 0.28);
+  --danger-dim:   rgba(230, 57, 70, 0.10);
+  --info-dim:     rgba(69, 123, 157, 0.10);
+
+  /* ── Superficies FLAT — dark mode (default) ── */
+  --bg:           #0F172A;
+  --body-bg:      #0F172A;
+  --bg-main:      #0F172A;
+  --bg-secondary: #1E293B;
+  --surface-0:    #0A0F1E;
+  --surface-1:    #1E293B;
+  --surface-2:    #293548;
+  --surface-3:    #334155;
+
+  --border:        rgba(255,255,255,0.08);
+  --border-base:   rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.16);
+  --border-glaze:  rgba(255,255,255,0.08);
+  --border-accent: rgba(230, 57, 70, 0.18);
+
+  --text-main:  #F1F5F9;
+  --text-muted: #94A3B8;
+  --text-faint: #64748B;
+
+  --input-bg:      #1E293B;
+  --modal-bg:      #0A0F1E;
+  --modal-overlay: rgba(0,0,0,0.65);
+
+  /* ── Tipografía ── */
+  --font: 'DM Sans', system-ui, sans-serif;
+
+  /* ── Sombras FLAT ── */
+  --shadow-card:   0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+  --shadow-module: 0 1px 3px rgba(0,0,0,0.08);
+  --soft-shadow:   0 1px 3px rgba(0,0,0,0.12);
+  --shadow-glow-red:  0 2px 8px rgba(230, 57, 70, 0.20);
+  --shadow-glow-teal: 0 2px 8px rgba(29, 53, 87, 0.20);
+  --shadow-glow-pink: 0 2px 8px rgba(230, 57, 70, 0.16);
+
+  /* ── Radios ── */
+  --radius-sm: 6px;
+  --radius:    10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* ── Sidebar ── */
+  --sidebar-w:           260px;
+  --sidebar-w-collapsed: 56px;
+
+  /* ── Roles ── */
+  --role-admin:     #D91010;
+  --role-gerente:   #7C3AED;
+  --role-ventas:    #059669;
+  --role-logistica: #2563EB;
+  --role-finanzas:  #D97706;
+  --role-viewer:    #64748B;
+
+  /* ── Legacy aliases — compatibilidad con style.css existente ── */
+  --brand-magenta:      var(--primary);
+  --brand-magenta-glow: rgba(230, 57, 70, 0.32);
+  --brand-magenta-dim:  rgba(230, 57, 70, 0.12);
+  --brand-green:        var(--secondary);
+  --brand-green-glow:   rgba(29, 53, 87, 0.28);
+  --brand-green-dim:    rgba(29, 53, 87, 0.10);
+  --brand-red:          var(--primary);
+  --brand-red-glow:     rgba(230, 57, 70, 0.32);
+  --brand-red-dim:      rgba(230, 57, 70, 0.12);
+  --primary-red:        var(--primary);
+  --teal:               var(--secondary);
+  --teal-glow:          rgba(29, 53, 87, 0.28);
+  --teal-dim:           rgba(29, 53, 87, 0.10);
+  --pink:               var(--primary);
+  --pink-glow:          rgba(230, 57, 70, 0.32);
+  --pink-dim:           rgba(230, 57, 70, 0.12);
+  --violet:             #7C3AED;
+  --violet-dim:         rgba(124, 58, 237, 0.10);
+  --success-green:      var(--success);
+  --warning-orange:     var(--warning);
+  --info-blue:          var(--info);
+
+  /* ── Glass aliases → superficies flat (elimina glassmorphism) ── */
+  --glass-bg:     var(--surface-1);
+  --glass-border: var(--border);
+  --glass-hover:  var(--surface-2);
+}
+
+/* ── LIGHT MODE ── */
+[data-theme="light"] {
+  --bg:           #F8F8F6;
+  --body-bg:      #F8F8F6;
+  --bg-main:      #F8F8F6;
+  --bg-secondary: #FFFFFF;
+  --surface-0:    #FFFFFF;
+  --surface-1:    #FFFFFF;
+  --surface-2:    #F4F3EF;
+  --surface-3:    #ECEAE4;
+
+  --border:        rgba(0,0,0,0.08);
+  --border-base:   rgba(0,0,0,0.08);
+  --border-strong: rgba(0,0,0,0.16);
+  --border-glaze:  rgba(0,0,0,0.08);
+  --border-accent: rgba(193, 18, 31, 0.22);
+
+  --text-main:  #1F2937;
+  --text-muted: #6B7280;
+  --text-faint: #9CA3AF;
+
+  --input-bg:      #FFFFFF;
+  --modal-bg:      rgba(255,255,255,0.99);
+  --modal-overlay: rgba(15,23,42,0.55);
+
+  --shadow-card:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-module: 0 1px 3px rgba(0,0,0,0.06);
+  --soft-shadow:   0 1px 3px rgba(0,0,0,0.08);
+  --shadow-glow-red:  0 2px 6px rgba(193, 18, 31, 0.18);
+  --shadow-glow-teal: 0 2px 6px rgba(5, 150, 105, 0.12);
+  --shadow-glow-pink: 0 2px 6px rgba(193, 18, 31, 0.14);
+
+  /* Overrides de brand en light ── */
+  --primary:            #C1121F;
+  --primary-dark:       #9B0014;
+  --primary-light:      #FDECEA;
+  --brand-magenta:      #C1121F;
+  --brand-magenta-glow: rgba(193, 18, 31, 0.22);
+  --brand-magenta-dim:  rgba(193, 18, 31, 0.09);
+  --primary-red:        #C1121F;
+  --brand-red:          #C1121F;
+  --brand-red-glow:     rgba(193, 18, 31, 0.22);
+
+  --success:      #059669;
+  --success-glow: rgba(5,150,105,0.15);
+  --success-dim:  rgba(5,150,105,0.07);
+  --warning:      #B45309;
+  --warning-dim:  rgba(180,83,9,0.08);
+  --danger:       #DC2626;
+  --danger-dim:   rgba(220,38,38,0.10);
+  --info:         #1D4ED8;
+  --info-dim:     rgba(29,78,216,0.08);
+}

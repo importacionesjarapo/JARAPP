@@ -116,7 +116,7 @@ export const renderCalculadora = async (renderLayout, navigateTo) => {
 function renderCalcView() {
   const isAdmin  = auth.isAdmin();
   const canEdit  = auth.canEdit('calculadora');
-  const trm     = parseFloat(localStorage.getItem('CALC_TRM') || '4200');
+  const trm     = parseFloat(localStorage.getItem('CALC_TRM') || window.JARAPP_TRM || 4200);
   const usd     = parseFloat(localStorage.getItem('CALC_USD') || '0') || 0;
   const domicilio = localStorage.getItem('CALC_DOMICILIO') !== 'false';
   const res     = calcular(_config, _activeMode, usd, trm, domicilio);

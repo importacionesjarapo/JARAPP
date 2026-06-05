@@ -50,10 +50,13 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         });
     }
 
-    const _page = parseInt(localStorage.getItem('logistics_page') || '1');
-    const _rpp  = parseInt(localStorage.getItem('logistics_rpp') || '10');
-    const pagedList = paginate(filteredList, _page, _rpp);
-    const reversedList = [...pagedList].reverse();
+    // Ordenar de más recientes a más antiguos según ID (que son timestamps de creación + 'LOG')
+    const sortedList = [...filteredList].sort((a, b) => {
+        const idA = parseFloat(String(a.id).replace('LOG', '')) || 0;
+        const idB = parseFloat(String(b.id).replace('LOG', '')) || 0;
+        return idB - idA;
+    });
+    const reversedList = sortedList;
 
     const FASES = [
         "1. Comprado (Esperando Tracking Local USA)",
@@ -283,10 +286,10 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
       }).join('')}
       </div>
       `}
-      ${_logActiveTab === 'general' ? renderPagination(filteredList.length, _page, _rpp, 'logistics') : ''}
     `;
     renderLayout(html);
     if(window.lucide) window.lucide.createIcons();
+    setTimeout(() => { attachLogSearch(); }, 150);
 
     window.modalDetalleLogistica = async (id) => {
         const item = reversedList.find(i => i.id.toString() === id.toString());
@@ -545,19 +548,29 @@ export const createLogisticsModal = async (id, navigateTo) => {
                     </div>
                     
                     <div id="log-consolidation-box" style="margin-bottom:1.5rem;">
-                        ${(!id && Array.isArray(logisticaData)) ? `
-                            <div style="padding:1rem; background:rgba(37,99,235,0.05); border:1px dashed var(--info); border-radius:12px;">
+                        ${(Array.isArray(logisticaData)) ? `
+                            <div id="consolidation-zone" style="display:none; padding:1rem; background:rgba(37,99,235,0.05); border:1px dashed var(--info); border-radius:12px;">
                                 <label style="font-weight:800; font-size:0.85rem; color:var(--info); margin-bottom:10px; display:block;">📦 Consolidar con otros envíos en Bodega EEUU</label>
-                                ${logisticaData.filter(it => it.fase && it.fase.includes('3.')).map(it => {
-                                    const v = ventas.find(vnt => vnt.id.toString() === it.venta_id?.toString());
-                                    const p = v ? productos.find(prd => prd.id.toString() === v.producto_id?.toString()) : null;
-                                    return `
-                                        <label style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-base); cursor:pointer; font-size:0.82rem;">
-                                            <input type="checkbox" name="consolidate_ids" value="${it.id}" style="width:18px; height:18px;">
-                                            <span>${p?.nombre_producto || 'Producto Stock'} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
-                                        </label>
-                                    `;
-                                }).join('')}
+                                ${(() => {
+                                    const otrosEnUSA = logisticaData.filter(it => 
+                                        it.fase && 
+                                        it.fase.includes('3.') && 
+                                        it.id.toString() !== data.id?.toString()
+                                    );
+                                    if (otrosEnUSA.length === 0) {
+                                        return `<p style="font-size:0.8rem; opacity:0.6; margin:0;">No hay otros productos en Bodega USA para consolidar.</p>`;
+                                    }
+                                    return otrosEnUSA.map(it => {
+                                        const v = ventas.find(vnt => vnt.id.toString() === it.venta_id?.toString());
+                                        const p = v ? productos.find(prd => prd.id.toString() === v.producto_id?.toString()) : null;
+                                        return `
+                                            <label style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-base); cursor:pointer; font-size:0.82rem;">
+                                                <input type="checkbox" name="consolidate_ids" value="${it.id}" style="width:18px; height:18px;">
+                                                <span>${p?.nombre_producto || 'Producto Stock'} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
+                                            </label>
+                                        `;
+                                    }).join('');
+                                })()}
                             </div>
                         ` : ''}
                     </div>
@@ -575,7 +588,15 @@ export const createLogisticsModal = async (id, navigateTo) => {
                             <label class="form-label">Courier Internacional</label>
                             <input type="text" name="paq" value="${data.paqueteria || ''}">
                         </div>
-                        <div class="form-group" style="grid-column: span 3;">
+                        <div class="form-group">
+                            <label class="form-label">Costo Guía/Flete (USD)</label>
+                            <input type="number" step="0.01" name="guia_total_usd" placeholder="Valor total USD flete" value="">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Costo Guía/Flete (COP)</label>
+                            <input type="number" name="guia_total_cop" placeholder="Valor total COP flete" value="">
+                        </div>
+                        <div class="form-group">
                             <label class="form-label">URL Tracking Int.</label>
                             <input type="url" name="int_url" value="${data.int_url || ''}" placeholder="https://...">
                         </div>
@@ -946,19 +967,39 @@ export const createLogisticsModal = async (id, navigateTo) => {
             const guiaCOP = fd.get('guia_total_cop');
             
             let newGuiaId = null;
-            if (nuevaFase.includes('4.') && (guiaUSD || guiaCOP)) {
-                btn.innerHTML = '<i class="loader"></i> Creando Guía Internacional...';
-                newGuiaId = Date.now().toString();
-                const guiaPayload = {
-                    id: newGuiaId,
-                    numero_guia: fd.get('int_guia') || payload.int_guia || '',
-                    valor_usd: parseFloat(guiaUSD || 0),
-                    valor_cop: parseInt(guiaCOP || 0),
-                    courier: fd.get('paq') || payload.paqueteria || '',
-                    fecha_creacion: new Date().toISOString()
-                };
-                await db.postData('GuiasInternacionales', guiaPayload, 'INSERT');
-                payload.guia_internacional_id = newGuiaId;
+            const intGuiaVal = (fd.get('int_guia') || payload.int_guia || '').trim();
+            if (nuevaFase.includes('4.') && intGuiaVal) {
+                btn.innerHTML = '<i class="loader"></i> Validando Guía Internacional...';
+                const guiasExistentes = await db.fetchData('GuiasInternacionales');
+                const listGuias = Array.isArray(guiasExistentes) ? guiasExistentes : [];
+                const guiaExistente = listGuias.find(g => g.numero_guia?.toString().trim() === intGuiaVal);
+                
+                if (guiaExistente) {
+                    newGuiaId = guiaExistente.id;
+                    payload.guia_internacional_id = newGuiaId;
+                    
+                    // Opcionalmente actualizar valores si el usuario los ingresó
+                    const updatedGuia = { ...guiaExistente };
+                    let changed = false;
+                    if (guiaUSD) { updatedGuia.valor_usd = parseFloat(guiaUSD); changed = true; }
+                    if (guiaCOP) { updatedGuia.valor_cop = parseInt(guiaCOP); changed = true; }
+                    if (changed) {
+                        await db.postData('GuiasInternacionales', updatedGuia, 'UPDATE');
+                    }
+                } else {
+                    btn.innerHTML = '<i class="loader"></i> Creando Guía Internacional...';
+                    newGuiaId = Date.now().toString();
+                    const guiaPayload = {
+                        id: newGuiaId,
+                        numero_guia: intGuiaVal,
+                        valor_usd: parseFloat(guiaUSD || 0),
+                        valor_cop: parseInt(guiaCOP || 0),
+                        courier: fd.get('paq') || payload.paqueteria || '',
+                        fecha_creacion: new Date().toISOString()
+                    };
+                    await db.postData('GuiasInternacionales', guiaPayload, 'INSERT');
+                    payload.guia_internacional_id = newGuiaId;
+                }
             }
 
             btn.innerHTML = '<i class="loader"></i> Guardando Registro Principal...';
@@ -1237,4 +1278,29 @@ window.moverArticuloGuia = async (logisticaId, newGuiaId, currentGuiaId) => {
         if(btn) { btn.disabled = false; btn.innerText = 'Mover'; }
     }
 };
+
+function attachLogSearch() {
+    const fi = document.getElementById('find-it');
+    if (!fi) return;
+    fi.oninput = (e) => {
+        const k = e.target.value.toLowerCase().trim();
+        document.querySelectorAll('#list-body .log-row').forEach(r => {
+            const m = (r.getAttribute('data-text')||'').toLowerCase().includes(k);
+            r.style.display = m ? '' : 'none';
+        });
+        
+        // Ocultar bloques de fase vacíos si el usuario está buscando y no hay coincidencias en esa fase
+        document.querySelectorAll('.log-fase-block').forEach(block => {
+            const rows = block.querySelectorAll('.log-row');
+            let hasVisible = false;
+            rows.forEach(r => {
+                if (r.style.display !== 'none') hasVisible = true;
+            });
+            const totalRows = rows.length;
+            if (totalRows > 0) {
+                block.style.display = hasVisible ? '' : 'none';
+            }
+        });
+    };
+}
 

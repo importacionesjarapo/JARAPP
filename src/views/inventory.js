@@ -351,7 +351,8 @@ const renderViewPrecios = (list) => {
                 </tr></thead>
                 <tbody>
                 ${sorted.map(p => {
-                    const costoCOP = (parseFloat(p.precio_usd)||0) * 4300; // TRM referencia
+                    const _trm = window.JARAPP_TRM || 4300;
+                    const costoCOP = (parseFloat(p.precio_usd)||0) * _trm;
                     const margen = parseFloat(p.precio_cop)>0 ? Math.round(((parseFloat(p.precio_cop)-costoCOP)/parseFloat(p.precio_cop))*100) : 0;
                     const margenColor = margen > 30 ? 'var(--success-green)' : margen > 10 ? 'var(--warning-orange)' : 'var(--primary-red)';
                     const sf=`${p.marca||''} ${p.nombre_producto||''} ${p.sku||''}`.replace(/\s+/g,' ').trim();
@@ -369,7 +370,7 @@ const renderViewPrecios = (list) => {
                         <td style="font-weight:800;color:var(--primary-red);">${p.marca}</td>
                         <td class="text-right" style="font-family:monospace;font-size:0.85rem;opacity:0.75;">${formatUSD(p.precio_usd)}</td>
                         <td class="text-right"><span class="cell-price" style="color:var(--success-green);">${formatCOP(p.precio_cop)}</span></td>
-                        <td class="text-right"><span style="font-weight:700;color:${margenColor};">${margen}%</span><div style="font-size:0.65rem;opacity:0.5;">@TRM 4300</div></td>
+                        <td class="text-right"><span style="font-weight:700;color:${margenColor};">${margen}%</span><div style="font-size:0.65rem;opacity:0.5;">@TRM ${Math.round(_trm).toLocaleString('es-CO')}</div></td>
                         <td style="font-size:0.78rem;opacity:0.7;">${p.tienda_cotizacion||'—'}</td>
                         <td class="td-actions">
                             <div class="td-actions-group">

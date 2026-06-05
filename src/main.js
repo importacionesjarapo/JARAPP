@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -16,6 +16,10 @@ import { renderParams } from './views/params.js';
 import { renderCalculadora } from './views/calculadora.js';
 import { renderLogin } from './views/login.js';
 import { renderAdmin } from './views/admin.js';
+import { renderViaje } from './views/viaje.js';
+import { TRMService } from './services/trm.js';
+import { ConfigService } from './services/config.js';
+import { initJaraBot } from './components/jarabot.js';
 
 // Init theme instantly to prevent flashing
 const savedTheme = localStorage.getItem('theme') || 'dark';
@@ -34,20 +38,35 @@ const state = {
   get isLoggedIn() { return true; }
 };
 
-// ── Nav Items definición (filtrados dinámicamente por permisos) ──
-const NAV_ITEMS = [
-  { view: 'dashboard',  icon: 'layout-dashboard', label: 'Dashboard',         module: 'dashboard'  },
-  { view: 'clients',    icon: 'users',             label: 'Clientes',           module: 'clients'    },
-  { view: 'inventory',  icon: 'package',           label: 'Inventario',         module: 'inventory'  },
-  { view: 'sales',      icon: 'shopping-cart',     label: 'Ventas',             module: 'sales'      },
-  { view: 'purchases',  icon: 'globe',             label: 'Compras USA',        module: 'purchases'  },
-  { view: 'logistics',  icon: 'truck',             label: 'Seguimientos',       module: 'logistics'    },
-  { divider: true },
-  { view: 'finance',    icon: 'activity',          label: 'Gastos y Finanzas',  module: 'finance'      },
-  { view: 'calculadora',icon: 'calculator',        label: 'Calculadora Precios',module: 'calculadora'  },
-  { divider: true },
-  { view: 'params',     icon: 'settings-2',        label: 'Parametrización',    module: 'params'       },
-  { view: 'settings',   icon: 'settings',          label: 'Configuración',      module: null, adminOnly: true },
+// ── Nav agrupado en 3 secciones ──
+const NAV_GROUPS = [
+  {
+    label: 'Operaciones',
+    items: [
+      { view: 'dashboard',   icon: 'layout-dashboard', label: 'Dashboard',    module: 'dashboard'   },
+      { view: 'inventory',   icon: 'package',           label: 'Inventario',   module: 'inventory'   },
+      { view: 'sales',       icon: 'shopping-cart',     label: 'Ventas',       module: 'sales'       },
+      { view: 'purchases',   icon: 'globe',             label: 'Compras USA',  module: 'purchases'   },
+      { view: 'logistics',   icon: 'truck',             label: 'Seguimientos', module: 'logistics'   },
+      { view: 'viaje',       icon: 'plane',             label: 'Viaje EEUU',   module: null, roleOnly: ['admin','gerente'] },
+    ]
+  },
+  {
+    label: 'Gestión',
+    items: [
+      { view: 'clients',     icon: 'users',             label: 'Clientes',     module: 'clients'     },
+      { view: 'finance',     icon: 'activity',          label: 'Finanzas',     module: 'finance'     },
+      { view: 'calculadora', icon: 'calculator',        label: 'Calculadora',  module: 'calculadora' },
+    ]
+  },
+  {
+    label: 'Sistema',
+    items: [
+      { view: 'params',      icon: 'settings-2',        label: 'Parámetros',   module: 'params'      },
+      { view: 'admin',       icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
+      { view: 'settings',    icon: 'settings',          label: 'Configuración',module: null, adminOnly: true },
+    ]
+  }
 ];
 
 const logoUrl = () => localStorage.getItem('GLOBAL_LOGO_URL') || '/logo.png';
@@ -59,58 +78,58 @@ export const renderLayout = (contentHTML) => {
   const roleColor = ROLE_COLORS[profile?.role] || '#64748B';
   const roleLabel = ROLE_LABELS[profile?.role] || 'Invitado';
 
-  // Filtrar nav items según permisos
-  // Si el perfil no ha cargado aún (null), mostrar todos los items para evitar nav vacío
+  // Generar nav agrupado (filtrado por permisos)
   const profileLoaded = !!profile;
-  const navHTML = NAV_ITEMS.map(item => {
-    if (item.divider) return `<div class="nav-divider"></div>`;
-
-    // adminOnly filters
-    if (item.adminOnly && profileLoaded && !auth.isAdmin()) return '';
-
-    // Admin solo para rol admin (solo filtrar si el perfil está cargado)
-    if (item.view === 'admin' && profileLoaded && !auth.isAdmin()) return '';
-
-    // Filtrar por permisos de módulo SOLO si el perfil está cargado
-    if (profileLoaded && item.module && !auth.canAccess(item.module)) return '';
-
-    const isReadOnly = profileLoaded && item.module && auth.canAccess(item.module) && !auth.canEdit(item.module);
-    return `
-      <div class="nav-item ${state.currentView === item.view ? 'active' : ''}" data-view="${item.view}">
-        <i data-lucide="${item.icon}"></i>
-        <span>${item.label}</span>
-        ${isReadOnly ? '<span class="nav-readonly-badge">Ver</span>' : ''}
-      </div>
-    `;
+  const navHTML = NAV_GROUPS.map(group => {
+    const groupItems = group.items.map(item => {
+      if (item.adminOnly && profileLoaded && !auth.isAdmin()) return '';
+      if (item.view === 'admin' && profileLoaded && !auth.isAdmin()) return '';
+      if (item.roleOnly && profileLoaded && !item.roleOnly.includes(auth.getUserRole())) return '';
+      if (profileLoaded && item.module && !auth.canAccess(item.module)) return '';
+      const isReadOnly = profileLoaded && item.module && auth.canAccess(item.module) && !auth.canEdit(item.module);
+      const isAdmin = item.view === 'admin';
+      return `
+        <div class="nav-item ${state.currentView === item.view ? 'active' : ''} ${isAdmin ? 'nav-item-admin' : ''}" data-view="${item.view}">
+          <i data-lucide="${item.icon}"></i>
+          <span>${item.label}</span>
+          ${isReadOnly ? '<span class="nav-readonly-badge">Ver</span>' : ''}
+        </div>
+      `;
+    }).join('');
+    if (!groupItems.trim()) return '';
+    return `<div class="nav-section-label">${group.label}</div>${groupItems}`;
   }).join('');
 
-  // Nav Admin (solo para admins)
-  const adminNavItem = auth.isAdmin() ? `
-    <div class="nav-divider"></div>
-    <div class="nav-item nav-item-admin ${state.currentView === 'admin' ? 'active' : ''}" data-view="admin">
-      <i data-lucide="shield"></i> <span>Administración</span>
-    </div>
-  ` : '';
+  const adminNavItem = ''; // incluido en NAV_GROUPS › Sistema
 
-  const imgUrl = logoUrl();
+  const _logoUrl = window.JARAPP_LOGO || sessionStorage.getItem('JARAPP_LOGO') || null;
+  const _logoZoneHtml = _logoUrl
+    ? `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
+         <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:contain;" alt="Logo Jarapo">
+       </div>
+       <div class="sidebar-brand">
+         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
+         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
+       </div>`
+    : `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
+         <span style="color:white;font-size:36px;font-weight:700;line-height:1;">J</span>
+       </div>
+       <div class="sidebar-brand">
+         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
+         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
+       </div>`;
+
   mainAppContent.innerHTML = `
     <div class="sidebar">
       <div class="sidebar-logo-zone">
-        <div class="sidebar-logo-ring">
-           <img src="${imgUrl}" style="width:100%; height:100%; object-fit:cover;" onerror="this.outerHTML='<div style=\\'font-size:2rem; font-weight:800; color:var(--primary-red);\\'>J</div>'">
-        </div>
-        <div class="sidebar-brand">
-          <h2>JARAPP</h2>
-          <span>Importaciones Jarapo</span>
-        </div>
+        ${_logoZoneHtml}
       </div>
-      
+
       <nav>
         ${navHTML}
-        ${adminNavItem}
       </nav>
 
-      <!-- User profile zone -->
+      <!-- Zona de usuario -->
       <div class="sidebar-user-zone">
         <div class="sidebar-user-avatar" style="background:${roleColor}22; color:${roleColor};">
           ${(profile?.full_name || 'U').charAt(0).toUpperCase()}
@@ -121,55 +140,72 @@ export const renderLayout = (contentHTML) => {
         </div>
       </div>
 
-      <div class="theme-toggle-wrapper">
-         <button id="sidebar-toggle-btn" class="theme-toggle" style="margin-bottom: 8px;">
-            <i data-lucide="menu"></i>
-            <span>Retraer / Fijar</span>
-         </button>
-         <button id="theme-toggle-btn" class="theme-toggle">
-            <i data-lucide="${currentTheme === 'light' ? 'moon' : 'sun'}"></i>
-            <span>${currentTheme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>
-         </button>
-         <button id="logout-btn" class="theme-toggle logout-btn">
-            <i data-lucide="log-out"></i>
-            <span>Cerrar Sesión</span>
-         </button>
+      <div class="sidebar-trm-badge" id="sidebar-trm-badge" title="Tasa de cambio USD/COP actual">
+        <span class="sidebar-trm-label" id="sidebar-trm-label">TRM: —</span>
+        <span class="trm-badge-source" id="sidebar-trm-source"></span>
       </div>
-      <div class="sidebar-foot">Medellín · ${new Date().getFullYear()}</div>
-     </div>
+
+      <div class="theme-toggle-wrapper">
+        <button id="sidebar-toggle-btn" class="theme-toggle" style="margin-bottom:8px;">
+          <i data-lucide="menu"></i>
+          <span>Retraer / Fijar</span>
+        </button>
+        <button id="theme-toggle-btn" class="theme-toggle">
+          <i data-lucide="${currentTheme === 'light' ? 'moon' : 'sun'}"></i>
+          <span>${currentTheme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>
+        </button>
+        <button id="logout-btn" class="theme-toggle logout-btn">
+          <i data-lucide="log-out"></i>
+          <span>Cerrar Sesión</span>
+        </button>
+      </div>
+      <div class="sidebar-foot">Bogotá · ${new Date().getFullYear()}</div>
     </div>
 
-    <!-- Mobile Sidebar Overlay (tap to close) -->
+    <!-- Overlay para cerrar sidebar en mobile -->
     <div id="sidebar-overlay"></div>
 
     <main class="main-content">
       <header class="header">
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
-            <div class="welcome-msg">
-              <p>Dirección Medellín</p>
-              <h1>Gestión Operativa</h1>
-            </div>
-            <button id="mobile-menu-btn" style="display:none; background:var(--glass-hover); border:1px solid var(--glass-border); color:var(--text-main); padding:8px 12px; border-radius:8px; cursor:pointer;">
-                <i data-lucide="menu"></i>
-            </button>
-        </div>
-        <div class="actions" style="display:flex; gap:12px; align-items:center;">
-           <!-- Botón global removido según solicitud -->
+          <div class="welcome-msg">
+            <p>Importaciones Jarapo</p>
+            <h1>Gestión Operativa</h1>
+          </div>
+          <button id="mobile-menu-btn" style="display:none; background:var(--surface-2); border:1px solid var(--border-base); color:var(--text-main); padding:8px 12px; border-radius:8px; cursor:pointer;">
+            <i data-lucide="menu"></i>
+          </button>
         </div>
       </header>
 
       <div id="module-view">${contentHTML}</div>
     </main>
 
+    <!-- Bottom Navigation (mobile) -->
+    <nav class="bottom-nav">
+      <div class="bottom-nav-item ${state.currentView === 'dashboard'  ? 'active' : ''}" data-view="dashboard">
+        <i data-lucide="layout-dashboard"></i><span>Inicio</span>
+      </div>
+      <div class="bottom-nav-item ${state.currentView === 'inventory'  ? 'active' : ''}" data-view="inventory">
+        <i data-lucide="package"></i><span>Inventario</span>
+      </div>
+      <div class="bottom-nav-item ${state.currentView === 'sales'      ? 'active' : ''}" data-view="sales">
+        <i data-lucide="shopping-cart"></i><span>Ventas</span>
+      </div>
+      <div class="bottom-nav-item ${state.currentView === 'clients'    ? 'active' : ''}" data-view="clients">
+        <i data-lucide="users"></i><span>Clientes</span>
+      </div>
+      <div class="bottom-nav-item" id="bottom-nav-more">
+        <i data-lucide="menu"></i><span>Más</span>
+      </div>
+    </nav>
+
     <div id="modal-container" style="display:none;">
-       <div id="modal-content">
-          <!-- Inyección Dinámica de Modales -->
-       </div>
+      <div id="modal-content"></div>
     </div>
 
     <div id="custom-dialog-container" style="display:none;">
-       <div id="custom-dialog-content" class="glass-card">
-       </div>
+      <div id="custom-dialog-content" class="glass-card"></div>
     </div>
   `;
 
@@ -180,8 +216,30 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane }
     });
+
+    // Restaurar logo desde sessionStorage (persiste entre navegaciones)
+    const logoStored = window.JARAPP_LOGO || sessionStorage.getItem('JARAPP_LOGO');
+    if (logoStored) ConfigService.applyLogo(logoStored);
+
+    // Restaurar badge TRM desde sessionStorage (persiste entre navegaciones)
+    const trmCached = sessionStorage.getItem('JARAPP_TRM');
+    const trmFecha  = sessionStorage.getItem('JARAPP_TRM_FECHA');
+    const trmFuente = sessionStorage.getItem('JARAPP_TRM_FUENTE') || 'manual';
+    const hoyStr    = new Date().toISOString().split('T')[0];
+    if (trmCached && trmFecha === hoyStr) {
+      window.JARAPP_TRM = parseFloat(trmCached);
+      window.JARAPP_TRM_FUENTE = trmFuente;
+      const labelEl  = document.getElementById('sidebar-trm-label');
+      const sourceEl = document.getElementById('sidebar-trm-source');
+      if (labelEl)  labelEl.textContent = `TRM: $${Math.round(parseFloat(trmCached)).toLocaleString('es-CO')}`;
+      if (sourceEl) {
+        const esAuto = trmFuente !== 'manual' && trmFuente !== 'fallback';
+        sourceEl.textContent = esAuto ? 'Auto' : 'Manual';
+        sourceEl.className   = `trm-badge-source ${esAuto ? 'trm-auto' : 'trm-manual'}`;
+      }
+    }
     
     // Theme Toggle
     const themeBtn = document.getElementById('theme-toggle-btn');
@@ -222,10 +280,20 @@ export const renderLayout = (contentHTML) => {
     }
     // Auto-close sidebar after navigating on mobile
     document.querySelectorAll('.nav-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (window.innerWidth <= 768) closeMobileNav();
-        }, { capture: true });
+      btn.addEventListener('click', () => {
+        if (window.innerWidth <= 768) closeMobileNav();
+      }, { capture: true });
     });
+
+    // Bottom nav — items directos
+    document.querySelectorAll('.bottom-nav-item[data-view]').forEach(btn => {
+      btn.onclick = () => navigateTo(btn.getAttribute('data-view'));
+    });
+    // Bottom nav — "Más" abre el sidebar en mobile
+    const bottomMore = document.getElementById('bottom-nav-more');
+    if (bottomMore) {
+      bottomMore.onclick = () => document.body.classList.toggle('mobile-nav-open');
+    }
 
     // Logout Button
     const logoutBtn = document.getElementById('logout-btn');
@@ -242,9 +310,17 @@ export const renderLayout = (contentHTML) => {
   // Event listener del main-quick-btn removido
 };
 
+const TITULOS = {
+  dashboard: 'Dashboard', inventory: 'Inventario', sales: 'Ventas',
+  clients: 'Clientes', purchases: 'Compras', logistics: 'Logística',
+  finance: 'Finanzas', params: 'Parámetros', calculadora: 'Calculadora',
+  admin: 'Administración', settings: 'Configuración', viaje: 'Viaje EEUU',
+};
+
 export const navigateTo = (view) => {
   state.currentView = view;
-  localStorage.setItem('JARAPP_VIEW', view); // Persistir vista actual
+  localStorage.setItem('JARAPP_VIEW', view);
+  document.title = `${TITULOS[view] ?? view} · JARAPP`;
 
   // (Credenciales siempre disponibles via fallback en db.js)
 
@@ -295,13 +371,14 @@ export const navigateTo = (view) => {
     case 'calculadora':  renderCalculadora(renderLayout, navigateTo); break;
     case 'settings':     renderSettingsView(renderLayout, navigateTo); break;
     case 'admin':        renderAdmin(renderLayout, navigateTo); break;
+    case 'viaje':        renderViaje(renderLayout, navigateTo); break;
     default: renderPlaceholder(view); break;
   }
   
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane }
     });
   }, 200);
 };
@@ -445,14 +522,41 @@ async function bootApp() {
   startApp();
 }
 
-function startApp() {
-  // Navegar al primer módulo accesible
+async function startApp() {
   const profile = auth.getProfile();
-  
+
   if (!profile) {
     renderLogin(() => startApp());
     return;
   }
+
+  // Cargar logo en background
+  ConfigService.getLogo().then(url => {
+    if (url) ConfigService.applyLogo(url);
+  }).catch(() => {});
+
+  // Cargar TRM en background — no bloquea la navegación
+  TRMService.getTRMHoy().then(({ valor, fuente }) => {
+    window.JARAPP_TRM = valor;
+    window.JARAPP_TRM_FUENTE = fuente;
+
+    // Actualizar badge en sidebar
+    const labelEl = document.getElementById('sidebar-trm-label');
+    const sourceEl = document.getElementById('sidebar-trm-source');
+    if (labelEl) labelEl.textContent = `TRM: $${Math.round(valor).toLocaleString('es-CO')}`;
+    if (sourceEl) {
+      const esAuto = fuente !== 'manual' && fuente !== 'fallback';
+      sourceEl.textContent = esAuto ? 'Auto' : 'Manual';
+      sourceEl.className = `trm-badge-source ${esAuto ? 'trm-auto' : 'trm-manual'}`;
+      if (!esAuto) {
+        const badge = document.getElementById('sidebar-trm-badge');
+        if (badge) badge.title = 'TRM ingresada manualmente en Configuración';
+      }
+    }
+  }).catch(() => {
+    window.JARAPP_TRM = 4200;
+    window.JARAPP_TRM_FUENTE = 'fallback';
+  });
 
   // Ir al dashboard si tiene acceso, si no al primer módulo permitido
   if (auth.canAccess('dashboard')) {
@@ -462,7 +566,18 @@ function startApp() {
       .find(m => auth.canAccess(m));
     navigateTo(firstModule || 'settings');
   }
+
+  // Iniciar JaraBot para admin y gerente (solo una vez por sesión)
+  initJaraBot(auth);
 }
 
 // Arrancar App
 bootApp();
+
+// Registro del Service Worker (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .catch(err => console.warn('[SW] Registro fallido:', err));
+  });
+}

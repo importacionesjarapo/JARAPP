@@ -1,0 +1,12 @@
+{
+  "name": "JARAPP - Importaciones Jarapo",
+  "short_name": "JARAPP",
+  "description": "Sistema administrativo interno",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#E63946",
+  "background_color": "#F8F8F6",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

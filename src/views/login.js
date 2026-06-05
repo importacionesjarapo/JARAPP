@@ -6,7 +6,11 @@
 
 import { auth } from '../auth.js';
 
-const logoUrl = localStorage.getItem('GLOBAL_LOGO_URL') || '/logo.png';
+// Prioridad: sesión activa → localStorage → null (fallback a la "J")
+const _logoUrl = window.JARAPP_LOGO
+  || sessionStorage.getItem('JARAPP_LOGO')
+  || localStorage.getItem('GLOBAL_LOGO_URL')
+  || null;
 
 export const renderLogin = (onSuccess) => {
   const appEl = document.querySelector('#app');
@@ -26,9 +30,10 @@ export const renderLogin = (onSuccess) => {
         <!-- Logo y branding -->
         <div class="login-logo-zone">
           <div class="login-logo-ring">
-            <img src="${logoUrl}" 
-                 onerror="this.outerHTML='<div style=\\'font-size:3rem; font-weight:900; color:var(--brand-magenta)\\'>J</div>'"
-                 style="width:100%;height:100%;object-fit:cover;" />
+            ${_logoUrl
+              ? `<img src="${_logoUrl}" class="app-logo-img" style="width:100%;height:100%;object-fit:contain;" alt="Importaciones Jarapo">`
+              : `<div style="font-size:3rem;font-weight:900;color:var(--primary);display:flex;align-items:center;justify-content:center;width:100%;height:100%;">J</div>`
+            }
           </div>
           <div class="login-brand">
             <h1 class="login-title">JARAPP</h1>

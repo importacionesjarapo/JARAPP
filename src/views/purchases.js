@@ -540,7 +540,13 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         downloadExcel(dataToExport, `Reporte_Compras_${new Date().toISOString().split('T')[0]}`);
     };
 
-    const pendientes = (ventas || []).filter(v => v.tipo_venta === 'Encargo' && v.estado_orden === 'Validando Compra EEUU');
+    // Excluir encargos que ya tienen compra registrada en BD
+    const comprasVentaIds = new Set((_cache.compras || []).map(c => c.venta_id?.toString()).filter(Boolean));
+    const pendientes = (ventas || []).filter(v =>
+        v.tipo_venta === 'Encargo' &&
+        v.estado_orden === 'Validando Compra EEUU' &&
+        !comprasVentaIds.has(v.id?.toString())
+    );
     
     // Initial Filter
     _purFiltered = [..._cache.compras];
@@ -1093,9 +1099,16 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
 
             showToast('✅ Compra registrada correctamente.');
             window.closeModal();
+            window.invalidateDashCache?.(); // Refrescar alertas del dashboard
             _cache = null;
             _currentView = 'tabla';
-            renderPurchases(_renderLayoutFn, navigateTo);
+            // Si el modal fue abierto desde el módulo purchases, re-renderiza purchases.
+            // Si fue abierto desde otro módulo (ej. dashboard), navega al dashboard para ver las alertas actualizadas.
+            if (_renderLayoutFn) {
+                renderPurchases(_renderLayoutFn, navigateTo);
+            } else {
+                navigateTo('dashboard');
+            }
         } catch (err) {
             errEl.textContent = 'Error al guardar: ' + err.message;
             errEl.style.display = '';

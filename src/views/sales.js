@@ -864,7 +864,7 @@ export const createSaleModal = async (navigateTo) => {
                     </div>
                     <div class="form-group">
                         <label class="form-label">TRM Cotizada <span style="color:var(--primary-red);">*</span></label>
-                        <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" required inputmode="numeric">
+                        <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" required inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Valor Venta (COP) <span style="color:var(--primary-red);">*</span></label>
@@ -1041,12 +1041,25 @@ export const createSaleModal = async (navigateTo) => {
                             await db.postData('Clientes', existing, 'UPDATE');
                             showToast('Cliente actualizado', 'success');
                             
+                            // Actualizar en la lista en memoria
+                            const dupIdx = clientsList.findIndex(c => c.id.toString() === existing.id.toString());
+                            if (dupIdx !== -1) clientsList[dupIdx] = existing; else clientsList.push(existing);
+                            
                             document.getElementById('sel-cliente-text').value = `${existing.nombre} (CC: ${existing.numero_identificacion||'-'})`;
                             document.getElementById('sel-cliente-id').value = existing.id;
                             document.getElementById('btn-edit-inline-client').style.display = 'block';
                             document.getElementById('inline-client-form').style.display = 'none';
-                            // Refrescar direcciones
-                            document.getElementById('sel-cliente-text').dispatchEvent(new Event('input'));
+                            
+                            // Mostrar dirección directamente sin depender del listener
+                            const addrBox2 = document.getElementById('address-selection-box');
+                            const selAddr2 = document.getElementById('sel-direccion-envio');
+                            addrBox2.style.display = 'block';
+                            if (existing.direccion) {
+                                const history2 = existing.direccion.split(' | ').reverse();
+                                selAddr2.innerHTML = history2.map(d => `<option value="${d}">${d}</option>`).join('');
+                            } else {
+                                selAddr2.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
+                            }
                         }
                         return;
                     } else {
@@ -1056,15 +1069,30 @@ export const createSaleModal = async (navigateTo) => {
                         await db.postData('Clientes', payload, 'INSERT');
                         showToast('Cliente creado', 'success');
                         
+                        // Agregar a la lista en memoria para que el listener lo encuentre
+                        clientsList.push(payload);
+                        
                         const dl = document.getElementById('dl-clientes');
                         const optValue = `${nombre} (CC: ${nid||'-'})`;
-                        dl.innerHTML += `<option data-id="${newId}" value="${optValue}"></option>`;
+                        const newOpt = document.createElement('option');
+                        newOpt.setAttribute('data-id', newId);
+                        newOpt.value = optValue;
+                        dl.appendChild(newOpt);
+                        
                         document.getElementById('sel-cliente-text').value = optValue;
                         document.getElementById('sel-cliente-id').value = newId;
                         document.getElementById('btn-edit-inline-client').style.display = 'block';
                         document.getElementById('inline-client-form').style.display = 'none';
-                        // Refrescar direcciones
-                        document.getElementById('sel-cliente-text').dispatchEvent(new Event('input'));
+                        
+                        // Mostrar dirección directamente sin depender del listener
+                        const addrBox = document.getElementById('address-selection-box');
+                        const selAddr = document.getElementById('sel-direccion-envio');
+                        addrBox.style.display = 'block';
+                        if (fullDir) {
+                            selAddr.innerHTML = `<option value="${fullDir}">${fullDir}</option>`;
+                        } else {
+                            selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
+                        }
                     }
                 } else if (mode === 'EDIT') {
                     const selId = document.getElementById('sel-cliente-id').value;
@@ -1094,6 +1122,21 @@ export const createSaleModal = async (navigateTo) => {
                     if (updated) {
                         await db.postData('Clientes', existing, 'UPDATE');
                         showToast('Datos agregados al cliente', 'success');
+                        
+                        // Actualizar el objeto en la lista en memoria
+                        const idx = clientsList.findIndex(c => c.id.toString() === existing.id.toString());
+                        if (idx !== -1) clientsList[idx] = existing;
+                        
+                        // Refrescar selector de direcciones directamente
+                        const addrBox = document.getElementById('address-selection-box');
+                        const selAddr = document.getElementById('sel-direccion-envio');
+                        addrBox.style.display = 'block';
+                        if (existing.direccion) {
+                            const history = existing.direccion.split(' | ').reverse();
+                            selAddr.innerHTML = history.map(d => `<option value="${d}">${d}</option>`).join('');
+                        } else {
+                            selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
+                        }
                     } else {
                         showToast('No se agregaron datos nuevos', 'info');
                     }
@@ -1191,7 +1234,9 @@ export const createSaleModal = async (navigateTo) => {
                 const initAbono = { id: (Date.now()+1).toString(), venta_id: pvId, valor: abonoIni, metodo_pago: 'Pago Inicial', fecha: fd.get('fecha_real_venta') || new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
                 await db.postData('Abonos', initAbono, 'INSERT');
             }
-            window.closeModal(); showToast('✅ Operación Exitosa','success'); navigateTo('sales');
+            window.closeModal(); showToast('✅ Operación Exitosa','success');
+            window.invalidateDashCache?.(); // Refrescar alertas del dashboard
+            navigateTo('sales');
         } catch(err){ showToast(err.message,'error'); btn.disabled=false; btn.innerText='Reintentar'; }
     };
 };

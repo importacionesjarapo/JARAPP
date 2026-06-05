@@ -25,12 +25,13 @@ let _vau = null; // ventasAnalisisUtils
 const loadVAU = async () => _vau || (_vau = await import('../dashboard/ventasAnalisisUtils.js'));
 
 // ─── Estado del módulo ────────────────────────────────────────────────────────
-let _cache      = null;   // datos crudos de Supabase
-let _metasCache = null;   // MetasDashboard
-let _kpisCache  = null;   // KPIs calculados
-let _rl         = null;   // renderLayout ref
-let _nav        = null;   // navigateTo ref
-let _re         = null;   // renderError ref
+let _cache        = null;   // datos crudos de Supabase
+let _metasCache   = null;   // MetasDashboard
+let _kpisCache    = null;   // KPIs calculados
+let _rl           = null;   // renderLayout ref
+let _nav          = null;   // navigateTo ref
+let _re           = null;   // renderError ref
+let _viajeActivo  = null;   // viaje activo (si existe)
 
 let _view   = 'resumen';  // 'resumen' | 'explorador'
 let _desde  = '';
@@ -251,6 +252,11 @@ export const renderDashboard = async (renderLayout, renderError) => {
     window.__dashThemeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
+  // Cargar viaje activo en paralelo (sin bloquear el render)
+  import('../services/viajes.js').then(({ ViajeService }) => {
+    ViajeService.getActivo().then(v => { _viajeActivo = v || null; }).catch(() => { _viajeActivo = null; });
+  }).catch(() => { _viajeActivo = null; });
+
   _render();
 };
 
@@ -386,7 +392,7 @@ const _renderResumen = () => {
   const chips = chipDates();
   const canSeeMoney = auth.canAccess('feat_money') !== false;
 
-  const kpiCard = ({ label, valor, sub, var: variation, varDir, color, icon, rpt, accion, cumpl }) => {
+  const kpiCard = ({ label, valor, sub, var: variation, varDir, color, icon, rpt, accion, cumpl, nota }) => {
     const varBadge = variation !== null && variation !== undefined
       ? `<span style="font-size:0.62rem;font-weight:700;color:${varDir === 'up' ? CC.ingresos : CC.gastosOp};background:${varDir === 'up' ? CC.ingresos : CC.gastosOp}18;padding:2px 6px;border-radius:6px;">${varDir === 'up' ? '↑' : '↓'}${Math.abs(variation).toFixed(1)}%</span>`
       : '';
@@ -395,7 +401,7 @@ const _renderResumen = () => {
       : '';
 
     return `
-    <div class="dash360-kpi-card" style="border-top:3px solid ${color};" onclick="window.irAReporte('${rpt}')" title="Ver reporte relacionado">
+    <div class="dash360-kpi-card" style="border:1px solid var(--border-base);" onclick="window.irAReporte('${rpt}')" title="Ver reporte relacionado">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
         <span style="font-size:1.5rem;">${icon}</span>
         <div style="display:flex;gap:4px;align-items:center;">${varBadge}${cumplBadge}</div>
@@ -405,6 +411,7 @@ const _renderResumen = () => {
       </div>
       <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.7;margin-bottom:2px;">${label}</div>
       <div style="font-size:0.62rem;opacity:0.45;">${sub}</div>
+      ${nota ? `<div style="font-size:0.58rem;color:var(--text-tertiary,var(--text-faint));margin-top:3px;">${nota}</div>` : ''}
     </div>`;
   };
 
@@ -473,7 +480,11 @@ const _renderResumen = () => {
   }).length;
   const logsTransito = data.logistica.filter(l => ['transito','comprado'].includes(mapFaseSimple(l.fase))).length;
   const logsBodega   = data.logistica.filter(l => ['bodega_usa','bodega_col'].includes(mapFaseSimple(l.fase))).length;
-  const skusBajoStock = data.productos.filter(p => parseFloat(p.stock||p.cantidad||0) <= parseFloat(p.punto_reorden||p.stock_minimo||1)).length;
+  const skusBajoStock = data.productos.filter(p => {
+    const minimo = parseFloat(p.punto_reorden || p.stock_minimo || 0);
+    if (minimo <= 0) return false; // sin punto de reorden definido → no alertar
+    return parseFloat(p.stock || p.cantidad || 0) <= minimo;
+  }).length;
   const skusSinMovimiento = data.productos.filter(p => {
     const lastSale = data.ventas.filter(v => v.producto_id?.toString() === p.id?.toString()).sort((a,b) => new Date(b.fecha) - new Date(a.fecha))[0];
     if (!lastSale) return true;
@@ -550,11 +561,31 @@ const _renderResumen = () => {
   const globalScore = scores.global;
   const scoreColor  = globalScore >= 75 ? CC.ingresos : globalScore >= 50 ? CC.alerta : CC.gastosOp;
 
+  const viajeActivoBanner = _viajeActivo ? (() => {
+    const dias = Math.floor((Date.now() - new Date(_viajeActivo.fecha_inicio)) / 86400000);
+    return `
+    <div style="background:linear-gradient(135deg,#16a34a,#15803d);border-radius:12px;padding:0.9rem 1.2rem;margin-bottom:1.2rem;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.8rem;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:1.6rem;">✈️</span>
+        <div style="font-size:0.85rem;">
+          <strong>Viaje activo: ${_viajeActivo.nombre}</strong>
+          <span style="opacity:0.8;margin-left:8px;">· ${_viajeActivo.destino} · ${dias} día${dias !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+      <button onclick="window._navigateTo('viaje')" style="padding:6px 14px;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">
+        Ver detalles →
+      </button>
+    </div>`;
+  })() : '';
+
   _rl(`
   <div class="dash360-root">
 
     <!-- ══ HEADER GLOBAL ══════════════════════════════════════════════════════ -->
     ${_renderHeader()}
+
+    <!-- ══ BANNER VIAJE ACTIVO (si aplica) ═══════════════════════════════════ -->
+    ${viajeActivoBanner}
 
     <!-- ══ TIER 1: KPIs FINANCIEROS ══════════════════════════════════════════ -->
     <div class="dash360-kpi-grid">
@@ -563,7 +594,7 @@ const _renderResumen = () => {
       ${kpiCard({ label:'Cartera',       valor: formatCOP(totalCartera),   sub:`${data.ventas.filter(v => parseFloat(v.saldo_pendiente||0) > 0).length} ventas con saldo`, var: null, color: totalCartera > metaCartera ? CC.gastosOp : CC.alerta, icon:'⏰', rpt:'F3' })}
       ${kpiCard({ label:'Total Egresos', valor: formatCOP(totalEgresos),   sub:`${gastos.length} gastos + ${compras.length} compras`, var: varGastos, varDir: varGastos >= 0 ? 'dn' : 'up', color: CC.gastosOp, icon:'📤', rpt:'F5' })}
       ${kpiCard({ label:'Balance Caja',  valor: formatCOP(balance),        sub:`Cobrado − Egresos`, var: null, color: balance >= 0 ? CC.ingresos : CC.gastosOp, icon:'💰', rpt:'F2' })}
-      ${kpiCard({ label:'Margen Neto',   valor: `${margenPct.toFixed(1).replace('.',',')}%`, sub:`Meta: ${metaMargen}%`, var: null, color: margenPct >= metaMargen ? CC.ingresos : margenPct >= 5 ? CC.alerta : CC.gastosOp, icon: margenPct >= metaMargen ? '📈' : '📉', rpt:'F1' })}
+      ${kpiCard({ label:'Margen Neto',   valor: `${margenPct.toFixed(1).replace('.',',')}%`, sub:`Meta: ${metaMargen}%`, var: null, color: margenPct >= metaMargen ? CC.ingresos : margenPct >= 5 ? CC.alerta : CC.gastosOp, icon: margenPct >= metaMargen ? '📈' : '📉', rpt:'F1', nota: margenPct < 0 ? 'Cartera pendiente incluida' : null })}
     </div>
 
     <!-- ══ TIER 2: MÓDULOS OPERATIVOS ════════════════════════════════════════ -->
