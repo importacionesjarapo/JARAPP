@@ -12,6 +12,8 @@ import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { formatCOP, showToast, downloadExcel, openKPIDetailModal } from '../utils.js';
 import Chart from 'chart.js/auto';
+import { AlertasService } from '../services/alertas.js';
+import { renderAlertasPanel } from '../components/alertas-panel.js';
 
 // Lazy-load módulos pesados
 let _utils = null;
@@ -32,6 +34,7 @@ let _rl           = null;   // renderLayout ref
 let _nav          = null;   // navigateTo ref
 let _re           = null;   // renderError ref
 let _viajeActivo  = null;   // viaje activo (si existe)
+let _alertasCache = null;   // alertas del sistema (cargadas en background)
 
 let _view   = 'resumen';  // 'resumen' | 'explorador'
 let _desde  = '';
@@ -252,10 +255,60 @@ export const renderDashboard = async (renderLayout, renderError) => {
     window.__dashThemeObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
-  // Cargar viaje activo en paralelo (sin bloquear el render)
+  // Cargar viaje activo en paralelo — re-renderiza y actualiza badge cuando llega
   import('../services/viajes.js').then(({ ViajeService }) => {
-    ViajeService.getActivo().then(v => { _viajeActivo = v || null; }).catch(() => { _viajeActivo = null; });
+    ViajeService.getActivo().then(v => {
+      _viajeActivo = v || null;
+      if (_cache) _render();
+      window._actualizarBadgeViaje?.();
+    }).catch(() => { _viajeActivo = null; });
   }).catch(() => { _viajeActivo = null; });
+
+  // Cargar alertas en background — re-renderiza cuando estén listas
+  AlertasService.getAlertas().then(a => {
+    _alertasCache = a;
+    if (_cache) _render();
+  }).catch(() => { _alertasCache = []; });
+
+  // Handler global para el botón Refrescar del panel
+  window._refrescarAlertas = async () => {
+    AlertasService.invalidar();
+    _alertasCache = await AlertasService.getAlertas();
+    if (_cache) _render();
+    window._actualizarBadgeAlertas?.();
+  };
+
+  // Listener de navegación directa desde ítems de detalle de alerta (una sola vez)
+  if (!window.__alertasNavListener) {
+    window.__alertasNavListener = true;
+    document.addEventListener('click', (e) => {
+      const item = e.target.closest('.alerta-detalle-item');
+      if (!item) return;
+      e.stopPropagation();
+      const tipo     = item.dataset.tipo;
+      const id       = item.dataset.id;
+      const ventaId  = item.dataset.ventaId;
+
+      if (tipo === 'venta') {
+        window._navigateTo('sales');
+        setTimeout(() => { window.modalDetalleVentaGlobal?.(id); }, 800);
+      } else if (tipo === 'seguimiento') {
+        window._navigateTo('logistics');
+        setTimeout(() => { window.modalDetalleLogistica?.(id); }, 800);
+      } else if (tipo === 'producto') {
+        window._navigateTo('inventory');
+      }
+    });
+
+    // Animación de resaltado
+    const styleEl = document.createElement('style');
+    styleEl.textContent = `
+      @keyframes highlight-row {
+        0%,30% { background:rgba(59,130,246,0.2) !important; }
+        100%    { background:transparent !important; }
+      }`;
+    document.head.appendChild(styleEl);
+  }
 
   _render();
 };
@@ -563,18 +616,40 @@ const _renderResumen = () => {
 
   const viajeActivoBanner = _viajeActivo ? (() => {
     const dias = Math.floor((Date.now() - new Date(_viajeActivo.fecha_inicio)) / 86400000);
+    const gastoNegocio = [
+      'gasto_tiquetes','gasto_hotel','gasto_flete','gasto_overweight',
+      'gasto_vehiculo','gasto_gasolina','gasto_telefonia','gasto_cajas',
+      'gasto_compras_outlet','gasto_otros'
+    ].reduce((s, k) => s + parseFloat(_viajeActivo[k] || 0), 0);
+    const gastosHtml = gastoNegocio > 0
+      ? `<span style="font-size:12px;color:rgba(255,255,255,0.8);">💰 Gastos: $${gastoNegocio.toLocaleString('en-US',{minimumFractionDigits:0})} USD</span>`
+      : `<span style="font-size:12px;color:rgba(255,255,255,0.6);">💰 Sin gastos registrados aún</span>`;
     return `
-    <div style="background:linear-gradient(135deg,#16a34a,#15803d);border-radius:12px;padding:0.9rem 1.2rem;margin-bottom:1.2rem;color:#fff;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.8rem;">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:1.6rem;">✈️</span>
-        <div style="font-size:0.85rem;">
-          <strong>Viaje activo: ${_viajeActivo.nombre}</strong>
-          <span style="opacity:0.8;margin-left:8px;">· ${_viajeActivo.destino} · ${dias} día${dias !== 1 ? 's' : ''}</span>
+    <div id="banner-viaje-activo" onclick="window._navigateTo('viaje')" style="
+      background:linear-gradient(135deg,#1D3557 0%,#2563EB 100%);
+      border-radius:12px;padding:14px 20px;margin-bottom:16px;
+      display:flex;align-items:center;justify-content:space-between;
+      cursor:pointer;transition:opacity 0.15s;
+      box-shadow:0 2px 12px rgba(37,99,235,0.25);"
+      onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+      <div style="display:flex;align-items:center;gap:14px;">
+        <span style="font-size:28px;">✈️</span>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+            <span style="font-size:15px;font-weight:600;color:white;">${_viajeActivo.nombre}</span>
+            <span style="background:rgba(255,255,255,0.2);color:white;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;letter-spacing:0.05em;">EN CURSO</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <span style="font-size:12px;color:rgba(255,255,255,0.8);">📍 ${_viajeActivo.destino}</span>
+            <span style="font-size:12px;color:rgba(255,255,255,0.8);">📅 Inicio: ${new Date(_viajeActivo.fecha_inicio).toLocaleDateString('es-CO')}</span>
+            <span style="font-size:12px;color:rgba(255,255,255,0.8);">⏱️ ${dias} día${dias !== 1 ? 's' : ''} activo</span>
+            ${gastosHtml}
+          </div>
         </div>
       </div>
-      <button onclick="window._navigateTo('viaje')" style="padding:6px 14px;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">
-        Ver detalles →
-      </button>
+      <div style="background:rgba(255,255,255,0.15);border-radius:8px;padding:8px 14px;font-size:13px;font-weight:500;color:white;border:1px solid rgba(255,255,255,0.2);flex-shrink:0;">
+        Ver viaje →
+      </div>
     </div>`;
   })() : '';
 
@@ -586,6 +661,9 @@ const _renderResumen = () => {
 
     <!-- ══ BANNER VIAJE ACTIVO (si aplica) ═══════════════════════════════════ -->
     ${viajeActivoBanner}
+
+    <!-- ══ ALERTAS AUTOMÁTICAS DEL SISTEMA ═══════════════════════════════════ -->
+    ${renderAlertasPanel(_alertasCache)}
 
     <!-- ══ TIER 1: KPIs FINANCIEROS ══════════════════════════════════════════ -->
     <div class="dash360-kpi-grid">

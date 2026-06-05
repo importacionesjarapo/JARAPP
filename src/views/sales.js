@@ -150,7 +150,7 @@ const renderViewTabla = (ventas) => {
                     const col     = getLogisticaColor(fase);
                     const sf = `${v.id.toString().slice(-4)} ${fecha} ${prod?prod.marca:''} ${prod?prod.nombre_producto:''} ${c&&c.nombre?c.nombre:''} ${fase} ${v.tipo_venta}`;
                     return `
-                    <tr class="sale-item-filterable" data-text="${sf.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">
+                    <tr class="sale-item-filterable" data-venta-id="${v.id}" data-text="${sf.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">
                         <td>
                             <div class="cell-number">#${v.id.toString().slice(-4)}</div>
                             <span class="cell-subtitle">${fecha}</span>

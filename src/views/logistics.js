@@ -257,7 +257,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                           const searchStr = `${c.id_seguimiento_internacional || ''} ${nombreCli} ${td1} ${td3} ${td4}`.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
                           const safeSearchStr = searchStr.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                           return `
-                              <tr class="log-row" data-text="${safeSearchStr}">
+                              <tr class="log-row" data-log-id="${c.id}" data-text="${safeSearchStr}">
                                 <td style="padding:15px 20px;">${td1}</td>
                                 <td style="padding:15px 20px;">
                                     <strong style="color:var(--warning-orange);">${nombreCli}</strong><br>

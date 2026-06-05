@@ -20,6 +20,7 @@ import { renderViaje } from './views/viaje.js';
 import { renderCotizador } from './views/cotizador.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
+import { AlertasService } from './services/alertas.js';
 import { initJaraBot } from './components/jarabot.js';
 
 // Init theme instantly to prevent flashing
@@ -73,6 +74,36 @@ const NAV_GROUPS = [
 
 const logoUrl = () => localStorage.getItem('GLOBAL_LOGO_URL') || '/logo.png';
 
+// Contador de alertas danger para el badge del sidebar
+let _dangerAlertCount = 0;
+
+// Actualiza el badge sin forzar re-render del layout completo
+window._actualizarBadgeAlertas = () => {
+  const badge = document.getElementById('sidebar-alert-badge-dashboard');
+  if (badge) {
+    badge.textContent = _dangerAlertCount;
+    badge.style.display = _dangerAlertCount > 0 ? 'inline-flex' : 'none';
+  }
+};
+
+// Actualiza el badge "ACTIVO" del ítem Viaje EEUU en el sidebar
+window._actualizarBadgeViaje = (viajeActivo) => {
+  const viajeItem = document.querySelector('[data-view="viaje"]');
+  if (!viajeItem) return;
+  viajeItem.querySelector('.viaje-badge')?.remove();
+  if (viajeActivo) {
+    viajeItem.style.position = 'relative';
+    viajeItem.insertAdjacentHTML('beforeend', `
+      <span class="viaje-badge" style="
+        position:absolute;top:50%;right:8px;transform:translateY(-50%);
+        background:#06D6A0;color:white;
+        font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;
+        letter-spacing:0.04em;pointer-events:none;
+      ">ACTIVO</span>
+    `);
+  }
+};
+
 // ── renderLayout (con filtrado de nav por permisos) ──────────────
 export const renderLayout = (contentHTML) => {
   const currentTheme = localStorage.getItem('theme') || 'dark';
@@ -90,11 +121,19 @@ export const renderLayout = (contentHTML) => {
       if (profileLoaded && item.module && !auth.canAccess(item.module)) return '';
       const isReadOnly = profileLoaded && item.module && auth.canAccess(item.module) && !auth.canEdit(item.module);
       const isAdmin = item.view === 'admin';
+      const alertBadge = item.view === 'dashboard' && _dangerAlertCount > 0
+        ? `<span id="sidebar-alert-badge-dashboard" style="background:#ef4444;color:#fff;font-size:0.52rem;font-weight:800;min-width:15px;height:15px;padding:0 3px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;line-height:1;margin-left:auto;">${_dangerAlertCount}</span>`
+        : (item.view === 'dashboard' ? `<span id="sidebar-alert-badge-dashboard" style="display:none;background:#ef4444;color:#fff;font-size:0.52rem;font-weight:800;min-width:15px;height:15px;padding:0 3px;border-radius:8px;display:none;align-items:center;justify-content:center;line-height:1;margin-left:auto;">${_dangerAlertCount}</span>` : '');
+      const _hayViajeActivo = (() => { try { return !!JSON.parse(sessionStorage.getItem('JARAPP_VIAJE_ACTIVO') || 'null'); } catch { return false; } })();
+      const viajeBadge = item.view === 'viaje' && _hayViajeActivo
+        ? `<span class="viaje-badge" style="background:#06D6A0;color:white;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;letter-spacing:0.04em;margin-left:auto;">ACTIVO</span>`
+        : '';
       return `
         <div class="nav-item ${state.currentView === item.view ? 'active' : ''} ${isAdmin ? 'nav-item-admin' : ''}" data-view="${item.view}">
           <i data-lucide="${item.icon}"></i>
           <span>${item.label}</span>
           ${isReadOnly ? '<span class="nav-readonly-badge">Ver</span>' : ''}
+          ${alertBadge}${viajeBadge}
         </div>
       `;
     }).join('');
@@ -218,7 +257,7 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles }
     });
 
     // Restaurar logo desde sessionStorage (persiste entre navegaciones)
@@ -382,7 +421,7 @@ export const navigateTo = (view) => {
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles }
     });
   }, 200);
 };
@@ -570,6 +609,28 @@ async function startApp() {
       .find(m => auth.canAccess(m));
     navigateTo(firstModule || 'settings');
   }
+
+  // Cargar alertas en background y mostrar badge en sidebar
+  AlertasService.getAlertas().then(alertas => {
+    _dangerAlertCount = alertas.filter(a => a.nivel === 'danger').length;
+    window._actualizarBadgeAlertas?.();
+  }).catch(() => {});
+
+  // Refrescar alertas automáticamente cada 30 minutos
+  setInterval(() => {
+    AlertasService.invalidar();
+    AlertasService.getAlertas().then(alertas => {
+      _dangerAlertCount = alertas.filter(a => a.nivel === 'danger').length;
+      window._actualizarBadgeAlertas?.();
+    }).catch(() => {});
+  }, 30 * 60 * 1000);
+
+  // Cargar viaje activo en background y mostrar badge "ACTIVO" en sidebar
+  import('./services/viajes.js').then(({ ViajeService }) => {
+    ViajeService.getActivo().then(v => {
+      window._actualizarBadgeViaje?.(v);
+    }).catch(() => {});
+  }).catch(() => {});
 
   // Iniciar JaraBot para admin y gerente (solo una vez por sesión)
   initJaraBot(auth);
