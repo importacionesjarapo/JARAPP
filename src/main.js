@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -17,6 +17,7 @@ import { renderCalculadora } from './views/calculadora.js';
 import { renderLogin } from './views/login.js';
 import { renderAdmin } from './views/admin.js';
 import { renderViaje } from './views/viaje.js';
+import { renderCotizador } from './views/cotizador.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
 import { initJaraBot } from './components/jarabot.js';
@@ -46,6 +47,7 @@ const NAV_GROUPS = [
       { view: 'dashboard',   icon: 'layout-dashboard', label: 'Dashboard',    module: 'dashboard'   },
       { view: 'inventory',   icon: 'package',           label: 'Inventario',   module: 'inventory'   },
       { view: 'sales',       icon: 'shopping-cart',     label: 'Ventas',       module: 'sales'       },
+      { view: 'cotizador',   icon: 'file-text',         label: 'Cotizador',    module: 'cotizador_ver' },
       { view: 'purchases',   icon: 'globe',             label: 'Compras USA',  module: 'purchases'   },
       { view: 'logistics',   icon: 'truck',             label: 'Seguimientos', module: 'logistics'   },
       { view: 'viaje',       icon: 'plane',             label: 'Viaje EEUU',   module: null, roleOnly: ['admin','gerente'] },
@@ -216,7 +218,7 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText }
     });
 
     // Restaurar logo desde sessionStorage (persiste entre navegaciones)
@@ -315,6 +317,7 @@ const TITULOS = {
   clients: 'Clientes', purchases: 'Compras', logistics: 'Logística',
   finance: 'Finanzas', params: 'Parámetros', calculadora: 'Calculadora',
   admin: 'Administración', settings: 'Configuración', viaje: 'Viaje EEUU',
+  cotizador: 'Cotizador',
 };
 
 export const navigateTo = (view) => {
@@ -340,7 +343,7 @@ export const navigateTo = (view) => {
   const moduleMap = {
     clients: 'clients', inventory: 'inventory', sales: 'sales',
     purchases: 'purchases', logistics: 'logistics', finance: 'finance',
-    params: 'params', calculadora: 'calculadora'
+    params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver'
   };
   
   if (moduleMap[view] && !auth.canAccess(moduleMap[view])) {
@@ -372,13 +375,14 @@ export const navigateTo = (view) => {
     case 'settings':     renderSettingsView(renderLayout, navigateTo); break;
     case 'admin':        renderAdmin(renderLayout, navigateTo); break;
     case 'viaje':        renderViaje(renderLayout, navigateTo); break;
+    case 'cotizador':    renderCotizador(renderLayout, navigateTo); break;
     default: renderPlaceholder(view); break;
   }
   
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText }
     });
   }, 200);
 };

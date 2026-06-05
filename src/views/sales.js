@@ -624,6 +624,7 @@ export const renderSales = async (renderLayout, navigateTo) => {
             </div>
             <button class="btn-excel" onclick="window.exportSalesExcel()">📥 Excel</button>
             <input type="text" id="find-sale" placeholder="Buscar cliente, producto..." style="background:var(--glass-hover);padding:10px 15px;border-radius:12px;color:var(--text-main);border:1px solid var(--glass-border);width:230px;outline:none;">
+            <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="window._navigateTo('cotizador')">📋 Nueva cotización</button>
             ${auth.canEdit('sales') ? `<button class="btn-primary" onclick="window.modalVenta()">+ Nueva Venta</button>` : ''}
         </div>
     </div>

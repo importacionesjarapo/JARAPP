@@ -592,20 +592,20 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
 }
 
 function buildPermsGrid(perms) {
-  const modules = ['dashboard','clients','inventory','sales','purchases','logistics','finance','calculadora','params','admin','feat_money','feat_usa','feat_calc_desglose'];
+  const modules = ['dashboard','clients','inventory','sales','purchases','logistics','finance','calculadora','params','admin','feat_money','feat_usa','feat_calc_desglose','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno'];
 
-  
   return modules.map(mod => {
     const perm = perms[mod];
-    const isBoolean = mod === 'admin' || mod === 'dashboard' || mod.startsWith('feat_');
-    
+    const isBoolean = mod === 'admin' || mod === 'dashboard' || mod.startsWith('feat_') || mod.startsWith('cotizador_');
+
     return `
       <div class="admin-perm-row">
         <div class="admin-perm-label">
           <span class="admin-perm-dot ${perm ? 'active' : ''}"></span>
-          <span>${MODULE_LABELS[mod]}</span>
+          <span>${MODULE_LABELS[mod] || mod}</span>
           ${mod === 'admin' ? '<span class="admin-badge-admin">Solo Admin</span>' : ''}
           ${mod.startsWith('feat_') ? '<span style="font-size:0.65rem; background:var(--glass-border); padding:2px 6px; border-radius:4px; margin-left:6px;">UI Feature</span>' : ''}
+          ${mod.startsWith('cotizador_') ? '<span style="font-size:0.65rem; background:rgba(230,57,70,0.12); color:var(--primary); padding:2px 6px; border-radius:4px; margin-left:6px;">Cotizador</span>' : ''}
         </div>
         <div class="admin-perm-controls">
           ${isBoolean ? `
