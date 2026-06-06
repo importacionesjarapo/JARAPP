@@ -31,7 +31,7 @@ try {
     })
     .composite([{
       input: await sharp(logoBuffer)
-        .resize(156, 156, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+        .resize(184, 184, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
         .toBuffer(),
       gravity: 'center'
     }])
@@ -46,7 +46,7 @@ try {
     })
     .composite([{
       input: await sharp(logoBuffer)
-        .resize(420, 420, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+        .resize(490, 490, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
         .toBuffer(),
       gravity: 'center'
     }])
