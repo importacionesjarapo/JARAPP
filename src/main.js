@@ -18,6 +18,7 @@ import { renderLogin } from './views/login.js';
 import { renderAdmin } from './views/admin.js';
 import { renderViaje } from './views/viaje.js';
 import { renderCotizador } from './views/cotizador.js';
+import { renderDocumentacion } from './views/documentacion.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
 import { AlertasService } from './services/alertas.js';
@@ -65,9 +66,10 @@ const NAV_GROUPS = [
   {
     label: 'Sistema',
     items: [
-      { view: 'params',      icon: 'settings-2',        label: 'Parámetros',   module: 'params'      },
-      { view: 'admin',       icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
-      { view: 'settings',    icon: 'settings',          label: 'Configuración',module: null, adminOnly: true },
+      { view: 'params',        icon: 'settings-2',        label: 'Parámetros',   module: 'params'        },
+      { view: 'documentacion', icon: 'book-open',         label: 'Documentación',module: 'documentacion' },
+      { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
+      { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, adminOnly: true },
     ]
   }
 ];
@@ -355,7 +357,7 @@ const TITULOS = {
   dashboard: 'Dashboard', inventory: 'Inventario', sales: 'Ventas',
   clients: 'Clientes', purchases: 'Compras', logistics: 'Logística',
   finance: 'Finanzas', params: 'Parámetros', calculadora: 'Calculadora',
-  admin: 'Administración', settings: 'Configuración', viaje: 'Viaje EEUU',
+  admin: 'Administración', settings: 'Configuración', viaje: 'Viaje EEUU', documentacion: 'Documentación',
   cotizador: 'Cotizador',
 };
 
@@ -415,6 +417,7 @@ export const navigateTo = (view) => {
     case 'admin':        renderAdmin(renderLayout, navigateTo); break;
     case 'viaje':        renderViaje(renderLayout, navigateTo); break;
     case 'cotizador':    renderCotizador(renderLayout, navigateTo); break;
+    case 'documentacion': renderDocumentacion(mainContent, auth); break;
     default: renderPlaceholder(view); break;
   }
   

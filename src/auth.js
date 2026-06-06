@@ -8,37 +8,37 @@ import { createClient } from '@supabase/supabase-js';
 export const ROLE_TEMPLATES = {
   admin: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
-    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'edit',
+    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'edit', documentacion: 'edit',
     calculadora: 'edit', admin: true, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
   },
   gerente: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
-    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'view',
+    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'view', documentacion: 'edit',
     calculadora: 'edit', admin: false, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
   },
   ventas: {
     dashboard: true, clients: 'edit', inventory: 'view', sales: 'edit',
-    purchases: false, logistics: 'view', finance: false, params: false,
+    purchases: false, logistics: 'view', finance: false, params: false, documentacion: 'view',
     calculadora: 'edit', admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: true, cotizador_desglose: false, cotizador_pdf_cliente: true, cotizador_pdf_interno: false,
   },
   logistica: {
     dashboard: true, clients: 'view', inventory: 'edit', sales: 'view',
-    purchases: 'edit', logistics: 'edit', finance: false, params: false,
+    purchases: 'edit', logistics: 'edit', finance: false, params: false, documentacion: 'view',
     calculadora: 'view', admin: false, feat_money: false, feat_usa: true, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
   },
   finanzas: {
     dashboard: true, clients: 'view', inventory: 'view', sales: 'view',
-    purchases: 'view', logistics: 'view', finance: 'edit', params: false,
+    purchases: 'view', logistics: 'view', finance: 'edit', params: false, documentacion: 'view',
     calculadora: 'view', admin: false, feat_money: true, feat_usa: false, feat_calc_desglose: true,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
   },
   viewer: {
     dashboard: true, clients: false, inventory: false, sales: false,
-    purchases: false, logistics: false, finance: false, params: false,
+    purchases: false, logistics: false, finance: false, params: false, documentacion: false,
     calculadora: false, admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
   }
@@ -46,7 +46,7 @@ export const ROLE_TEMPLATES = {
 
 export const MODULE_LABELS = {
   dashboard: 'Dashboard', clients: 'Clientes', inventory: 'Inventario',
-  sales: 'Ventas', purchases: 'Compras USA',
+  sales: 'Ventas', purchases: 'Compras USA', documentacion: 'Documentación',
   cotizador_ver: 'Cotizador — Ver cotizaciones',
   cotizador_desglose: 'Cotizador — Ver desglose interno',
   cotizador_pdf_cliente: 'Cotizador — PDF Cliente',
