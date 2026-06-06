@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -40,6 +40,8 @@ const state = {
   // Siempre conectado — credenciales embebidas en db.js como fallback
   get isLoggedIn() { return true; }
 };
+
+let _uiListenersInit = false;
 
 // ── Nav agrupado en 3 secciones ──
 const NAV_GROUPS = [
@@ -108,6 +110,26 @@ window._actualizarBadgeViaje = (viajeActivo) => {
 
 // ── renderLayout (con filtrado de nav por permisos) ──────────────
 export const renderLayout = (contentHTML) => {
+  // Fast path: sidebar ya renderizado — solo actualizar contenido y estado activo
+  const existingView = document.getElementById('module-view');
+  if (existingView) {
+    existingView.innerHTML = contentHTML;
+    const view = state.currentView;
+    document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === view);
+    });
+    document.querySelectorAll('.bottom-nav-item[data-view]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === view);
+    });
+    const alertBadge = document.getElementById('sidebar-alert-badge-dashboard');
+    if (alertBadge) {
+      alertBadge.style.display = _dangerAlertCount > 0 ? 'inline-flex' : 'none';
+      if (_dangerAlertCount > 0) alertBadge.textContent = _dangerAlertCount;
+    }
+    return;
+  }
+
+  // Full render (primera vez o tras logout)
   const currentTheme = localStorage.getItem('theme') || 'dark';
   const profile = auth.getProfile();
   const roleColor = ROLE_COLORS[profile?.role] || '#64748B';
@@ -255,11 +277,18 @@ export const renderLayout = (contentHTML) => {
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.onclick = () => navigateTo(btn.getAttribute('data-view'));
   });
-  
-  // Renderizar iconos svg
+
+  // Aplicar estado colapsado del sidebar síncronamente (antes del primer paint)
+  if (localStorage.getItem('jarapp-sidebar-collapsed') === 'true') {
+    document.body.classList.add('sidebar-collapsed');
+  } else {
+    document.body.classList.remove('sidebar-collapsed');
+  }
+
+  // Renderizar iconos svg (delay 0 = próximo microtask, sin flash visible)
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen }
     });
 
     // Restaurar logo desde sessionStorage (persiste entre navegaciones)
@@ -284,24 +313,37 @@ export const renderLayout = (contentHTML) => {
       }
     }
     
-    // Theme Toggle — usando event delegation para botones dinámicos
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('#theme-toggle-btn')) {
-        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-        const newTheme = isLight ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-        const currentView = state.currentView || localStorage.getItem('JARAPP_VIEW') || 'dashboard';
-        navigateTo(currentView);
-      }
-    });
+    // Registrar UI listeners una sola vez — evita duplicados por re-renders de renderLayout
+    if (!_uiListenersInit) {
+      _uiListenersInit = true;
 
-    // Sidebar Toggle (Desktop) — usando event delegation
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('#sidebar-toggle-btn')) {
-        document.body.classList.toggle('sidebar-collapsed');
-      }
-    });
+      // Modo oscuro/claro — actualiza atributo + icono sin re-renderizar la vista
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#theme-toggle-btn')) return;
+        const html = document.documentElement;
+        const newTheme = (html.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        const btn = document.getElementById('theme-toggle-btn');
+        if (btn) {
+          btn.innerHTML = `<i data-lucide="${newTheme === 'light' ? 'moon' : 'sun'}"></i><span>${newTheme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}</span>`;
+          if (window.lucide) lucide.createIcons();
+          else createIcons({ icons: { Moon, Sun } });
+        }
+      });
+
+      // Retraer/fijar sidebar — persiste en localStorage
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('#sidebar-toggle-btn')) return;
+        const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
+        localStorage.setItem('jarapp-sidebar-collapsed', isCollapsed);
+        const btn = document.getElementById('sidebar-toggle-btn');
+        if (btn) {
+          btn.innerHTML = `<i data-lucide="${isCollapsed ? 'panel-left-open' : 'menu'}"></i><span>${isCollapsed ? 'Expandir' : 'Retraer / Fijar'}</span>`;
+          createIcons({ icons: { Menu, PanelLeftOpen } });
+        }
+      });
+    }
 
     // Mobile Menu Toggle
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
@@ -421,7 +463,7 @@ export const navigateTo = (view) => {
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen }
     });
   }, 200);
 };
@@ -578,7 +620,7 @@ async function startApp() {
     if (url) ConfigService.applyLogo(url);
   }).catch(() => {});
 
-  // Cargar TRM en background — con delay para esperar DOM listo
+  // Cargar TRM en background — delay para esperar DOM listo
   setTimeout(() => {
     TRMService.getTRMHoy().then(({ valor, fuente }) => {
       window.JARAPP_TRM = valor;
@@ -607,13 +649,20 @@ async function startApp() {
       if (!document.getElementById('sidebar-trm-label')) {
         setTimeout(updateTrmBadge, 500);
       }
-    }).catch(() => {
-      window.JARAPP_TRM = 4200;
+    }).catch((err) => {
+      console.error('[TRM] Error al cargar:', err);
+      const cachedVal = sessionStorage.getItem('JARAPP_TRM');
+      const valor = cachedVal ? parseFloat(cachedVal) : 3700;
+      window.JARAPP_TRM = valor;
       window.JARAPP_TRM_FUENTE = 'fallback';
-      sessionStorage.setItem('JARAPP_TRM', '4200');
+      sessionStorage.setItem('JARAPP_TRM', String(valor));
       sessionStorage.setItem('JARAPP_TRM_FUENTE', 'fallback');
+      const labelEl  = document.getElementById('sidebar-trm-label');
+      const sourceEl = document.getElementById('sidebar-trm-source');
+      if (labelEl)  labelEl.textContent = `TRM: $${Math.round(valor).toLocaleString('es-CO')}`;
+      if (sourceEl) { sourceEl.textContent = 'Manual'; sourceEl.className = 'trm-badge-source trm-manual'; }
     });
-  }, 800);
+  }, 1500);
 
   // Ir al dashboard si tiene acceso, si no al primer módulo permitido
   if (auth.canAccess('dashboard')) {

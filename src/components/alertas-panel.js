@@ -8,8 +8,8 @@ function _detalleItem(d, c) {
   const waLink = d.wa
     ? `<a href="https://wa.me/57${d.wa.replace(/\D/g, '')}" target="_blank"
          onclick="event.stopPropagation()"
-         style="font-size:10px;padding:3px 8px;border-radius:99px;background:#25D366;color:#fff;text-decoration:none;font-weight:600;white-space:nowrap;flex-shrink:0;line-height:1.4;">
-         📱 WA
+         style="display:inline-flex !important;align-items:center !important;width:auto !important;height:auto !important;min-width:unset !important;min-height:unset !important;font-size:10px !important;padding:3px 10px !important;border-radius:99px !important;background:#25D366 !important;color:#fff !important;text-decoration:none !important;font-weight:600 !important;white-space:nowrap !important;flex-shrink:0 !important;line-height:1.4 !important;">
+         WA
        </a>`
     : '';
 
