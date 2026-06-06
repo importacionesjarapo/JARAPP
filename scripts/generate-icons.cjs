@@ -25,33 +25,17 @@ try {
 
   async function generateWithSharp() {
     // Generar 192x192 con fondo blanco y logo centrado con padding
-    await sharp({
-      create: { width: 192, height: 192, channels: 4,
-                background: { r: 255, g: 255, b: 255, alpha: 1 } }
-    })
-    .composite([{
-      input: await sharp(logoBuffer)
-        .resize(184, 184, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
-        .toBuffer(),
-      gravity: 'center'
-    }])
-    .png()
-    .toFile(OUT_192)
+    await sharp(logoBuffer)
+      .resize(192, 192, { fit: 'cover', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+      .png()
+      .toFile(OUT_192)
     console.log('icon-192.png generado con logo real')
 
     // Generar 512x512
-    await sharp({
-      create: { width: 512, height: 512, channels: 4,
-                background: { r: 255, g: 255, b: 255, alpha: 1 } }
-    })
-    .composite([{
-      input: await sharp(logoBuffer)
-        .resize(490, 490, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 1 } })
-        .toBuffer(),
-      gravity: 'center'
-    }])
-    .png()
-    .toFile(OUT_512)
+    await sharp(logoBuffer)
+      .resize(512, 512, { fit: 'cover', background: { r: 255, g: 255, b: 255, alpha: 1 } })
+      .png()
+      .toFile(OUT_512)
     console.log('icon-512.png generado con logo real')
   }
 
