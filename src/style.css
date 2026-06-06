@@ -4317,3 +4317,34 @@ body.sidebar-collapsed .nav-section-label { display: none; }
   .bottom-nav { display: flex; }
   .main-content { padding-bottom: 72px !important; }
 }
+
+/* ── PWA iOS — optimizaciones ─────────────────────────────────────────────── */
+
+/* Safe area para iPhone con notch / Dynamic Island */
+:root {
+  --safe-top:    env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+  --safe-left:   env(safe-area-inset-left);
+  --safe-right:  env(safe-area-inset-right);
+}
+
+/* Prevenir text-size-adjust en iOS y otros browsers */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+
+/* Evitar zoom en inputs en iOS (mínimo 16px) */
+input, select, textarea { font-size: max(16px, 1em) !important; }
+
+/* Touch targets mínimo 44px (Apple HIG) */
+button, a, .nav-item, [role="button"] { min-height: 44px; }
+
+/* Deshabilitar selección de texto en elementos de UI */
+button, .nav-item, .dash360-kpi-card, .bottom-nav-item {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Bottom nav con safe area en móvil */
+@media (max-width: 768px) {
+  .bottom-nav { padding-bottom: var(--safe-bottom, 0); height: calc(60px + var(--safe-bottom, 0)); }
+  .main-content { padding-bottom: calc(72px + var(--safe-bottom, 0)) !important; }
+}

@@ -646,3 +646,63 @@ if ('serviceWorker' in navigator) {
       .catch(err => console.warn('[SW] Registro fallido:', err));
   });
 }
+
+// ── Indicador de conectividad offline ────────────────────────────────────────
+function initConectividad() {
+  const mostrarEstado = (online) => {
+    document.getElementById('offline-banner')?.remove();
+    if (!online) {
+      const banner = document.createElement('div');
+      banner.id = 'offline-banner';
+      banner.innerHTML = `
+        <div style="
+          position:fixed;bottom:0;left:0;right:0;z-index:99999;
+          background:#1D3557;color:white;
+          text-align:center;padding:8px;
+          padding-bottom:calc(8px + env(safe-area-inset-bottom));
+          font-size:13px;display:flex;align-items:center;
+          justify-content:center;gap:8px;
+        ">
+          <span>📵</span>
+          <span>Sin conexión — mostrando datos en caché</span>
+        </div>`;
+      document.body.appendChild(banner);
+    }
+  };
+  window.addEventListener('online',  () => mostrarEstado(true));
+  window.addEventListener('offline', () => mostrarEstado(false));
+  mostrarEstado(navigator.onLine);
+}
+initConectividad();
+
+// ── Banner de instalación para iOS ───────────────────────────────────────────
+function mostrarBannerInstalacioniOS() {
+  const esIOS    = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const esPWA    = window.navigator.standalone === true;
+  const yaVisto  = sessionStorage.getItem('pwa-banner-visto');
+  if (!esIOS || esPWA || yaVisto) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'ios-install-banner';
+  banner.innerHTML = `
+    <div style="
+      position:fixed;bottom:0;left:0;right:0;z-index:99998;
+      background:white;border-top:1px solid #e0e0e0;
+      padding:12px 16px;
+      padding-bottom:calc(12px + env(safe-area-inset-bottom));
+      display:flex;align-items:center;gap:12px;
+      box-shadow:0 -4px 20px rgba(0,0,0,0.1);
+    ">
+      <img src="/icon-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0;">
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;color:#111;">Instalar JARAPP</div>
+        <div style="font-size:12px;color:#666;">
+          Toca <strong>⬆️ Compartir</strong> → <strong>"Añadir a inicio"</strong>
+        </div>
+      </div>
+      <button onclick="sessionStorage.setItem('pwa-banner-visto','1');document.getElementById('ios-install-banner').remove();"
+        style="background:none;border:none;font-size:20px;cursor:pointer;padding:4px;color:#888;">✕</button>
+    </div>`;
+  document.body.appendChild(banner);
+}
+mostrarBannerInstalacioniOS();

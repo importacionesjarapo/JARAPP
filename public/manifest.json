@@ -1,12 +1,21 @@
 {
-  "name": "JARAPP - Importaciones Jarapo",
+  "name": "JARAPP · Importaciones Jarapo",
   "short_name": "JARAPP",
-  "description": "Sistema administrativo interno",
+  "description": "Sistema administrativo interno de Importaciones Jarapo",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "theme_color": "#E63946",
   "background_color": "#F8F8F6",
+  "lang": "es",
+  "scope": "/",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
-  ]
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "screenshots": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "form_factor": "narrow" }
+  ],
+  "categories": ["business", "productivity"]
 }

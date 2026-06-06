@@ -3,9 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#E63946" />
+
+    <!-- Viewport optimizado para iOS (viewport-fit=cover para notch/Dynamic Island) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
+
+    <!-- PWA iOS específico -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="JARAPP" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Splash screen iOS -->
+    <meta name="apple-touch-startup-image" content="/icon-512.png" />
+
+    <!-- Touch icon para iOS (180x180 cubre todos los dispositivos modernos) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png" />
+
+    <!-- Theme color por esquema de color -->
+    <meta name="theme-color" content="#E63946" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1D3557" media="(prefers-color-scheme: dark)" />
+
     <title>JARAPP</title>
   </head>
   <body>
