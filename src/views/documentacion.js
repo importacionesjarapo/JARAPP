@@ -1,7 +1,11 @@
-export async function renderDocumentacion(container, auth) {
-  const puedeVerTecnico = auth.currentRole === 'admin' || auth.currentRole === 'gerente'
+export const renderDocumentacion = async (renderLayout, navigateTo) => {
+  const { auth } = await import('../auth.js');
+  const userAuth = auth.getProfile();
+  console.log('[Documentacion] render iniciado, rol:', userAuth?.role);
 
-  container.innerHTML = `
+  const puedeVerTecnico = userAuth?.role === 'admin' || userAuth?.role === 'gerente'
+
+  renderLayout(`
     <div style="max-width:860px;margin:0 auto;padding:0 8px;">
 
       <div style="margin-bottom:24px;">
@@ -24,7 +28,7 @@ export async function renderDocumentacion(container, auth) {
             <span style="font-size:11px;background:var(--primary-light);color:var(--primary);padding:2px 8px;border-radius:99px;font-weight:500;">Para todo el equipo</span>
             <span style="font-size:11px;background:var(--surface-1);color:var(--text-faint);padding:2px 8px;border-radius:99px;">11 secciones · 554 KB</span>
           </div>
-          <a href="https://vygfsqdveudpzytnnhiq.supabase.co/storage/v1/object/public/documentos/JARAPP_Manual_Funcional.pdf"
+          <a href="/docs/JARAPP_Manual_Funcional.pdf"
              target="_blank"
              download="JARAPP_Manual_Funcional.pdf"
              style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--primary);color:white;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;text-decoration:none;transition:opacity 0.15s;cursor:pointer;"
@@ -46,7 +50,7 @@ export async function renderDocumentacion(container, auth) {
             <span style="font-size:11px;background:var(--secondary);color:white;padding:2px 8px;border-radius:99px;font-weight:500;">Solo Admin y Gerente</span>
             <span style="font-size:11px;background:var(--surface-1);color:var(--text-faint);padding:2px 8px;border-radius:99px;">10 secciones · 555 KB</span>
           </div>
-          <a href="https://vygfsqdveudpzytnnhiq.supabase.co/storage/v1/object/public/documentos/JARAPP_Manual_Tecnico.pdf"
+          <a href="/docs/JARAPP_Manual_Tecnico.pdf"
              target="_blank"
              download="JARAPP_Manual_Tecnico.pdf"
              style="display:flex;align-items:center;justify-content:center;gap:8px;background:var(--secondary);color:white;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;text-decoration:none;transition:opacity 0.15s;cursor:pointer;"
@@ -96,5 +100,5 @@ export async function renderDocumentacion(container, auth) {
         JARAPP v3.0 · Importaciones Jarapo · Documentación actualizada junio 2026
       </div>
     </div>
-  `
-}
+  `);
+};

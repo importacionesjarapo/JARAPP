@@ -284,27 +284,24 @@ export const renderLayout = (contentHTML) => {
       }
     }
     
-    // Theme Toggle
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    if (themeBtn) {
-       themeBtn.onclick = () => {
-          const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-          const newTheme = isLight ? 'dark' : 'light';
-          document.documentElement.setAttribute('data-theme', newTheme);
-          localStorage.setItem('theme', newTheme);
-          // Re-renderizar el módulo actual para que los colores se actualicen
-          const currentView = state.currentView || localStorage.getItem('JARAPP_VIEW') || 'dashboard';
-          navigateTo(currentView);
-       };
-    }
-    
-    // Sidebar Toggle (Desktop)
-    const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
-    if (sidebarToggleBtn) {
-       sidebarToggleBtn.onclick = () => {
-          document.body.classList.toggle('sidebar-collapsed');
-       };
-    }
+    // Theme Toggle — usando event delegation para botones dinámicos
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#theme-toggle-btn')) {
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        const newTheme = isLight ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        const currentView = state.currentView || localStorage.getItem('JARAPP_VIEW') || 'dashboard';
+        navigateTo(currentView);
+      }
+    });
+
+    // Sidebar Toggle (Desktop) — usando event delegation
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('#sidebar-toggle-btn')) {
+        document.body.classList.toggle('sidebar-collapsed');
+      }
+    });
 
     // Mobile Menu Toggle
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
@@ -417,7 +414,7 @@ export const navigateTo = (view) => {
     case 'admin':        renderAdmin(renderLayout, navigateTo); break;
     case 'viaje':        renderViaje(renderLayout, navigateTo); break;
     case 'cotizador':    renderCotizador(renderLayout, navigateTo); break;
-    case 'documentacion': renderDocumentacion(mainContent, auth); break;
+    case 'documentacion': renderDocumentacion(renderLayout, navigateTo); break;
     default: renderPlaceholder(view); break;
   }
   
@@ -581,28 +578,42 @@ async function startApp() {
     if (url) ConfigService.applyLogo(url);
   }).catch(() => {});
 
-  // Cargar TRM en background — no bloquea la navegación
-  TRMService.getTRMHoy().then(({ valor, fuente }) => {
-    window.JARAPP_TRM = valor;
-    window.JARAPP_TRM_FUENTE = fuente;
+  // Cargar TRM en background — con delay para esperar DOM listo
+  setTimeout(() => {
+    TRMService.getTRMHoy().then(({ valor, fuente }) => {
+      window.JARAPP_TRM = valor;
+      window.JARAPP_TRM_FUENTE = fuente;
+      sessionStorage.setItem('JARAPP_TRM', valor);
+      sessionStorage.setItem('JARAPP_TRM_FUENTE', fuente);
+      sessionStorage.setItem('JARAPP_TRM_FECHA', new Date().toISOString().split('T')[0]);
 
-    // Actualizar badge en sidebar
-    const labelEl = document.getElementById('sidebar-trm-label');
-    const sourceEl = document.getElementById('sidebar-trm-source');
-    if (labelEl) labelEl.textContent = `TRM: $${Math.round(valor).toLocaleString('es-CO')}`;
-    if (sourceEl) {
-      const esAuto = fuente !== 'manual' && fuente !== 'fallback';
-      sourceEl.textContent = esAuto ? 'Auto' : 'Manual';
-      sourceEl.className = `trm-badge-source ${esAuto ? 'trm-auto' : 'trm-manual'}`;
-      if (!esAuto) {
-        const badge = document.getElementById('sidebar-trm-badge');
-        if (badge) badge.title = 'TRM ingresada manualmente en Configuración';
+      // Actualizar badge en sidebar cuando esté disponible
+      const updateTrmBadge = () => {
+        const labelEl = document.getElementById('sidebar-trm-label');
+        const sourceEl = document.getElementById('sidebar-trm-source');
+        if (labelEl) labelEl.textContent = `TRM: $${Math.round(valor).toLocaleString('es-CO')}`;
+        if (sourceEl) {
+          const esAuto = fuente !== 'manual' && fuente !== 'fallback';
+          sourceEl.textContent = esAuto ? 'Auto' : 'Manual';
+          sourceEl.className = `trm-badge-source ${esAuto ? 'trm-auto' : 'trm-manual'}`;
+          if (!esAuto) {
+            const badge = document.getElementById('sidebar-trm-badge');
+            if (badge) badge.title = 'TRM ingresada manualmente en Configuración';
+          }
+        }
+      };
+      updateTrmBadge();
+      // Reintentar si los elementos aún no están listos
+      if (!document.getElementById('sidebar-trm-label')) {
+        setTimeout(updateTrmBadge, 500);
       }
-    }
-  }).catch(() => {
-    window.JARAPP_TRM = 4200;
-    window.JARAPP_TRM_FUENTE = 'fallback';
-  });
+    }).catch(() => {
+      window.JARAPP_TRM = 4200;
+      window.JARAPP_TRM_FUENTE = 'fallback';
+      sessionStorage.setItem('JARAPP_TRM', '4200');
+      sessionStorage.setItem('JARAPP_TRM_FUENTE', 'fallback');
+    });
+  }, 800);
 
   // Ir al dashboard si tiene acceso, si no al primer módulo permitido
   if (auth.canAccess('dashboard')) {
