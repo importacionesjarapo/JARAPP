@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Pedido — Importaciones Jarapo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --rojo: #D91010; --rojo-s: #b50e0e; --ok: #059669; --warn: #d97706;
+      --bg: #f8f7f5; --card: #ffffff; --txt: #1a1a1a; --txt2: #5a5a5a;
+      --borde: #e8e6e0; --radio: 12px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--txt); min-height: 100vh; font-size: 15px; line-height: 1.6; }
+    .header { background: var(--rojo); color: white; padding: 16px 20px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10; }
+    .header-logo { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+    .header-logo span { opacity: 0.75; font-weight: 400; font-size: 14px; }
+    .container { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+    .card { background: var(--card); border: 1px solid var(--borde); border-radius: var(--radio); padding: 20px; margin-bottom: 16px; }
+    .card-titulo { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--txt2); margin-bottom: 16px; }
+    .auth-logo { text-align: center; margin-bottom: 32px; padding-top: 32px; }
+    .auth-logo .marca { font-size: 26px; font-weight: 800; color: var(--rojo); }
+    .auth-logo p { font-size: 14px; color: var(--txt2); margin-top: 4px; }
+    .input-group { margin-bottom: 14px; }
+    .input-group label { display: block; font-size: 13px; font-weight: 500; color: var(--txt2); margin-bottom: 6px; }
+    .prefix { position: relative; }
+    .prefix span { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--txt2); font-size: 15px; pointer-events: none; }
+    .prefix input { padding-left: 46px; }
+    input[type=tel] { width: 100%; border: 1.5px solid var(--borde); border-radius: 8px; padding: 12px 14px; font-size: 16px; outline: none; transition: border-color 0.15s; background: white; }
+    input[type=tel]:focus { border-color: var(--rojo); }
+    .btn { width: 100%; background: var(--rojo); color: white; border: none; border-radius: 8px; padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn:hover { background: var(--rojo-s); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-sec { background: transparent; color: var(--rojo); border: 1.5px solid var(--rojo); margin-top: 10px; }
+    .btn-sec:hover { background: #fdf0f0; }
+    .msg-error { background: #fff0f0; border: 1px solid #fcc; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #b00; margin-top: 12px; display: none; }
+    .otp-inputs { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
+    .otp-digit { width: 46px !important; height: 54px; text-align: center; font-size: 24px; font-weight: 700; border: 1.5px solid var(--borde); border-radius: 8px; padding: 0 !important; }
+    .otp-digit:focus { border-color: var(--rojo); }
+    .otp-timer { text-align: center; font-size: 13px; color: var(--txt2); margin-bottom: 12px; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px; border-radius: 20px; }
+    .badge-colombia    { background: #e0f2e9; color: #0f5e2f; }
+    .badge-encargo-usa { background: #e8eeff; color: #1a3fa3; }
+    .badge-encargo-web { background: #fef3e2; color: #92400e; }
+    .timeline { position: relative; padding-left: 32px; }
+    .timeline::before { content: ''; position: absolute; left: 12px; top: 0; bottom: 0; width: 2px; background: var(--borde); }
+    .tl-item { position: relative; padding-bottom: 20px; }
+    .tl-item:last-child { padding-bottom: 0; }
+    .tl-dot { position: absolute; left: -26px; top: 2px; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--borde); background: white; display: flex; align-items: center; justify-content: center; font-size: 11px; z-index: 1; }
+    .tl-item.done .tl-dot   { background: var(--ok); border-color: var(--ok); color: white; }
+    .tl-item.active .tl-dot { background: var(--rojo); border-color: var(--rojo); color: white; box-shadow: 0 0 0 4px rgba(217,16,16,.15); }
+    .tl-item.pending .tl-dot { background: var(--bg); }
+    .tl-nombre { font-weight: 600; font-size: 14px; }
+    .tl-desc   { font-size: 13px; color: var(--txt2); margin-top: 1px; }
+    .tl-item.pending .tl-nombre { font-weight: 400; color: var(--txt2); }
+    .fin-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--borde); font-size: 14px; }
+    .fin-row:last-child { border-bottom: none; font-weight: 700; }
+    .hist-item { padding: 12px 0; border-bottom: 1px solid var(--borde); }
+    .hist-item:last-child { border-bottom: none; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--borde); border-top-color: var(--rojo); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 32px auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+    .centro { text-align: center; }
+    .txt2 { color: var(--txt2); font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">Jarapo <span>Portal</span></div>
+  <div style="margin-left:auto;font-size:13px;opacity:.9" id="header-tel"></div>
+</div>
+
+<div class="container">
+
+  <div id="pantalla-loading"><div class="spinner"></div></div>
+
+  <div id="pantalla-auth" class="hidden">
+    <div class="auth-logo">
+      <div class="marca">Importaciones Jarapo</div>
+      <p>Ingresa tu número de WhatsApp para ver tu pedido</p>
+    </div>
+    <div class="card" id="card-telefono">
+      <div class="input-group">
+        <label>Número de WhatsApp</label>
+        <div class="prefix">
+          <span>+57</span>
+          <input type="tel" id="inp-telefono" placeholder="3001234567" maxlength="10" inputmode="numeric">
+        </div>
+      </div>
+      <button class="btn" id="btn-enviar-otp">Enviar código</button>
+      <div class="msg-error" id="err-tel"></div>
+    </div>
+    <div class="card hidden" id="card-otp">
+      <p class="centro txt2">Código enviado a</p>
+      <p class="centro" style="font-weight:600;margin-bottom:16px" id="otp-tel-display"></p>
+      <div class="otp-inputs">
+        <input type="tel" maxlength="1" inputmode="numeric" class="otp-digit">
+        <input type="tel" maxlength="1" inputmode="numeric" class="otp-digit">
+        <input type="tel" maxlength="1" inputmode="numeric" class="otp-digit">
+        <input type="tel" maxlength="1" inputmode="numeric" class="otp-digit">
+        <input type="tel" maxlength="1" inputmode="numeric" class="otp-digit">
+        <input type="tel" maxlength="1" inputmode="numeric" class="otp-digit">
+      </div>
+      <div class="otp-timer">Expira en <strong id="otp-countdown">10:00</strong></div>
+      <button class="btn" id="btn-verificar-otp">Verificar</button>
+      <button class="btn btn-sec" id="btn-reenviar">Reenviar código</button>
+      <div class="msg-error" id="err-otp"></div>
+    </div>
+  </div>
+
+  <div id="pantalla-portal" class="hidden">
+    <div style="margin-bottom:20px">
+      <h2 style="font-size:20px;font-weight:700" id="saludo-nombre">Hola 👋</h2>
+      <p class="txt2">Aquí puedes ver el estado de tu pedido</p>
+    </div>
+    <div id="portal-loading"><div class="spinner"></div></div>
+    <div id="portal-contenido" class="hidden">
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div class="card-titulo" style="margin-bottom:0">Estado del pedido</div>
+          <span class="badge" id="badge-track"></span>
+        </div>
+        <div class="timeline" id="timeline-container"></div>
+        <div style="margin-top:12px;font-size:13px;color:var(--txt2)" id="fecha-estimada-row"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-titulo">Resumen financiero</div>
+        <div id="fin-rows-container"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-titulo">Historial de pedidos</div>
+        <div id="historial-container"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API_BASE = '/.netlify/functions'
+const estado = { token: null, telefono: null, cliente: null }
+const $ = id => document.getElementById(id)
+const mostrar = id => $(id).classList.remove('hidden')
+const ocultar = id => $(id).classList.add('hidden')
+
+function mostrarPantalla(id) {
+  ['pantalla-loading','pantalla-auth','pantalla-portal'].forEach(p =>
+    $(p).classList.toggle('hidden', p !== id))
+}
+
+function formatCOP(n) {
+  const num = parseFloat(n) || 0
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(num)
+}
+function formatFecha(str) {
+  if (!str) return ''
+  return new Date(str).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+async function apiFn(fn, body) {
+  const res = await fetch(`${API_BASE}/${fn}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Error desconocido')
+  return data
+}
+
+const TRACKS = {
+  colombia: {
+    label: '🇨🇴 Colombia', cls: 'badge-colombia',
+    fases: [
+      { n: 'Pedido confirmado',       d: 'Tu pedido ha sido registrado y confirmado' },
+      { n: 'Producto reservado',       d: 'Tu producto está reservado en nuestra bodega' },
+      { n: 'En preparación / empaque', d: 'Estamos preparando y empacando tu pedido' },
+      { n: 'Listo para entrega',       d: 'Tu pedido está listo, coordinando la entrega' },
+      { n: 'Enviado',                  d: 'Tu pedido está en camino hacia ti' },
+      { n: 'Entregado',                d: '¡Tu pedido fue entregado con éxito!' }
+    ]
+  },
+  encargo_usa: {
+    label: '✈️ Encargo USA', cls: 'badge-encargo-usa',
+    fases: [
+      { n: 'Pedido confirmado',          d: 'Tu encargo ha sido registrado y confirmado' },
+      { n: 'Compra realizada en USA',    d: 'Tu producto fue comprado en tienda de Estados Unidos' },
+      { n: 'En camino a Colombia',       d: 'Tu producto está viajando desde USA hacia Colombia' },
+      { n: 'En aduana / trámites',       d: 'Tu producto está en proceso de aduana en Colombia' },
+      { n: 'Llegó a bodega en Medellín', d: 'Tu producto llegó a nuestra bodega en Medellín' },
+      { n: 'Pedido confirmado al cliente', d: 'Nos comunicamos contigo para coordinar la entrega' },
+      { n: 'En preparación / empaque',   d: 'Estamos preparando y empacando tu pedido' },
+      { n: 'Enviado',                    d: 'Tu pedido está en camino hacia ti' },
+      { n: 'Entregado',                  d: '¡Tu encargo llegó con éxito!' }
+    ]
+  },
+  encargo_web: {
+    label: '🛒 Encargo Web USA', cls: 'badge-encargo-web',
+    fases: [
+      { n: 'Pedido confirmado',          d: 'Tu encargo ha sido registrado y confirmado' },
+      { n: 'Compra realizada en USA',    d: 'Tu producto fue comprado en tienda online de USA' },
+      { n: 'En camino a bodega USA',     d: 'Tu producto se dirige a nuestra bodega en USA' },
+      { n: 'En camino a Colombia',       d: 'Tu producto está en tránsito desde USA a Colombia' },
+      { n: 'En aduana / trámites',       d: 'Tu producto está en proceso de aduana en Colombia' },
+      { n: 'Llegó a bodega en Medellín', d: 'Tu producto llegó a nuestra bodega en Medellín' },
+      { n: 'Pedido confirmado al cliente', d: 'Nos comunicamos contigo para coordinar la entrega' },
+      { n: 'En preparación / empaque',   d: 'Estamos preparando y empacando tu pedido' },
+      { n: 'Enviado',                    d: 'Tu pedido está en camino hacia ti' },
+      { n: 'Entregado',                  d: '¡Tu encargo llegó con éxito!' }
+    ]
+  }
+}
+
+// ── Auth ──────────────────────────────────────────────────────
+$('btn-enviar-otp').addEventListener('click', async () => {
+  const tel = $('inp-telefono').value.trim().replace(/\D/g, '')
+  if (tel.length !== 10) { mostrarError('err-tel', 'Ingresa un número válido de 10 dígitos'); return }
+  $('btn-enviar-otp').disabled = true
+  $('btn-enviar-otp').textContent = 'Enviando...'
+  $('err-tel').style.display = 'none'
+  try {
+    await apiFn('portal-otp', { accion: 'solicitar', telefono: tel })
+    estado.telefono = tel
+    $('otp-tel-display').textContent = `+57 ${tel}`
+    ocultar('card-telefono')
+    mostrar('card-otp')
+    document.querySelectorAll('.otp-digit')[0].focus()
+    iniciarCountdown()
+  } catch(e) {
+    mostrarError('err-tel', e.message)
+    $('btn-enviar-otp').disabled = false
+    $('btn-enviar-otp').textContent = 'Enviar código'
+  }
+})
+
+document.querySelectorAll('.otp-digit').forEach((inp, i, all) => {
+  inp.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(-1)
+    if (e.target.value && i < all.length - 1) all[i+1].focus()
+  })
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !e.target.value && i > 0) all[i-1].focus()
+  })
+})
+
+$('btn-verificar-otp').addEventListener('click', verificarOTP)
+$('btn-reenviar').addEventListener('click', async () => {
+  $('btn-reenviar').disabled = true
+  try {
+    await apiFn('portal-otp', { accion: 'solicitar', telefono: estado.telefono })
+    iniciarCountdown()
+  } catch(e) { mostrarError('err-otp', e.message) }
+  finally { setTimeout(() => { $('btn-reenviar').disabled = false }, 5000) }
+})
+
+async function verificarOTP() {
+  const otp = [...document.querySelectorAll('.otp-digit')].map(i => i.value).join('')
+  if (otp.length !== 6) { mostrarError('err-otp', 'Ingresa el código completo'); return }
+  $('btn-verificar-otp').disabled = true
+  $('btn-verificar-otp').textContent = 'Verificando...'
+  try {
+    const res = await apiFn('portal-otp', { accion: 'verificar', telefono: estado.telefono, otp })
+    estado.token = res.token
+    estado.cliente = { nombre: res.nombre }
+    localStorage.setItem('jp_token', res.token)
+    iniciarPortal()
+  } catch(e) {
+    mostrarError('err-otp', e.message)
+    $('btn-verificar-otp').disabled = false
+    $('btn-verificar-otp').textContent = 'Verificar'
+  }
+}
+
+let countdownInterval
+function iniciarCountdown() {
+  clearInterval(countdownInterval)
+  let seg = 600
+  countdownInterval = setInterval(() => {
+    seg--
+    const m = Math.floor(seg / 60), s = seg % 60
+    $('otp-countdown').textContent = `${m}:${s.toString().padStart(2,'0')}`
+    if (seg <= 0) { clearInterval(countdownInterval); $('otp-countdown').textContent = 'expirado' }
+  }, 1000)
+}
+
+// ── Portal ────────────────────────────────────────────────────
+async function iniciarPortal() {
+  mostrarPantalla('pantalla-portal')
+  if (estado.cliente?.nombre) {
+    $('saludo-nombre').textContent = `Hola, ${estado.cliente.nombre.split(' ')[0]} 👋`
+  }
+  if (estado.telefono) $('header-tel').textContent = `+57 ${estado.telefono}`
+  mostrar('portal-loading')
+  ocultar('portal-contenido')
+  try {
+    const SUPABASE_URL  = import.meta.env?.VITE_SUPABASE_URL  || window.__SUPABASE_URL__
+    const SUPABASE_ANON = import.meta.env?.VITE_SUPABASE_ANON_KEY || window.__SUPABASE_ANON__
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/portal_cliente_view?portal_token=eq.${estado.token}&select=*`,
+      { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
+    )
+    const datos = await res.json()
+    renderizarPortal(datos)
+  } catch(e) { console.error(e) }
+  finally { ocultar('portal-loading'); mostrar('portal-contenido') }
+}
+
+function renderizarPortal(filas) {
+  if (!filas || filas.length === 0) {
+    $('portal-contenido').innerHTML = '<div class="card"><p class="centro txt2">No encontramos pedidos para tu número.</p></div>'
+    return
+  }
+  const activo = filas[0]
+  const historial = filas.slice(1)
+  const trackData = TRACKS[activo.track] || TRACKS.colombia
+  $('badge-track').textContent = trackData.label
+  $('badge-track').className = 'badge ' + trackData.cls
+
+  const faseActual = activo.fase_portal_num || 1
+  $('timeline-container').innerHTML = trackData.fases.map((f, i) => {
+    const num = i + 1
+    const cls = num < faseActual ? 'done' : num === faseActual ? 'active' : 'pending'
+    const dot = num < faseActual ? '✓' : num === faseActual ? '●' : ''
+    return `<div class="tl-item ${cls}"><div class="tl-dot">${dot}</div><div class="tl-nombre">${f.n}</div><div class="tl-desc">${f.d}</div></div>`
+  }).join('')
+
+  if (activo.fecha_estimada) {
+    $('fecha-estimada-row').textContent = `📅 Fecha estimada: ${formatFecha(activo.fecha_estimada)}`
+  }
+
+  const saldo = parseFloat(activo.saldo_pendiente) || 0
+  $('fin-rows-container').innerHTML = `
+    <div class="fin-row"><span>Total del pedido</span><span>${formatCOP(activo.total)}</span></div>
+    <div class="fin-row"><span>Pagado</span><span style="color:var(--ok)">${formatCOP(activo.total_abonado)}</span></div>
+    <div class="fin-row"><span>Saldo pendiente</span><span style="color:${saldo <= 0 ? 'var(--ok)' : 'var(--warn)'}">${saldo <= 0 ? '¡Pagado ✓' : formatCOP(saldo)}</span></div>`
+
+  $('historial-container').innerHTML = historial.length === 0
+    ? '<p class="txt2">Este es tu primer pedido con nosotros.</p>'
+    : historial.map(v => `
+        <div class="hist-item">
+          <div style="font-weight:600;font-size:14px">${v.estado_venta || 'Pedido'} — ${formatCOP(v.total)}</div>
+          <div style="font-size:12px;color:var(--txt2)">${formatFecha(v.fecha_venta)} · Saldo: ${formatCOP(v.saldo_pendiente)}</div>
+        </div>`).join('')
+}
+
+function mostrarError(id, msg) { const el = $(id); el.textContent = msg; el.style.display = 'block' }
+
+// ── Inicio ────────────────────────────────────────────────────
+async function init() {
+  const params = new URLSearchParams(window.location.search)
+  const tokenURL = params.get('t')
+  const tokenGuardado = localStorage.getItem('jp_token')
+  const token = tokenURL || tokenGuardado
+  if (token) {
+    try {
+      const res = await apiFn('portal-otp', { accion: 'validar_token', token_portal: token })
+      if (res.ok) {
+        estado.token = token
+        estado.cliente = res.cliente
+        estado.telefono = res.cliente?.telefono
+        if (tokenURL) localStorage.setItem('jp_token', tokenURL)
+        iniciarPortal()
+        return
+      }
+    } catch { localStorage.removeItem('jp_token') }
+  }
+  mostrarPantalla('pantalla-auth')
+}
+
+init()
+</script>
+</body>
+</html>
