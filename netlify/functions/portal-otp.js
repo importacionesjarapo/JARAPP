@@ -42,13 +42,13 @@ export const handler = async (event) => {
 
     const { count } = await supabase
       .from('portal_otps').select('*', { count: 'exact', head: true })
-      .eq('telefono', telefono)
+      .eq('whatsapp', telefono)
       .gt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
 
     if (count >= 3) return { statusCode: 429, body: JSON.stringify({ error: 'Demasiados intentos. Espera 10 minutos.' }) }
 
     const { data: cliente } = await supabase
-      .from('Clientes').select('id').eq('telefono', telefono).maybeSingle()
+      .from('Clientes').select('id').eq('whatsapp', telefono).maybeSingle()
 
     if (!cliente) return { statusCode: 200, body: JSON.stringify({ ok: true, mensaje: 'Si el número está registrado, recibirás un código.' }) }
 
@@ -65,7 +65,7 @@ export const handler = async (event) => {
 
     const { data: registro } = await supabase
       .from('portal_otps').select('*')
-      .eq('telefono', telefono).eq('used', false)
+      .eq('whatsapp', telefono).eq('used', false)
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .limit(1).maybeSingle()
@@ -85,7 +85,7 @@ export const handler = async (event) => {
     await supabase.from('portal_otps').update({ used: true }).eq('id', registro.id)
 
     const { data: cliente } = await supabase
-      .from('Clientes').select('id, nombre, portal_token').eq('telefono', telefono).single()
+      .from('Clientes').select('id, nombre, portal_token').eq('whatsapp', telefono).single()
 
     let portalToken = cliente.portal_token
     if (!portalToken) {
