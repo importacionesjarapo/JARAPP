@@ -3,7 +3,7 @@
   publish = "dist"
 
 [functions]
-  directory = ".netlify/v1/functions"
+  directory = "netlify/functions"
 
 [build.environment]
   VITE_SUPABASE_URL = "https://vygfsqdveudpzytnnhiq.supabase.co"
