@@ -16,47 +16,25 @@
 
     /* ── HERO HEADER ── */
     .hero {
-      position: relative;
-      height: 260px;
+      background: white;
+      padding: 32px 24px 24px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-end;
-      padding-bottom: 40px;
-      overflow: hidden;
+      gap: 12px;
+      border-bottom: 1px solid var(--borde);
     }
-    .hero-bg {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(160deg, #c00d0d 0%, #D91010 60%, #e8160f 100%);
+    .hero-logo-img {
+      width: 220px;
+      object-fit: contain;
     }
-    .hero-logo-bg {
-      position: absolute;
-      inset: 0;
-      background-image: url('/logo_jarapo.png');
-      background-size: 85%;
-      background-position: center 30%;
-      background-repeat: no-repeat;
-      opacity: 0.18;
-    }
-    .hero-overlay {
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to bottom, rgba(180,0,0,0.1) 0%, rgba(180,0,0,0.7) 100%);
-    }
-    .hero-content {
-      position: relative;
-      z-index: 2;
-      text-align: center;
-    }
-    .hero-title { color: white; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; text-shadow: 0 2px 12px rgba(0,0,0,0.3); }
-    .hero-sub { color: rgba(255,255,255,0.85); font-size: 14px; margin-top: 4px; }
-    .hero-tel { color: rgba(255,255,255,0.9); font-size: 13px; margin-top: 8px; background: rgba(255,255,255,0.15); padding: 4px 14px; border-radius: 20px; display: none; }
+    .hero-sub { color: var(--txt2); font-size: 13px; }
+    .hero-tel { color: var(--txt2); font-size: 13px; display: none; }
 
     /* ── CONTENEDOR ── */
     .container {
       max-width: 440px;
-      margin: -28px auto 0;
+      margin: 0 auto;
       padding: 0 16px 48px;
       position: relative;
       z-index: 2;
@@ -200,14 +178,9 @@
 
 <!-- HERO -->
 <div class="hero" id="hero">
-  <div class="hero-bg"></div>
-  <div class="hero-logo-bg"></div>
-  <div class="hero-overlay"></div>
-  <div class="hero-content">
-    <div class="hero-title">Importaciones Jarapo</div>
-    <div class="hero-sub" id="hero-sub">Seguimiento de tu pedido</div>
-    <div class="hero-tel" id="hero-tel"></div>
-  </div>
+  <img src="/logo_jarapo.png" alt="Importaciones Jarapo" class="hero-logo-img">
+  <div class="hero-sub" id="hero-sub">Seguimiento de tu pedido</div>
+  <div class="hero-tel" id="hero-tel"></div>
 </div>
 
 <div class="container">
