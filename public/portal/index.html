@@ -296,8 +296,8 @@ async function iniciarPortal() {
   mostrar('portal-loading')
   ocultar('portal-contenido')
   try {
-    const SUPABASE_URL  = import.meta.env?.VITE_SUPABASE_URL  || window.__SUPABASE_URL__
-    const SUPABASE_ANON = import.meta.env?.VITE_SUPABASE_ANON_KEY || window.__SUPABASE_ANON__
+    const SUPABASE_URL  = 'https://vygfsqdveudpzytnnhiq.supabase.co'
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTk2NjMsImV4cCI6MjA5MDYzNTY2M30.ZfkBk625C6X1Hgs51MRIB5TbRLYoztD1YS-QESL2x9M'
     const res = await fetch(
       `${SUPABASE_URL}/rest/v1/portal_cliente_view?portal_token=eq.${estado.token}&select=*`,
       { headers: { 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` } }
