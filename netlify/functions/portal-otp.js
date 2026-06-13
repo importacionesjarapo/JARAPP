@@ -14,20 +14,54 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
   const subdomain = process.env.KOMMO_SUBDOMAIN
   const accessToken = process.env.KOMMO_ACCESS_TOKEN
   if (!subdomain || !accessToken) {
-    console.log(`OTP para ${telefono}: ${otp}`)
+    console.log(`[DEV] OTP para ${telefono}: ${otp}`)
     return { ok: true, dev: true }
   }
   const mensaje = `Tu código de verificación para el portal de *Importaciones Jarapo* es:\n\n*${otp}*\n\nVálido por 10 minutos. No lo compartas.`
+  const telefonoCompleto = `57${telefono}`
   try {
-    const res = await fetch(`https://${subdomain}.kommo.com/api/v4/talks`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: `57${telefono}`, message: mensaje, origin: 'whatsapp' })
-    })
-    return { ok: res.ok }
+    // Paso 1: Buscar el contacto en Kommo por teléfono
+    const busquedaRes = await fetch(
+      `https://${subdomain}.kommo.com/api/v4/contacts?query=${telefonoCompleto}&limit=1`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    )
+    const busquedaData = await busquedaRes.json()
+    console.log('[Kommo] Búsqueda contacto:', JSON.stringify(busquedaData))
+    const contactId = busquedaData?._embedded?.contacts?.[0]?.id
+    if (!contactId) {
+      console.warn('[Kommo] Contacto no encontrado para:', telefonoCompleto)
+      // Intentar envío directo por número sin contacto
+      const directRes = await fetch(
+        `https://${subdomain}.kommo.com/api/v4/chats/template`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: telefonoCompleto, message: mensaje })
+        }
+      )
+      const directData = await directRes.json()
+      console.log('[Kommo] Envío directo:', JSON.stringify(directData))
+      return { ok: directRes.ok, data: directData }
+    }
+    // Paso 2: Enviar mensaje al contacto encontrado
+    const msgRes = await fetch(
+      `https://${subdomain}.kommo.com/api/v4/talks`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: contactId,
+          message: mensaje,
+          origin: 'whatsapp'
+        })
+      }
+    )
+    const msgData = await msgRes.json()
+    console.log('[Kommo] Envío mensaje:', JSON.stringify(msgData))
+    return { ok: msgRes.ok, data: msgData }
   } catch (err) {
-    console.error('Error enviando OTP:', err)
-    return { ok: false }
+    console.error('[Kommo] Error:', err)
+    return { ok: false, error: err.message }
   }
 }
 
