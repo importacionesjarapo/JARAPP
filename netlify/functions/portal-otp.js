@@ -45,7 +45,7 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
       console.log('[Kommo] Envío directo:', JSON.stringify(directData))
       return { ok: directRes.ok, data: directData }
     }
-    // Paso 2: Enviar mensaje al contacto encontrado
+    // Paso 2: Enviar mensaje al contacto encontrado via WhatsApp
     const msgRes = await fetch(
       `https://${subdomain}.kommo.com/api/v4/talks`,
       {
@@ -58,8 +58,10 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
         })
       }
     )
-    const msgData = await msgRes.json()
-    console.log('[Kommo] Envío mensaje:', JSON.stringify(msgData))
+    const msgText = await msgRes.text()
+    console.log('[Kommo] Respuesta envío (raw):', msgRes.status, msgText)
+    let msgData = {}
+    try { msgData = JSON.parse(msgText) } catch { msgData = { raw: msgText } }
     return { ok: msgRes.ok, data: msgData }
   } catch (err) {
     console.error('[Kommo] Error:', err)
