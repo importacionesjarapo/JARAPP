@@ -1002,8 +1002,25 @@ export const createLogisticsModal = async (id, navigateTo) => {
                 }
             }
 
+            // Actualizar fase_portal y fase_portal_num para el portal de clientes
+            const mapaFasePortal = {
+              '1. Comprado (Esperando Tracking Local USA)': { num: 2, nombre: 'Compra realizada en USA' },
+              '2. Comprado Local':                          { num: 1, nombre: 'Pedido confirmado' },
+              '3. En Bodega USA (Estados Unidos)':          { num: 3, nombre: 'En bodega USA' },
+              '4. En Camino a Colombia':                    { num: 4, nombre: 'En camino a Colombia' },
+              '5. En Aduana Colombia':                      { num: 5, nombre: 'En aduana / trámites' },
+              '6. Entregado a Cliente Final':               { num: 9, nombre: 'Entregado' },
+              '7. En Bodega Medellín':                      { num: 6, nombre: 'Llegó a bodega en Medellín' },
+              '8. Notificado al Cliente':                   { num: 7, nombre: 'Pedido confirmado al cliente' },
+              '9. Enviado Interno Colombia':                { num: 8, nombre: 'Enviado' },
+            }
+            if (mapaFasePortal[nuevaFase]) {
+              payload.fase_portal     = mapaFasePortal[nuevaFase].nombre
+              payload.fase_portal_num = mapaFasePortal[nuevaFase].num
+            }
+
             btn.innerHTML = '<i class="loader"></i> Guardando Registro Principal...';
-            const res = await db.postData('Logistica', payload, mode); 
+            const res = await db.postData('Logistica', payload, mode);
             if(res.error) throw new Error(res.error);
 
             // Actualizar otros productos consolidados
@@ -1072,8 +1089,9 @@ const renderEnviosEEUU = (list, ventas, clientes, compras, productos, guiasInt) 
                             <th style="padding:15px 20px;">Nº GUÍA / COURIER</th>
                             <th style="padding:15px 20px;">FECHA CREACIÓN</th>
                             <th style="padding:15px 20px;">PRODUCTOS</th>
-                            <th style="padding:15px 20px;">VALOR TOTAL (COP)</th>
-                            <th style="padding:15px 20px;">VALOR TOTAL (USD)</th>
+                            <th style="padding:15px 20px;">VALOR TOTAL GUÍA</th>
+                            <th style="padding:15px 20px;">SUMA COBRADO</th>
+                            <th style="padding:15px 20px;">DIF. FLETE</th>
                             <th style="padding:15px 20px; text-align:right;">ACCIÓN</th>
                         </tr>
                     </thead>
@@ -1081,6 +1099,14 @@ const renderEnviosEEUU = (list, ventas, clientes, compras, productos, guiasInt) 
                         ${guiasInt.reverse().map(g => {
                             const items = list.filter(l => l.guia_internacional_id?.toString() === g.id.toString());
                             if (items.length === 0) return '';
+                            let sumaInd = 0;
+                            items.forEach(item => {
+                                const v = ventas.find(vt => vt.id.toString() === item.venta_id?.toString());
+                                sumaInd += v?.valor_envio_internacional || 0;
+                            });
+                            const dif = sumaInd - (g.valor_cop || 0);
+                            const difColor = dif >= 0 ? 'var(--success-green)' : 'var(--primary-red)';
+                            const difIcon = dif >= 0 ? '💹' : '⚠️';
                             return `
                                 <tr class="log-row">
                                     <td style="padding:15px 20px;">
@@ -1091,8 +1117,15 @@ const renderEnviosEEUU = (list, ventas, clientes, compras, productos, guiasInt) 
                                     <td style="padding:15px 20px;">
                                         <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:10px; font-weight:bold; font-size:0.8rem;">${items.length} ítems</span>
                                     </td>
-                                    <td style="padding:15px 20px; font-weight:700;">${formatCOP(g.valor_cop || 0)}</td>
-                                    <td style="padding:15px 20px; opacity:0.8;">$${g.valor_usd || 0} USD</td>
+                                    <td style="padding:15px 20px;">
+                                        <div style="font-weight:700; color:var(--success-green);">${formatCOP(g.valor_cop || 0)}</div>
+                                        <div style="font-size:0.75rem; opacity:0.6;">$${g.valor_usd || 0} USD</div>
+                                    </td>
+                                    <td style="padding:15px 20px; font-weight:700; color:#FFB703;">${formatCOP(sumaInd)}<br><span style="font-size:0.7rem; opacity:0.6; font-weight:400;">Cobrado a clientes</span></td>
+                                    <td style="padding:15px 20px;">
+                                        <span style="font-weight:700; color:${difColor};">${difIcon} ${formatCOP(Math.abs(dif))}</span><br>
+                                        <span style="font-size:0.7rem; opacity:0.6;">${dif >= 0 ? 'Ganancia flete' : 'Diferencia flete'}</span>
+                                    </td>
                                     <td style="padding:15px 20px; text-align:right;">
                                         <button class="btn-action" onclick="window.modalDetalleGuia('${g.id}')">👁️ Ver Detalle</button>
                                     </td>

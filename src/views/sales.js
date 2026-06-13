@@ -183,6 +183,10 @@ const renderViewTabla = (ventas) => {
                             <div class="td-actions-group">
                                 <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}')" title="Ver Detalle">👁️ Ver</button>
                                 ${auth.canEdit('sales') && saldo>0?`<button class="btn-action" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:`${saldo>0?'':'<span style="opacity:0.4;font-size:0.72rem;white-space:nowrap">✔ Pagado</span>'}`}
+                                ${auth.canEdit('sales') && v.estado_orden !== 'Cancelado'
+                                    ? `<button class="btn-action btn-action-cancelar" onclick="window.confirmarCancelarVenta('${v.id}','${(v.nombre_producto||'Producto').replace(/'/g,"\\'")}')" title="Cancelar Venta">✕ Cancelar</button>`
+                                    : v.estado_orden === 'Cancelado' ? '<span style="opacity:0.5;font-size:0.72rem;color:#e53e3e;white-space:nowrap">✕ Cancelada</span>' : ''
+                                }
                             </div>
                         </td>
                     </tr>`;
@@ -1434,3 +1438,80 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
         </div>
         </div>`;
 };
+
+// ── Cancelar Venta ─────────────────────────────────────────
+window.confirmarCancelarVenta = async function(ventaId, nombreProducto) {
+  const overlay = document.createElement('div')
+  overlay.id = 'modal-cancelar-venta'
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px'
+  overlay.innerHTML = `
+    <div style="background:white;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <div style="font-size:32px;text-align:center;margin-bottom:12px">⚠️</div>
+      <h3 style="font-size:17px;font-weight:800;text-align:center;margin-bottom:8px">¿Cancelar esta venta?</h3>
+      <p style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:20px">${nombreProducto}</p>
+      <div style="margin-bottom:16px">
+        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Motivo de cancelación <span style="color:#e53e3e">*</span></label>
+        <textarea id="motivo-cancelacion" placeholder="Ingresa el motivo de la cancelación..." rows="3"
+          style="width:100%;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:14px;resize:none;outline:none;font-family:inherit"
+          oninput="this.style.borderColor=this.value.trim()?'#10b981':'#e5e7eb'"></textarea>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modal-cancelar-venta').remove()"
+          style="flex:1;padding:12px;border:1.5px solid #e5e7eb;border-radius:10px;background:white;font-size:14px;font-weight:600;cursor:pointer;color:#374151">
+          Volver
+        </button>
+        <button onclick="window.ejecutarCancelarVenta('${ventaId}')"
+          style="flex:1;padding:12px;border:none;border-radius:10px;background:#e53e3e;color:white;font-size:14px;font-weight:700;cursor:pointer">
+          Sí, cancelar
+        </button>
+      </div>
+    </div>`
+  document.body.appendChild(overlay)
+  setTimeout(() => document.getElementById('motivo-cancelacion')?.focus(), 100)
+}
+
+window.ejecutarCancelarVenta = async function(ventaId) {
+  const motivo = document.getElementById('motivo-cancelacion')?.value.trim()
+  if (!motivo) {
+    document.getElementById('motivo-cancelacion').style.borderColor = '#e53e3e'
+    document.getElementById('motivo-cancelacion').focus()
+    return
+  }
+  const btn = document.querySelector('#modal-cancelar-venta button:last-child')
+  btn.textContent = 'Cancelando...'
+  btn.disabled = true
+  try {
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2')
+    const supabase = createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_KEY
+    )
+    await supabase.from('Ventas').update({
+      estado_orden: 'Cancelado',
+      notas: `CANCELADO: ${motivo} — ${new Date().toLocaleDateString('es-CO')}`
+    }).eq('id', ventaId)
+    await supabase.from('Logistica').update({
+      fase: 'Cancelado',
+      fase_portal: 'Pedido cancelado',
+      fase_portal_num: 0,
+      notas_fase: `Cancelado: ${motivo}`
+    }).eq('venta_id', ventaId)
+    document.getElementById('modal-cancelar-venta').remove()
+    if (window.navigateTo) window.navigateTo('sales')
+  } catch(e) {
+    console.error('Error cancelando venta:', e)
+    btn.textContent = 'Sí, cancelar'
+    btn.disabled = false
+    alert('Error al cancelar la venta. Intenta de nuevo.')
+  }
+}
+
+const cancelStyles = document.createElement('style')
+cancelStyles.textContent = `
+  .btn-action-cancelar { color: #e53e3e !important; border-color: #fecaca !important; }
+  .btn-action-cancelar:hover { background: #fff5f5 !important; }
+`
+if (!document.getElementById('cancel-styles')) {
+  cancelStyles.id = 'cancel-styles'
+  document.head.appendChild(cancelStyles)
+}

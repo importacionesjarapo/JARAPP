@@ -1,5 +1,5 @@
-const CACHE_STATIC  = 'jarapp-static-v2';
-const CACHE_DYNAMIC = 'jarapp-dynamic-v2';
+const CACHE_STATIC  = 'jarapp-static-v3';
+const CACHE_DYNAMIC = 'jarapp-dynamic-v3';
 
 // Assets estáticos — siempre desde caché
 const STATIC_ASSETS = [

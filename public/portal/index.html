@@ -16,12 +16,12 @@
 
     /* ── HERO HEADER ── */
     .hero {
-      background: #D91010;
-      padding: 40px 32px 36px;
+      background: linear-gradient(135deg, #c00d0d 0%, #D91010 60%, #b50000 100%);
+      padding: 24px 20px 20px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
       position: relative;
       overflow: hidden;
     }
@@ -33,11 +33,11 @@
       line-height: 1;
     }
     .hero-logo-wrap {
-      border-radius: 24px;
+      border-radius: 20px;
       overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-      width: 100%;
-      max-width: 320px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+      width: 72%;
+      max-width: 240px;
     }
     .hero-logo-img {
       width: 100%;
@@ -46,8 +46,8 @@
       object-fit: cover;
     }
     .hero-sub {
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 700;
       color: rgba(255,255,255,0.85);
       letter-spacing: 2.5px;
       text-transform: uppercase;
@@ -203,6 +203,228 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .hidden { display: none !important; }
+
+    .pedido-card {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 20px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+      border: 1.5px solid var(--borde);
+    }
+    .pedido-activo {
+      border-color: var(--rojo);
+      box-shadow: 0 4px 24px rgba(217,16,16,0.1);
+    }
+    .pedido-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .pedido-header-left {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      flex: 1;
+      min-width: 0;
+    }
+    .pedido-img {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid var(--borde);
+    }
+    .pedido-img-placeholder {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      background: var(--bg);
+      border: 1px solid var(--borde);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+    .pedido-producto {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--txt);
+      line-height: 1.3;
+    }
+    .pedido-marca {
+      font-size: 12px;
+      color: var(--txt2);
+      margin-top: 2px;
+    }
+    .pedido-fecha {
+      font-size: 11px;
+      color: var(--txt2);
+      margin-top: 3px;
+    }
+    .pedido-estado-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+    }
+    .pedido-estado-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .pedido-estado-txt {
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .pedido-fin { display: flex; flex-direction: column; gap: 6px; }
+    .pedido-fin-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .pedido-fin-label { color: var(--txt2); }
+    .pedido-fin-val { font-weight: 600; }
+    .pedido-progress-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0;
+    }
+    .pedido-progress-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--borde);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .pedido-progress-fill {
+      height: 100%;
+      border-radius: 10px;
+      transition: width 0.5s ease;
+    }
+    .pedido-progress-pct {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--txt2);
+      min-width: 28px;
+      text-align: right;
+    }
+    .pedido-saldo-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 6px;
+      border-top: 1px solid var(--borde);
+      margin-top: 2px;
+    }
+    .pedido-saldo-val { font-size: 15px; font-weight: 800; }
+    .saldo-ok   { color: var(--ok); }
+    .saldo-warn { color: var(--warn); }
+
+    .pedido-timeline-wrap {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--borde);
+    }
+    .tl-mini { position: relative; padding-left: 28px; }
+    .tl-mini::before {
+      content: '';
+      position: absolute;
+      left: 9px; top: 8px; bottom: 8px;
+      width: 2px;
+      background: var(--borde);
+      border-radius: 2px;
+    }
+    .tl-mini-item {
+      position: relative;
+      padding-bottom: 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .tl-mini-item:last-child { padding-bottom: 0; }
+    .tl-mini-dot {
+      position: absolute;
+      left: -24px;
+      top: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--borde);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 800;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+    .tl-mini-item.done .tl-mini-dot {
+      background: var(--ok);
+      border-color: var(--ok);
+      color: white;
+    }
+    .tl-mini-item.active .tl-mini-dot {
+      background: var(--rojo);
+      border-color: var(--rojo);
+      color: white;
+      box-shadow: 0 0 0 4px rgba(217,16,16,0.15);
+    }
+    .tl-mini-item.pending .tl-mini-dot { background: white; }
+    .tl-mini-txt { font-size: 13px; font-weight: 600; color: var(--txt); }
+    .tl-mini-item.done .tl-mini-txt { color: var(--ok); }
+    .tl-mini-item.active .tl-mini-txt { color: var(--rojo); }
+    .tl-mini-item.pending .tl-mini-txt { color: var(--txt2); font-weight: 400; }
+    .tl-mini-desc { font-size: 11px; color: var(--txt2); margin-top: 1px; }
+    .tl-mini-item.pending .tl-mini-desc { display: none; }
+    .ver-mas-btn {
+      width: 100%;
+      background: none;
+      border: 1px solid var(--borde);
+      border-radius: 10px;
+      padding: 8px;
+      font-size: 12px;
+      color: var(--txt2);
+      cursor: pointer;
+      margin-top: 10px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .ver-mas-btn:hover { border-color: var(--rojo); color: var(--rojo); }
+
+    .tabs-wrap { display: flex; gap: 8px; margin-bottom: 16px; background: white; border-radius: 14px; padding: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .tab-btn { flex: 1; padding: 10px 6px; border: none; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; background: transparent; color: var(--txt2); transition: all 0.2s; }
+    .tab-btn.active { background: var(--rojo); color: white; box-shadow: 0 2px 8px rgba(217,16,16,0.3); }
+    .pedido-card-mini { background: white; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); border: 1.5px solid var(--borde); display: flex; gap: 14px; align-items: center; cursor: pointer; transition: all 0.2s; }
+    .pedido-card-mini:active { transform: scale(0.98); }
+    .pedido-card-mini.activo { border-color: var(--rojo); }
+    .pedido-mini-img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; border: 1px solid var(--borde); flex-shrink: 0; }
+    .pedido-mini-placeholder { width: 64px; height: 64px; border-radius: 12px; background: var(--bg); border: 1px solid var(--borde); display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
+    .pedido-mini-info { flex: 1; min-width: 0; }
+    .pedido-mini-nombre { font-size: 14px; font-weight: 700; color: var(--txt); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pedido-mini-marca { font-size: 12px; color: var(--txt2); margin-top: 2px; }
+    .pedido-mini-fecha { font-size: 11px; color: var(--txt2); margin-top: 3px; }
+    .pedido-mini-estado { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; background: var(--bg); }
+    .pedido-mini-arrow { font-size: 20px; color: var(--txt2); flex-shrink: 0; }
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--txt2); background: white; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    .empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+    .btn-volver { display: flex; align-items: center; gap: 6px; background: none; border: none; font-size: 14px; font-weight: 700; color: var(--rojo); cursor: pointer; padding: 0; margin-bottom: 16px; }
+    .detalle-card { background: white; border-radius: 20px; padding: 20px; margin-bottom: 14px; box-shadow: 0 2px 16px rgba(0,0,0,0.06); border: 1.5px solid var(--borde); }
+    .detalle-producto-header { display: flex; gap: 14px; align-items: center; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--borde); }
+    .detalle-img { width: 80px; height: 80px; border-radius: 14px; object-fit: cover; border: 1px solid var(--borde); flex-shrink: 0; }
+    .detalle-nombre { font-size: 17px; font-weight: 800; color: var(--txt); }
+    .detalle-meta { font-size: 13px; color: var(--txt2); margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -266,54 +488,30 @@
   <div id="pantalla-portal" class="hidden">
     <div id="portal-loading"><div class="spinner"></div></div>
     <div id="portal-contenido" class="hidden">
-
-      <div class="saludo-wrap">
-        <div class="saludo-nombre" id="saludo-nombre">Hola 👋</div>
-        <div class="saludo-sub">Aquí está el estado de tu pedido</div>
-      </div>
-
-      <!-- Seguimiento -->
-      <div class="card">
-        <div class="track-header">
-          <div class="card-label" style="margin-bottom:0">Estado del pedido</div>
-          <span class="badge" id="badge-track"></span>
-        </div>
-        <div class="timeline" id="timeline"></div>
-        <div id="fecha-chip-wrap"></div>
-      </div>
-
-      <!-- Financiero -->
-      <div class="card">
-        <div class="card-label">Resumen de pago</div>
-        <div class="fin-row">
-          <span class="fin-label">Total del pedido</span>
-          <span class="fin-val" id="fin-total"></span>
-        </div>
-        <div class="fin-row">
-          <span class="fin-label">Pagado</span>
-          <span class="fin-val fin-ok" id="fin-pagado"></span>
-        </div>
-        <div class="fin-total-row">
-          <span class="fin-total-label">Saldo pendiente</span>
-          <span class="fin-total-val" id="fin-saldo"></span>
-        </div>
-      </div>
-
-      <!-- Historial -->
-      <div class="card" id="card-historial">
-        <div class="card-label">Historial de pedidos</div>
-        <div id="historial"></div>
-      </div>
-
+    <div class="saludo-wrap">
+      <div class="saludo-nombre" id="saludo-nombre">Hola 👋</div>
+      <div class="saludo-sub">Aquí están todos tus pedidos</div>
     </div>
+    <div class="tabs-wrap">
+      <button class="tab-btn active" onclick="cambiarTab('encurso',this)">En curso</button>
+      <button class="tab-btn" onclick="cambiarTab('entregados',this)">Entregados</button>
+      <button class="tab-btn" onclick="cambiarTab('cancelados',this)">Cancelados</button>
+    </div>
+    <div id="pedidos-lista"></div>
+    <div id="pedido-detalle" class="hidden">
+      <button class="btn-volver" onclick="volverLista()">← Volver a mis pedidos</button>
+      <div id="detalle-contenido"></div>
+    </div>
+  </div>
   </div>
 
 </div>
 
 <script>
 const SUPABASE_URL  = 'https://vygfsqdveudpzytnnhiq.supabase.co'
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU4MDgxOTUsImV4cCI6MjA2MTM4NDE5NX0.lylyM3aTMmRatMPEJFMKAXBPmfcBnSHcmHraFDOFHHk'
-const API = '/.netlify/functions'
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTk2NjMsImV4cCI6MjA5MDYzNTY2M30.ZfkBk625C6X1Hgs51MRIB5TbRLYoztD1YS-QESL2x9M'
+const IS_DEV = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+const API = IS_DEV ? 'http://localhost:9999/.netlify/functions' : '/.netlify/functions'
 const est = { token: null, tel: null, cliente: null }
 
 const $ = id => document.getElementById(id)
@@ -455,50 +653,211 @@ async function abrirPortal() {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/portal_cliente_view?portal_token=eq.${est.token}&select=*`,
       {headers:{'apikey':SUPABASE_ANON,'Authorization':`Bearer ${SUPABASE_ANON}`}})
     const datos = await r.json()
+    console.log('[PORTAL] token usado:', est.token)
+    console.log('[PORTAL] datos vista:', JSON.stringify(datos, null, 2))
+    if (!Array.isArray(datos)) { console.error('[PORTAL] Error vista:', datos); return }
     renderPortal(datos)
   } catch(e){ console.error(e) }
   finally { hide('portal-loading'); show('portal-contenido') }
 }
 
-function renderPortal(filas) {
-  if(!filas||filas.length===0){
-    $('portal-contenido').innerHTML='<div class="card" style="text-align:center;color:var(--txt2);padding:40px 24px;">No encontramos pedidos para tu número.</div>'
+let todosLosPedidos = []
+let tabActual = 'encurso'
+
+function trackLabel(track) {
+  const t = { colombia: '🇨🇴 Colombia', encargo_usa: '✈️ Encargo USA', encargo_web: '🛒 Web USA' }
+  return t[track] || '🇨🇴 Colombia'
+}
+function trackCls(track) {
+  const t = { colombia: 'badge-colombia', encargo_usa: 'badge-encargo-usa', encargo_web: 'badge-encargo-web' }
+  return t[track] || 'badge-colombia'
+}
+function estadoCliente(v) {
+  const faseLog = v.fase || ''
+  const estadoVenta = v.estado_venta || ''
+  const mapaFases = {
+    '1. Comprado (Esperando Tracking Local USA)': { txt: 'Comprado en USA 🛍️',       color: '#7c3aed', num: 2 },
+    '2. Comprado Local':                          { txt: 'Comprado en Colombia 🇨🇴',  color: '#2563eb', num: 1 },
+    '3. En Bodega USA (Estados Unidos)':          { txt: 'En bodega USA 📦',           color: '#7c3aed', num: 3 },
+    '4. En Camino a Colombia':                    { txt: 'En camino a Colombia ✈️',    color: '#0891b2', num: 4 },
+    '5. En Aduana Colombia':                      { txt: 'En aduana / trámites 🛃',    color: '#d97706', num: 5 },
+    '6. Entregado a Cliente Final':               { txt: '¡Entregado! 🎉',             color: '#059669', num: 9 },
+    '7. En Bodega Medellín':                      { txt: 'Llegó a Medellín 📍',        color: '#059669', num: 6 },
+    '8. Notificado al Cliente':                   { txt: 'Pedido confirmado 📞',        color: '#059669', num: 7 },
+    '9. Enviado Interno Colombia':                { txt: 'En camino hacia ti 🚚',       color: '#059669', num: 8 },
+  }
+  if (faseLog && mapaFases[faseLog]) return mapaFases[faseLog]
+  const mapaVenta = {
+    'Comprado en tienda EEUU': { txt: 'Comprado en USA 🛍️',     color: '#7c3aed', num: 2 },
+    'Validando Compra EEUU':   { txt: 'Validando compra USA 🔍', color: '#d97706', num: 1 },
+    'Completado Local':        { txt: '¡Entregado! 🎉',          color: '#059669', num: 9 },
+  }
+  if (mapaVenta[estadoVenta]) return mapaVenta[estadoVenta]
+  return { txt: 'En proceso', color: '#6b7280', num: 1 }
+}
+
+function tabDeEstado(v) {
+  const fase  = (v.fase || '').toLowerCase()
+  const estado = v.estado_venta || ''
+  if (estado === 'Cancelado' || fase.includes('cancel')) return 'cancelados'
+  if (v.fase === '6. Entregado a Cliente Final' || estado === 'Completado Local') return 'entregados'
+  return 'encurso'
+}
+
+function fasesTrack(track) {
+  const T = {
+    colombia: [
+      { n: 'Pedido confirmado',       d: 'Tu pedido ha sido registrado y confirmado' },
+      { n: 'Producto reservado',       d: 'Tu producto está reservado en nuestra bodega' },
+      { n: 'En preparación / empaque', d: 'Estamos preparando y empacando tu pedido' },
+      { n: 'Listo para entrega',       d: 'Tu pedido está listo, coordinando la entrega' },
+      { n: 'Enviado',                  d: 'Tu pedido está en camino hacia ti' },
+      { n: 'Entregado',                d: '¡Tu pedido fue entregado con éxito!' }
+    ],
+    encargo_usa: [
+      { n: 'Pedido confirmado',            d: 'Tu encargo ha sido registrado y confirmado' },
+      { n: 'Compra realizada en USA',      d: 'Tu producto fue comprado en tienda de USA' },
+      { n: 'En camino a Colombia',         d: 'Tu producto viaja desde USA hacia Colombia' },
+      { n: 'En aduana / trámites',         d: 'Tu producto está en proceso de aduana' },
+      { n: 'Llegó a bodega en Medellín',   d: 'Tu producto llegó a nuestra bodega' },
+      { n: 'Pedido confirmado al cliente', d: 'Coordinando la entrega contigo' },
+      { n: 'En preparación / empaque',     d: 'Estamos preparando y empacando tu pedido' },
+      { n: 'Enviado',                      d: 'Tu pedido está en camino hacia ti' },
+      { n: 'Entregado',                    d: '¡Tu encargo llegó con éxito!' }
+    ],
+    encargo_web: [
+      { n: 'Pedido confirmado',            d: 'Tu encargo ha sido registrado y confirmado' },
+      { n: 'Compra realizada en USA',      d: 'Tu producto fue comprado en tienda online de USA' },
+      { n: 'En camino a bodega USA',       d: 'Tu producto se dirige a nuestra bodega en USA' },
+      { n: 'En camino a Colombia',         d: 'Tu producto está en tránsito desde USA' },
+      { n: 'En aduana / trámites',         d: 'Tu producto está en proceso de aduana' },
+      { n: 'Llegó a bodega en Medellín',   d: 'Tu producto llegó a nuestra bodega' },
+      { n: 'Pedido confirmado al cliente', d: 'Coordinando la entrega contigo' },
+      { n: 'En preparación / empaque',     d: 'Estamos preparando y empacando tu pedido' },
+      { n: 'Enviado',                      d: 'Tu pedido está en camino hacia ti' },
+      { n: 'Entregado',                    d: '¡Tu encargo llegó con éxito!' }
+    ]
+  }
+  return T[track] || T.colombia
+}
+
+function renderTimeline(track, faseActual) {
+  const fases = fasesTrack(track)
+  return fases.map((f, i) => {
+    const n = i + 1
+    const cls = n < faseActual ? 'done' : n === faseActual ? 'active' : 'pending'
+    const dot = n < faseActual ? '✓' : n === faseActual ? '●' : ''
+    return `
+      <div class="tl-mini-item ${cls}">
+        <div class="tl-mini-dot">${dot}</div>
+        <div>
+          <div class="tl-mini-txt">${f.n}</div>
+          ${cls !== 'pending' ? `<div class="tl-mini-desc">${f.d}</div>` : ''}
+        </div>
+      </div>`
+  }).join('')
+}
+
+function cambiarTab(tab, btn) {
+  tabActual = tab
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  renderLista()
+}
+
+function renderLista() {
+  const filtrados = todosLosPedidos.filter(v => tabDeEstado(v) === tabActual)
+  const lista = $('pedidos-lista')
+  hide('pedido-detalle'); show('pedidos-lista')
+  if (!filtrados.length) {
+    const labels = { encurso: 'pedidos en curso', entregados: 'pedidos entregados', cancelados: 'pedidos cancelados' }
+    lista.innerHTML = `<div class="empty-state"><div class="emoji">📭</div><p>No tienes ${labels[tabActual]} por ahora.</p></div>`
     return
   }
-  const activo = filas[0]
-  const historial = filas.slice(1)
-  const track = TRACKS[activo.track] || TRACKS.colombia
-  $('badge-track').textContent = track.label
-  $('badge-track').className = 'badge ' + track.cls
-
-  const fase = activo.fase_portal_num || 1
-  $('timeline').innerHTML = track.fases.map((f,i)=>{
-    const n = i+1
-    const cls = n < fase ? 'done' : n === fase ? 'active' : 'pending'
-    const dot = n < fase ? '✓' : n === fase ? '●' : ''
-    return `<div class="tl-item ${cls}"><div class="tl-dot">${dot}</div><div class="tl-nombre">${f.n}</div>${cls!=='pending'?`<div class="tl-desc">${f.d}</div>`:''}</div>`
-  }).join('')
-
-  if(activo.fecha_estimada) {
-    $('fecha-chip-wrap').innerHTML = `<div class="fecha-chip">📅 Entrega estimada: ${fecha(activo.fecha_estimada)}</div>`
-  }
-
-  $('fin-total').textContent = cop(activo.total)
-  $('fin-pagado').textContent = cop(activo.total_abonado)
-  const saldo = parseFloat(activo.saldo_pendiente)||0
-  $('fin-saldo').textContent = saldo <= 0 ? '¡Pagado ✓' : cop(saldo)
-  $('fin-saldo').className = 'fin-total-val ' + (saldo <= 0 ? 'fin-ok' : 'fin-warn')
-
-  $('historial').innerHTML = historial.length === 0
-    ? '<p style="font-size:14px;color:var(--txt2)">Este es tu primer pedido con nosotros. ¡Gracias por confiar en Jarapo!</p>'
-    : historial.map(v=>`
-      <div class="hist-item">
-        <div class="hist-top">
-          <span class="hist-estado">${v.estado_venta||'Pedido'}</span>
-          <span class="hist-monto">${cop(v.total)}</span>
+  lista.innerHTML = filtrados.map(v => {
+    const estado = estadoCliente(v)
+    const idx = todosLosPedidos.indexOf(v)
+    return `
+    <div class="pedido-card-mini" onclick="verDetalle(${idx})">
+      ${v.url_imagen
+        ? `<img src="${v.url_imagen}" class="pedido-mini-img" onerror="this.style.display='none'">`
+        : `<div class="pedido-mini-placeholder">📦</div>`}
+      <div class="pedido-mini-info">
+        <div class="pedido-mini-nombre">${v.nombre_producto || 'Producto'}</div>
+        <div class="pedido-mini-marca">${[v.marca, v.talla ? 'Talla ' + v.talla : ''].filter(Boolean).join(' · ')}</div>
+        <div class="pedido-mini-fecha">${v.fecha_venta ? fecha(v.fecha_venta) : ''}</div>
+        <div class="pedido-mini-estado" style="color:${estado.color}">
+          <span style="width:7px;height:7px;border-radius:50%;background:${estado.color};display:inline-block"></span>
+          ${estado.txt}
         </div>
-        <div class="hist-fecha">${fecha(v.fecha_venta)} · Saldo: ${cop(v.saldo_pendiente)}</div>
-      </div>`).join('')
+      </div>
+      <div class="pedido-mini-arrow">›</div>
+    </div>`
+  }).join('')
+}
+
+function verDetalle(idx) {
+  const v = todosLosPedidos[idx]
+  if (!v) return
+  hide('pedidos-lista'); show('pedido-detalle')
+  const saldo  = parseFloat(v.saldo_pendiente) || 0
+  const pagado = parseFloat(v.total_abonado)   || 0
+  const total  = parseFloat(v.total)            || 0
+  const pct    = total > 0 ? Math.round((pagado / total) * 100) : 0
+  const estado = estadoCliente(v)
+  $('detalle-contenido').innerHTML = `
+    <div class="detalle-card">
+      <div class="detalle-producto-header">
+        ${v.url_imagen
+          ? `<img src="${v.url_imagen}" class="detalle-img" onerror="this.style.display='none'">`
+          : `<div class="pedido-mini-placeholder">📦</div>`}
+        <div>
+          <div class="detalle-nombre">${v.nombre_producto || 'Producto'}</div>
+          <div class="detalle-meta">${[v.marca, v.talla ? 'Talla ' + v.talla : ''].filter(Boolean).join(' · ')}</div>
+          <div class="detalle-meta">${v.fecha_venta ? fecha(v.fecha_venta) : ''}</div>
+          <span class="badge ${trackCls(v.track)}" style="margin-top:8px;display:inline-block">${trackLabel(v.track)}</span>
+        </div>
+      </div>
+      <div class="pedido-estado-wrap">
+        <div class="pedido-estado-dot" style="background:${estado.color}"></div>
+        <div class="pedido-estado-txt" style="color:${estado.color}">${estado.txt}</div>
+      </div>
+      <div class="pedido-timeline-wrap" style="margin-top:14px">
+        <div class="tl-mini">${renderTimeline(v.track, estado.num)}</div>
+      </div>
+    </div>
+    <div class="detalle-card">
+      <div class="pedido-fin">
+        <div class="pedido-fin-row">
+          <span class="pedido-fin-label">Total</span>
+          <span class="pedido-fin-val">${cop(total)}</span>
+        </div>
+        <div class="pedido-fin-row">
+          <span class="pedido-fin-label">Pagado</span>
+          <span class="pedido-fin-val" style="color:var(--ok)">${cop(pagado)}</span>
+        </div>
+        <div class="pedido-progress-wrap">
+          <div class="pedido-progress-bar">
+            <div class="pedido-progress-fill" style="width:${pct}%;background:${saldo<=0?'var(--ok)':'var(--rojo)'}"></div>
+          </div>
+          <span class="pedido-progress-pct">${pct}%</span>
+        </div>
+        <div class="pedido-saldo-row">
+          <span class="pedido-fin-label">Saldo pendiente</span>
+          <span class="pedido-saldo-val ${saldo<=0?'saldo-ok':'saldo-warn'}">${saldo<=0?'¡Pagado ✓':cop(saldo)}</span>
+        </div>
+      </div>
+    </div>`
+}
+
+function volverLista() {
+  hide('pedido-detalle'); show('pedidos-lista')
+}
+
+function renderPortal(filas) {
+  todosLosPedidos = filas
+  tabActual = 'encurso'
+  renderLista()
 }
 
 function mostrarErr(id, msg) { const el=$(id); el.textContent=msg; el.style.display='block' }

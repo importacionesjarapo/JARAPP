@@ -31,37 +31,64 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
   }
 }
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+const res = (statusCode, body) => ({ statusCode, headers: CORS, body: JSON.stringify(body) })
+
 export const handler = async (event) => {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method not allowed' }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: CORS, body: 'Method not allowed' }
 
   const { accion, telefono, otp, token_portal } = JSON.parse(event.body || '{}')
 
   // ── SOLICITAR OTP ──
   if (accion === 'solicitar') {
-    if (!telefono) return { statusCode: 400, body: JSON.stringify({ error: 'telefono requerido' }) }
+    if (!telefono) return res(400, { error: 'telefono requerido' })
 
     const { count } = await supabase
       .from('portal_otps').select('*', { count: 'exact', head: true })
       .eq('whatsapp', telefono)
       .gt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
 
-    if (count >= 3) return { statusCode: 429, body: JSON.stringify({ error: 'Demasiados intentos. Espera 10 minutos.' }) }
+    if (count >= 3) return res(429, { error: 'Demasiados intentos. Espera 10 minutos.' })
 
-    const { data: cliente } = await supabase
-      .from('Clientes').select('id').eq('whatsapp', telefono).maybeSingle()
+    const { data: byWA, error: errWA } = await supabase
+      .from('Clientes').select('id').ilike('whatsapp', `%${telefono}%`).limit(1)
+    if (errWA) return res(500, { error: 'DB whatsapp: ' + errWA.message })
 
-    if (!cliente) return { statusCode: 200, body: JSON.stringify({ ok: true, mensaje: 'Si el número está registrado, recibirás un código.' }) }
+    let cliente = byWA?.[0] || null
+
+    if (!cliente) {
+      const { data: byTel, error: errTel } = await supabase
+        .from('Clientes').select('id').eq('telefono', telefono).maybeSingle()
+      if (errTel) return res(500, { error: 'DB telefono: ' + errTel.message })
+      cliente = byTel || null
+    }
+
+    if (!cliente) return res(404, { error: 'Número no registrado. Contacta a Importaciones Jarapo.' })
 
     const codigo = generarOTP()
-    await supabase.from('portal_otps').insert({ telefono, otp_code: codigo })
+    const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+    const { error: insertErr } = await supabase
+      .from('portal_otps')
+      .insert({ whatsapp: telefono, otp_code: codigo, expires_at })
+    if (insertErr) {
+      console.error('[OTP] Error insertando:', insertErr)
+      return res(500, { error: 'Error generando código: ' + insertErr.message })
+    }
+    console.log('[OTP] Insert exitoso para', telefono)
     await enviarOTPWhatsApp({ telefono, otp: codigo })
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, mensaje: 'Código enviado por WhatsApp' }) }
+    return res(200, { ok: true, mensaje: 'Código enviado por WhatsApp' })
   }
 
   // ── VERIFICAR OTP ──
   if (accion === 'verificar') {
-    if (!telefono || !otp) return { statusCode: 400, body: JSON.stringify({ error: 'telefono y otp requeridos' }) }
+    if (!telefono || !otp) return res(400, { error: 'telefono y otp requeridos' })
 
     const { data: registro } = await supabase
       .from('portal_otps').select('*')
@@ -70,22 +97,26 @@ export const handler = async (event) => {
       .order('created_at', { ascending: false })
       .limit(1).maybeSingle()
 
-    if (!registro) return { statusCode: 400, body: JSON.stringify({ error: 'Código inválido o expirado' }) }
+    if (!registro) return res(400, { error: 'Código inválido o expirado' })
 
     if (registro.attempts >= 5) {
       await supabase.from('portal_otps').update({ used: true }).eq('id', registro.id)
-      return { statusCode: 400, body: JSON.stringify({ error: 'Demasiados intentos. Solicita un nuevo código.' }) }
+      return res(400, { error: 'Demasiados intentos. Solicita un nuevo código.' })
     }
 
     if (registro.otp_code !== otp) {
       await supabase.from('portal_otps').update({ attempts: registro.attempts + 1 }).eq('id', registro.id)
-      return { statusCode: 400, body: JSON.stringify({ error: 'Código incorrecto' }) }
+      return res(400, { error: 'Código incorrecto' })
     }
 
     await supabase.from('portal_otps').update({ used: true }).eq('id', registro.id)
 
-    const { data: cliente } = await supabase
-      .from('Clientes').select('id, nombre, portal_token').eq('whatsapp', telefono).single()
+    const { data: clientes2 } = await supabase
+      .from('Clientes').select('id, nombre, portal_token')
+      .or(`whatsapp.ilike.%${telefono}%,telefono.ilike.%${telefono}%`)
+      .limit(1)
+    const cliente = clientes2?.[0] || null
+    if (!cliente) return res(400, { error: 'Cliente no encontrado' })
 
     let portalToken = cliente.portal_token
     if (!portalToken) {
@@ -96,19 +127,19 @@ export const handler = async (event) => {
 
     await supabase.from('portal_tokens').update({ last_used_at: new Date().toISOString() }).eq('token', portalToken)
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, token: portalToken, nombre: cliente.nombre, redirect: `/portal?t=${portalToken}` }) }
+    return res(200, { ok: true, token: portalToken, nombre: cliente.nombre, redirect: `/portal?t=${portalToken}` })
   }
 
   // ── VALIDAR TOKEN ──
   if (accion === 'validar_token') {
-    if (!token_portal) return { statusCode: 400, body: JSON.stringify({ error: 'token requerido' }) }
+    if (!token_portal) return res(400, { error: 'token requerido' })
 
     const { data: tokenData } = await supabase
       .from('portal_tokens').select('cliente_id, expires_at, is_active')
       .eq('token', token_portal).maybeSingle()
 
     if (!tokenData || !tokenData.is_active || new Date(tokenData.expires_at) < new Date()) {
-      return { statusCode: 401, body: JSON.stringify({ error: 'Token inválido o expirado' }) }
+      return res(401, { error: 'Token inválido o expirado' })
     }
 
     await supabase.from('portal_tokens').update({ last_used_at: new Date().toISOString() }).eq('token', token_portal)
@@ -116,8 +147,8 @@ export const handler = async (event) => {
     const { data: cliente } = await supabase
       .from('Clientes').select('id, nombre, telefono').eq('id', tokenData.cliente_id).single()
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true, cliente }) }
+    return res(200, { ok: true, cliente })
   }
 
-  return { statusCode: 400, body: JSON.stringify({ error: 'Acción no reconocida' }) }
+  return res(400, { error: 'Acción no reconocida' })
 }
