@@ -27,9 +27,12 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
       `https://${subdomain}.kommo.com/api/v4/contacts?query=${telefonoCompleto}&limit=1`,
       { headers: { 'Authorization': `Bearer ${accessToken}` } }
     )
-    const busquedaData = await busquedaRes.json()
-    console.log('[Kommo] Búsqueda contacto:', JSON.stringify(busquedaData))
+    const busquedaText = await busquedaRes.text()
+    console.log('[Kommo] Búsqueda raw:', busquedaRes.status, busquedaText.substring(0, 200))
+    let busquedaData = {}
+    try { busquedaData = JSON.parse(busquedaText) } catch(e) { console.error('[Kommo] Parse error búsqueda:', e.message) }
     const contactId = busquedaData?._embedded?.contacts?.[0]?.id
+    console.log('[Kommo] ContactId encontrado:', contactId)
     if (!contactId) {
       console.warn('[Kommo] Contacto no encontrado para:', telefonoCompleto)
       // Intentar envío directo por número sin contacto
