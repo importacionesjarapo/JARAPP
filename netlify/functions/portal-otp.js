@@ -21,6 +21,8 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
   const telefonoCompleto = `57${telefono}`
   try {
     // Paso 1: Buscar el contacto en Kommo por teléfono
+    console.log('[Kommo] Token primeros 20 chars:', accessToken?.substring(0, 20))
+    console.log('[Kommo] Subdomain:', subdomain)
     const busquedaRes = await fetch(
       `https://${subdomain}.kommo.com/api/v4/contacts?query=${telefonoCompleto}&limit=1`,
       { headers: { 'Authorization': `Bearer ${accessToken}` } }
