@@ -131,6 +131,7 @@ const renderViewTabla = (list, clientStats) => `
                 <th style="min-width:155px;">WhatsApp</th>
                 <th style="min-width:200px;">Ciudad / Dirección</th>
                 <th style="min-width:130px;">Lead Kommo</th>
+                <th style="min-width:150px;">Portal Cliente</th>
                 <th style="min-width:130px;">Fecha Ingreso</th>
                 <th style="min-width:180px;">LTV (Compras)</th>
                 <th class="text-right" style="min-width:120px;">Acción</th>
@@ -150,6 +151,16 @@ const renderViewTabla = (list, clientStats) => `
                         <span class="cell-subtitle" style="white-space:normal;max-width:180px;display:block;">${c.direccion||''}</span>
                     </td>
                     <td style="font-size:0.85rem;">${c.numero_lead_kommo||'—'}</td>
+                    <td>
+                      ${c.portal_token
+                        ? `<div style="display:flex;gap:6px;align-items:center;">
+                            <span style="font-family:monospace;font-size:0.78rem;background:var(--bg-secondary);padding:2px 7px;border-radius:6px;color:var(--info-blue);">${c.portal_token.substring(0,8).toUpperCase()}</span>
+                            <button class="btn-action" onclick="window.copiarLinkPortal('${c.id}','${c.portal_token}','${(c.nombre||'').replace(/'/g,"\\'")}')" title="Copiar link">📋</button>
+                            <button class="btn-action" onclick="window.enviarPortalWhatsApp('${c.id}','${c.portal_token}','${(c.nombre||'').replace(/'/g,"\\'")}','${c.whatsapp||''}')" title="Enviar por WhatsApp">💬</button>
+                          </div>`
+                        : `<button class="btn-action" onclick="window.generarPortalCliente('${c.id}')" style="font-size:0.75rem;">+ Generar</button>`
+                      }
+                    </td>
                     <td style="font-size:0.85rem;opacity:0.8;">${fecha}</td>
                     <td>
                         <div class="cell-price" style="color:var(--primary-red);">${formatCOP(stats.total_gastado)}</div>
@@ -633,6 +644,64 @@ export const renderClients = async (renderLayout, navigateTo) => {
     renderLayout(html);
     setTimeout(() => { attachCliSearch(); attachGroupToggles(); }, 150);
 };
+
+// ── Portal Cliente ─────────────────────────────────────────────────────────────
+const APP_URL = 'https://importacionesjarapo-jarapp.netlify.app'
+
+function generarCodigoPortal() {
+  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const nums = Math.floor(1000 + Math.random() * 9000)
+  const letra = letras[Math.floor(Math.random() * letras.length)]
+  return `JAR${letra}${nums}`
+}
+
+window.generarPortalCliente = async function(clienteId) {
+  const codigo = generarCodigoPortal()
+  try {
+    await db.postData('Clientes', { id: clienteId, portal_token: codigo }, 'UPDATE')
+  } catch(e) {
+    alert('Error generando portal: ' + e.message)
+    return
+  }
+  if (window._navigateTo) window._navigateTo('clients')
+}
+
+window.copiarLinkPortal = function(clienteId, token, nombre) {
+  const url = `${APP_URL}/portal?t=${token}`
+  navigator.clipboard.writeText(url).then(() => {
+    const btns = document.querySelectorAll(`button[onclick*="copiarLinkPortal('${clienteId}'"]`)
+    btns.forEach(btn => {
+      const original = btn.textContent
+      btn.textContent = '✅'
+      setTimeout(() => btn.textContent = original, 2000)
+    })
+  })
+}
+
+window.enviarPortalWhatsApp = function(clienteId, token, nombre, whatsapp) {
+  const url = `${APP_URL}/portal?t=${token}`
+  const primerNombre = nombre.split(' ')[0]
+  const mensaje = `Hola ${primerNombre} 👋\n\nTe compartimos tu link de seguimiento en *Importaciones Jarapo*:\n\n🔗 ${url}\n\nDesde aquí puedes consultar:\n📦 Todos tus pedidos activos y su estado actual\n✅ Historial de pedidos entregados\n❌ Pedidos cancelados (si aplica)\n\n¡Guarda este link, es tuyo y siempre podrás consultarlo! 🛍️\n\n_Importaciones Jarapo — 100% original, directo de USA_ ✈️`
+  navigator.clipboard.writeText(mensaje).then(() => {
+    const allBtns = document.querySelectorAll('button')
+    allBtns.forEach(btn => {
+      if (btn.getAttribute('onclick')?.includes(`enviarPortalWhatsApp('${clienteId}'`)) {
+        const original = btn.innerHTML
+        btn.innerHTML = '✅ Copiado'
+        btn.style.color = 'var(--success-green)'
+        setTimeout(() => { btn.innerHTML = original; btn.style.color = '' }, 2500)
+      }
+    })
+  }).catch(() => {
+    const ta = document.createElement('textarea')
+    ta.value = mensaje
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    alert('Mensaje copiado. Pégalo en WhatsApp.')
+  })
+}
 
 // ─── Create Client Modal (unchanged) ──────────────────────────────────────────
 export const createClientModal = async (id, navigateTo) => {

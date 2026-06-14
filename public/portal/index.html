@@ -865,18 +865,27 @@ function mostrarErr(id, msg) { const el=$(id); el.textContent=msg; el.style.disp
 // INIT
 async function init() {
   const params = new URLSearchParams(window.location.search)
-  const token = params.get('t') || localStorage.getItem('jp_token')
-  if(token) {
+  const tokenURL = params.get('t')
+  const tokenGuardado = localStorage.getItem('jp_token')
+  const token = tokenURL || tokenGuardado
+  if (token) {
     try {
-      const r = await api('portal-otp',{accion:'validar_token',token_portal:token})
-      if(r.ok) {
+      const r = await api('portal-otp', { accion: 'validar_token', token_portal: token })
+      if (r.ok) {
         est.token = token
         est.cliente = r.cliente
         est.tel = r.cliente?.whatsapp || r.cliente?.telefono
-        if(params.get('t')) localStorage.setItem('jp_token', token)
-        abrirPortal(); return
+        if (tokenURL) localStorage.setItem('jp_token', tokenURL)
+        abrirPortal()
+        return
+      } else {
+        console.warn('Token inválido, limpiando...')
+        localStorage.removeItem('jp_token')
       }
-    } catch { localStorage.removeItem('jp_token') }
+    } catch(e) {
+      console.error('Error validando token:', e)
+      localStorage.removeItem('jp_token')
+    }
   }
   pantalla('pantalla-auth')
 }

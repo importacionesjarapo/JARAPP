@@ -48,21 +48,18 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
       console.log('[Kommo] Envío directo:', JSON.stringify(directData))
       return { ok: directRes.ok, data: directData }
     }
-    // Paso 2: Enviar mensaje al contacto encontrado via WhatsApp
+    // Paso 2: Enviar mensaje WhatsApp via Kommo
+    // Intentar con el endpoint correcto de chats
     const msgRes = await fetch(
-      `https://${subdomain}.kommo.com/api/v4/talks`,
+      `https://${subdomain}.kommo.com/api/v4/contacts/${contactId}/chats`,
       {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contact_id: contactId,
-          message: mensaje,
-          origin: 'whatsapp'
-        })
+        body: JSON.stringify({ message: mensaje })
       }
     )
     const msgText = await msgRes.text()
-    console.log('[Kommo] Respuesta envío (raw):', msgRes.status, msgText)
+    console.log('[Kommo] Respuesta envío (raw):', msgRes.status, msgText.substring(0, 300))
     let msgData = {}
     try { msgData = JSON.parse(msgText) } catch { msgData = { raw: msgText } }
     return { ok: msgRes.ok, data: msgData }
@@ -175,18 +172,36 @@ export const handler = async (event) => {
   if (accion === 'validar_token') {
     if (!token_portal) return res(400, { error: 'token requerido' })
 
+    // Buscar primero en portal_tokens
     const { data: tokenData } = await supabase
       .from('portal_tokens').select('cliente_id, expires_at, is_active')
       .eq('token', token_portal).maybeSingle()
 
-    if (!tokenData || !tokenData.is_active || new Date(tokenData.expires_at) < new Date()) {
-      return res(401, { error: 'Token inválido o expirado' })
+    // Si no está en portal_tokens, buscar directamente en Clientes por portal_token
+    let clienteId = tokenData?.cliente_id
+    if (!tokenData) {
+      const { data: clienteDirecto } = await supabase
+        .from('Clientes').select('id')
+        .eq('portal_token', token_portal).maybeSingle()
+      if (clienteDirecto) clienteId = clienteDirecto.id
     }
 
-    await supabase.from('portal_tokens').update({ last_used_at: new Date().toISOString() }).eq('token', token_portal)
+    if (!clienteId) return res(401, { error: 'Token inválido o expirado' })
+
+    // Si existe en portal_tokens, validar expiración
+    if (tokenData && tokenData.expires_at && new Date(tokenData.expires_at) < new Date()) {
+      return res(401, { error: 'Token expirado' })
+    }
+
+    // Actualizar last_used_at si existe en portal_tokens
+    if (tokenData) {
+      await supabase.from('portal_tokens')
+        .update({ last_used_at: new Date().toISOString() })
+        .eq('token', token_portal)
+    }
 
     const { data: cliente } = await supabase
-      .from('Clientes').select('id, nombre, telefono').eq('id', tokenData.cliente_id).single()
+      .from('Clientes').select('id, nombre, whatsapp').eq('id', clienteId).single()
 
     return res(200, { ok: true, cliente })
   }
