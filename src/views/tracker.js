@@ -1335,33 +1335,61 @@ window._trTestApify = async () => {
   try {
     const result = await testApifyUno(username, append);
 
-    // Mostrar resultado raw en pantalla
-    const hasItems = Array.isArray(result.items) && result.items.length > 0;
-    const colorHeader = hasItems ? '#10B981' : (result.error ? '#EF4444' : '#F97316');
+    // Mostrar resultado en pantalla
+    const { primerPerfil, latestPost0 } = result;
+    const hasPosts = (primerPerfil?.latestPostsCount ?? 0) > 0;
+    const colorHeader = result.error ? '#EF4444' : hasPosts ? '#10B981' : '#F97316';
     const titulo = result.error
       ? `❌ Error: ${result.error}`
-      : hasItems
-        ? `✅ ${result.itemsCount} posts encontrados para @${username}`
-        : `⚠️ Run completado pero 0 items devueltos`;
+      : !primerPerfil
+        ? `⚠️ 0 perfiles devueltos por Apify`
+        : hasPosts
+          ? `✅ @${primerPerfil.username}: ${primerPerfil.latestPostsCount} posts en latestPosts`
+          : `⚠️ @${primerPerfil.username}: perfil encontrado pero 0 latestPosts`;
 
     if (resultDiv) {
       resultDiv.style.display = 'block';
       resultDiv.innerHTML = `
         <div style="border-left:4px solid ${colorHeader};padding:14px 16px;border-radius:10px;background:var(--surface-2);margin-top:4px;">
           <div style="font-weight:800;font-size:0.9rem;color:${colorHeader};margin-bottom:10px;">${titulo}</div>
-          ${hasItems ? `
-            <div style="font-size:0.8rem;color:var(--text-faint);margin-bottom:8px;font-weight:600;">
-              Campos disponibles: <code>${Object.keys(result.items[0]).join(', ')}</code>
-            </div>
-            <div style="font-size:0.8rem;color:var(--text-faint);margin-bottom:8px;font-weight:600;">
-              Métricas primer post — videoViewCount: <strong>${result.items[0].videoViewCount ?? 'undefined'}</strong>
-              | videoPlayCount: <strong>${result.items[0].videoPlayCount ?? 'undefined'}</strong>
-              | likesCount: <strong>${result.items[0].likesCount ?? 'undefined'}</strong>
-              | ownerUsername: <strong>${result.items[0].ownerUsername ?? 'undefined'}</strong>
+          ${primerPerfil ? `
+            <div style="font-size:0.82rem;margin-bottom:10px;color:var(--text-base);">
+              <strong>@${primerPerfil.username}</strong> · ${(primerPerfil.followersCount || 0).toLocaleString('es-CO')} seguidores
+              · ${primerPerfil.postsCount} posts totales
+              · <span style="color:${hasPosts ? '#10B981' : '#F97316'};font-weight:700;">${primerPerfil.latestPostsCount} en latestPosts</span>
+              ${primerPerfil.igtvCount > 0 ? `· ${primerPerfil.igtvCount} IGTV` : ''}
             </div>` : ''}
-          <details style="margin-top:8px;">
-            <summary style="cursor:pointer;font-size:0.82rem;color:#8B5CF6;font-weight:700;">Ver JSON raw completo</summary>
-            <pre style="margin-top:8px;font-size:0.72rem;overflow-x:auto;max-height:300px;white-space:pre-wrap;color:var(--text-base);">${JSON.stringify(result, null, 2)}</pre>
+          ${latestPost0 ? `
+            <div style="margin-bottom:8px;">
+              <div style="font-size:0.75rem;font-weight:700;color:var(--text-faint);margin-bottom:4px;">CAMPOS EN latestPosts[0]:</div>
+              <code style="font-size:0.7rem;word-break:break-all;">${Object.keys(latestPost0).join(', ')}</code>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:10px;">
+              ${[
+                ['type', latestPost0.type],
+                ['videoViewCount', latestPost0.videoViewCount],
+                ['videoPlayCount', latestPost0.videoPlayCount],
+                ['likesCount', latestPost0.likesCount],
+                ['commentsCount', latestPost0.commentsCount],
+                ['id', latestPost0.id || latestPost0.shortCode],
+                ['timestamp', latestPost0.timestamp ? new Date(latestPost0.timestamp).toLocaleDateString('es-CO') : undefined],
+                ['url', latestPost0.url ? '✅ presente' : '❌ ausente'],
+                ['caption', latestPost0.caption ? '✅ presente' : '❌ ausente'],
+              ].map(([k, v]) => `
+                <div style="background:var(--surface-1);border-radius:8px;padding:8px 10px;">
+                  <div style="font-size:0.68rem;color:var(--text-faint);font-weight:700;">${k}</div>
+                  <div style="font-size:0.82rem;font-weight:600;color:${v == null || v === undefined ? '#EF4444' : '#10B981'};">
+                    ${v ?? '⚠️ undefined'}
+                  </div>
+                </div>`).join('')}
+            </div>
+            <details style="margin-bottom:6px;">
+              <summary style="cursor:pointer;font-size:0.82rem;color:#8B5CF6;font-weight:700;">📋 Ver latestPosts[0] raw (JSON completo)</summary>
+              <pre style="margin-top:8px;font-size:0.7rem;overflow-x:auto;max-height:300px;white-space:pre-wrap;color:var(--text-base);">${JSON.stringify(latestPost0, null, 2)}</pre>
+            </details>` : ''}
+          <details>
+            <summary style="cursor:pointer;font-size:0.78rem;color:var(--text-faint);">Ver respuesta completa de Apify</summary>
+            <pre style="margin-top:8px;font-size:0.68rem;overflow-x:auto;max-height:250px;white-space:pre-wrap;color:var(--text-base);">${JSON.stringify({ ...result, perfiles: result.perfiles?.map(p => ({ ...p, latestPosts: `[${(p.latestPosts||[]).length} posts]` })) }, null, 2)}</pre>
           </details>
         </div>`;
     }

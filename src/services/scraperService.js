@@ -259,33 +259,48 @@ async function _runApifyActor(usernames) {
     headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
   });
   if (!itemsRes.ok) throw new Error(`Apify items: ${itemsRes.status}`);
-  const items = await itemsRes.json();
-  console.log(`[Apify] Items recibidos: ${items.length} | primeros 2:`, JSON.stringify(items?.slice(0, 2)));
 
-  // DEBUG importaciones.nj — log raw para diagnóstico de cuentas con muchas vistas
+  // El actor devuelve un array de PERFILES, no de posts individuales.
+  // Cada perfil tiene { username, followersCount, latestPosts: [...], latestIgtvVideos: [...] }
+  const perfiles = await itemsRes.json();
+  console.log(`[Apify] Perfiles recibidos: ${perfiles.length}`,
+    perfiles.map(p => `@${p.username}(${(p.latestPosts || []).length}posts)`).join(', '));
+
+  // Aplanar perfiles → posts individuales con ownerUsername inyectado desde el perfil
+  const allPosts = [];
+  for (const perfil of perfiles) {
+    const uname = perfil.username || '';
+    const posts = [...(perfil.latestPosts || []), ...(perfil.latestIgtvVideos || [])];
+    console.log(`[Apify] @${uname}: ${posts.length} posts (${(perfil.latestPosts || []).length} latestPosts + ${(perfil.latestIgtvVideos || []).length} IGTV)`);
+    if (posts.length === 0) {
+      console.warn(`[Apify] ⚠️ @${uname} tiene 0 posts — posible cuenta privada o sin publicaciones`);
+    }
+    for (const post of posts) {
+      allPosts.push({ ...post, ownerUsername: uname });
+    }
+  }
+  console.log(`[Apify] Total posts aplanados: ${allPosts.length}`);
+
+  // DEBUG importaciones.nj
   if (usernames.some(u => u.toLowerCase() === 'importaciones.nj')) {
-    const njPosts = items.filter(p => (p.ownerUsername || '').toLowerCase() === 'importaciones.nj');
-    console.log(`[DEBUG importaciones.nj] Posts en lote Apify: ${njPosts.length}`);
-    if (njPosts.length > 0) {
-      console.log('[DEBUG importaciones.nj] Primer post (raw completo):', JSON.stringify(njPosts[0], null, 2));
-      console.log('[DEBUG importaciones.nj] Métricas de todos sus posts:', JSON.stringify(
-        njPosts.map(p => ({
-          id: p.id || p.shortCode,
-          type: p.type || p.productType,
-          videoViewCount: p.videoViewCount,
-          videoPlayCount: p.videoPlayCount,
-          likesCount: p.likesCount,
-          url: p.url,
-        }))
-      ));
+    const njPerfil = perfiles.find(p => (p.username || '').toLowerCase() === 'importaciones.nj');
+    if (njPerfil) {
+      console.log(`[DEBUG importaciones.nj] Perfil: ${njPerfil.followersCount} seguidores, ${njPerfil.postsCount} posts totales, ${(njPerfil.latestPosts || []).length} en latestPosts`);
+      const njPosts = allPosts.filter(p => (p.ownerUsername || '').toLowerCase() === 'importaciones.nj');
+      if (njPosts.length > 0) {
+        console.log('[DEBUG importaciones.nj] Primer post:', JSON.stringify(njPosts[0], null, 2));
+        console.log('[DEBUG importaciones.nj] Métricas:', njPosts.map(p => ({
+          id: p.id || p.shortCode, type: p.type,
+          videoViewCount: p.videoViewCount, videoPlayCount: p.videoPlayCount,
+          likesCount: p.likesCount, url: p.url,
+        })));
+      }
     } else {
-      console.warn('[DEBUG importaciones.nj] ⚠️ NO encontrado en respuesta Apify. ownerUsernames recibidos:', [
-        ...new Set(items.map(p => p.ownerUsername).filter(Boolean)),
-      ].join(', '));
+      console.warn('[DEBUG importaciones.nj] ⚠️ NO encontrado. Perfiles recibidos:', perfiles.map(p => p.username).join(', '));
     }
   }
 
-  return items;
+  return allPosts;
 }
 
 // ── PROCESAMIENTO DE RESULTADOS ────────────────────────────────────────────────
@@ -623,18 +638,56 @@ export async function testApifyUno(username = 'servicomprasusa1', onProgress = n
     }
   }
 
-  // ── 3. Dataset items ────────────────────────────────────────────────────────
+  // ── 3. Dataset items (son PERFILES, no posts directos) ─────────────────────
   const itemsRes = await fetch(`${APIFY_BASE}/actor-runs/${runId}/dataset/items`, {
     headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
   });
-  const items = await itemsRes.json();
-  log(`Items recibidos: ${Array.isArray(items) ? items.length : 'NO ES ARRAY'}`);
-  if (Array.isArray(items) && items.length > 0) {
-    log(`Campos del primer item: ${Object.keys(items[0]).join(', ')}`);
-    log(`ownerUsername: ${items[0].ownerUsername}`);
-    log(`videoViewCount: ${items[0].videoViewCount}`);
-    log(`likesCount: ${items[0].likesCount}`);
+  const perfiles = await itemsRes.json();
+  log(`Perfiles recibidos: ${Array.isArray(perfiles) ? perfiles.length : 'NO ES ARRAY'}`);
+
+  let primerPerfil = null;
+  let latestPost0  = null;
+
+  if (Array.isArray(perfiles) && perfiles.length > 0) {
+    const p = perfiles[0];
+    primerPerfil = {
+      username:         p.username,
+      fullName:         p.fullName,
+      followersCount:   p.followersCount,
+      followsCount:     p.followsCount,
+      postsCount:       p.postsCount,
+      latestPostsCount: (p.latestPosts || []).length,
+      igtvCount:        (p.latestIgtvVideos || []).length,
+    };
+    log(`Perfil: @${p.username} | ${p.followersCount?.toLocaleString('es-CO')} seguidores | ${p.postsCount} posts totales`);
+    log(`latestPosts.length: ${(p.latestPosts || []).length}`);
+    log(`latestIgtvVideos.length: ${(p.latestIgtvVideos || []).length}`);
+
+    if ((p.latestPosts || []).length > 0) {
+      latestPost0 = p.latestPosts[0];
+      log(`--- latestPosts[0] ---`);
+      log(`Campos: ${Object.keys(latestPost0).join(', ')}`);
+      log(`id:              ${latestPost0.id}`);
+      log(`shortCode:       ${latestPost0.shortCode}`);
+      log(`type:            ${latestPost0.type}`);
+      log(`videoViewCount:  ${latestPost0.videoViewCount}`);
+      log(`videoPlayCount:  ${latestPost0.videoPlayCount}`);
+      log(`likesCount:      ${latestPost0.likesCount}`);
+      log(`commentsCount:   ${latestPost0.commentsCount}`);
+      log(`timestamp:       ${latestPost0.timestamp}`);
+      log(`url:             ${latestPost0.url}`);
+      log(`caption (100c):  ${String(latestPost0.caption || '').substring(0, 100)}`);
+    } else {
+      log(`⚠️ latestPosts está vacío para @${p.username}`);
+    }
   }
 
-  return { runId, status: lastStatus, itemsCount: Array.isArray(items) ? items.length : 0, items };
+  return {
+    runId,
+    status:       lastStatus,
+    perfilesCount: Array.isArray(perfiles) ? perfiles.length : 0,
+    primerPerfil,
+    latestPost0,
+    perfiles,
+  };
 }
