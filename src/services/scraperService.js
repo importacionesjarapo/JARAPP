@@ -147,13 +147,14 @@ export async function ejecutarScrapingDiario(onProgress = null) {
 
 // ── APIFY ──────────────────────────────────────────────────────────────────────
 async function _runApifyActor(usernames) {
+  console.log(`[Apify] Enviando lote (${usernames.length} cuentas):`, usernames);
   const runRes = await fetch(`${APIFY_BASE}/acts/${APIFY_ACTOR}/runs`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${APIFY_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ usernames, resultsLimit: 10, addParentData: false }),
+    body: JSON.stringify({ usernames, resultsLimit: 20, addParentData: false }),
   });
   if (!runRes.ok) throw new Error(`Apify iniciar run: ${runRes.status} ${await runRes.text()}`);
   const runData = await runRes.json();
