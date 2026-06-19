@@ -700,6 +700,13 @@ async function startApp() {
 
   // Iniciar JaraBot para admin y gerente (solo una vez por sesión)
   initJaraBot(auth);
+
+  // Iniciar scheduler de scraping para admin y gerente
+  if (['admin', 'gerente'].includes(auth.getUserRole())) {
+    import('./services/schedulerService.js').then(({ iniciarScheduler }) => {
+      iniciarScheduler();
+    }).catch(err => console.warn('[Scheduler] Error al iniciar:', err));
+  }
 }
 
 // Arrancar App

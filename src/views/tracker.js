@@ -1,4 +1,7 @@
 import { db } from '../db.js';
+import { auth } from '../auth.js';
+import { getEstadoScheduler, ejecutarAhora } from '../services/schedulerService.js';
+import { construirMensajeWhatsApp } from '../services/scraperService.js';
 
 const client = () => db.client;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -16,6 +19,7 @@ let _filterEstado  = 'todos';
 let _cuentas       = [];
 let _posts         = [];
 let _recs          = [];
+let _scrapingLogs  = null; // null = aún no cargados
 let _renderLayout  = null;
 
 // ─── Styles (injected once) ───────────────────────────────────────────────────
@@ -168,6 +172,17 @@ async function _loadRecs() {
   if (error) throw error;
   _recs = data || [];
   return _recs;
+}
+
+async function _loadScrapingLogs() {
+  const { data, error } = await client()
+    .from('scraping_logs')
+    .select('*')
+    .order('fecha_ejecucion', { ascending: false })
+    .limit(10);
+  if (error) throw error;
+  _scrapingLogs = data || [];
+  return _scrapingLogs;
 }
 
 // ─── KPI strip ────────────────────────────────────────────────────────────────
@@ -500,6 +515,152 @@ function _tabInspiracion() {
   return sections || `<div style="text-align:center;padding:60px;color:var(--text-faint);">Sin cuentas de inspiración.</div>`;
 }
 
+// ─── Tab: Scraping (solo admin) ───────────────────────────────────────────────
+function _tabScraping() {
+  const sched   = getEstadoScheduler();
+  const proxima = sched.proximaEjecucion
+    ? sched.proximaEjecucion.toLocaleString('es-CO', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+    : '—';
+
+  const ultimoLog    = _scrapingLogs?.[0];
+  const ultimaFecha  = ultimoLog?.fecha_ejecucion
+    ? new Date(ultimoLog.fecha_ejecucion).toLocaleString('es-CO', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+    : 'Nunca';
+  const ultimoEstado = ultimoLog?.estado || '—';
+  const estadoColor  = ultimoEstado === 'completado' ? '#10B981' : ultimoEstado === 'error' ? '#D91010' : '#F97316';
+
+  const secEstado = `
+    <div class="glass-card" style="padding:22px;margin-bottom:18px;">
+      <h3 style="font-size:1rem;font-weight:800;margin-bottom:16px;">📡 Estado del sistema</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:16px;">
+        <div style="background:var(--surface-2);border-radius:10px;padding:14px;">
+          <div style="font-size:0.72rem;color:var(--text-faint);font-weight:700;margin-bottom:4px;text-transform:uppercase;">Estado</div>
+          <div style="font-size:0.95rem;font-weight:700;">${sched.activo ? '🟢 Activo' : '🔴 Inactivo'}</div>
+        </div>
+        <div style="background:var(--surface-2);border-radius:10px;padding:14px;">
+          <div style="font-size:0.72rem;color:var(--text-faint);font-weight:700;margin-bottom:4px;text-transform:uppercase;">Próxima ejecución</div>
+          <div style="font-size:0.88rem;font-weight:600;">${proxima}</div>
+        </div>
+        <div style="background:var(--surface-2);border-radius:10px;padding:14px;">
+          <div style="font-size:0.72rem;color:var(--text-faint);font-weight:700;margin-bottom:4px;text-transform:uppercase;">Última ejecución</div>
+          <div style="font-size:0.88rem;font-weight:600;">${ultimaFecha}</div>
+        </div>
+        <div style="background:var(--surface-2);border-radius:10px;padding:14px;">
+          <div style="font-size:0.72rem;color:var(--text-faint);font-weight:700;margin-bottom:4px;text-transform:uppercase;">Último estado</div>
+          <div style="font-size:0.9rem;font-weight:700;color:${estadoColor};">${ultimoEstado}</div>
+        </div>
+      </div>
+      <div style="background:#F9731615;border:1px solid #F9731633;border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#F97316;">
+        ⚠️ El scheduler solo corre mientras JARAPP esté abierto en el navegador.
+        En Sprint 3 se migrará a Supabase Edge Functions para ejecución continua.
+      </div>
+    </div>`;
+
+  const secManual = `
+    <div class="glass-card" style="padding:22px;margin-bottom:18px;">
+      <h3 style="font-size:1rem;font-weight:800;margin-bottom:4px;">▶ Ejecución manual</h3>
+      <p style="color:var(--text-faint);font-size:0.84rem;margin-bottom:16px;">
+        Inicia el scraping inmediatamente. Puede tardar varios minutos según el número de cuentas.
+      </p>
+      <button id="tr-scraping-btn" class="btn-primary" style="font-size:0.92rem;" onclick="window._trEjecutarScraping()">
+        ▶ Ejecutar scraping ahora
+      </button>
+      <div id="tr-scraping-log" style="display:none;margin-top:18px;background:var(--surface-2);border-radius:12px;padding:16px;font-family:monospace;font-size:0.82rem;line-height:2;max-height:240px;overflow-y:auto;white-space:pre-wrap;"></div>
+    </div>`;
+
+  // Historial
+  let histBody = '';
+  if (!_scrapingLogs) {
+    histBody = `<div style="padding:20px;text-align:center;color:var(--text-faint);">Cargando historial...</div>`;
+  } else if (_scrapingLogs.length === 0) {
+    histBody = `<div style="padding:24px;text-align:center;color:var(--text-faint);">Sin ejecuciones registradas aún.<br>Usa el botón "Ejecutar scraping ahora" para comenzar.</div>`;
+  } else {
+    const rows = _scrapingLogs.map(log => {
+      const fecha = new Date(log.fecha_ejecucion).toLocaleString('es-CO', { day:'numeric', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit' });
+      const ec = log.estado === 'completado' ? '#10B981' : log.estado === 'error' ? '#D91010' : '#F97316';
+      return `<tr style="border-bottom:1px solid var(--border-base);">
+        <td style="padding:10px 12px;font-size:0.82rem;">${fecha}</td>
+        <td style="padding:10px 12px;text-align:center;font-size:0.82rem;">${log.cuentas_procesadas}</td>
+        <td style="padding:10px 12px;text-align:center;font-size:0.82rem;">${log.posts_nuevos_detectados}</td>
+        <td style="padding:10px 12px;text-align:center;font-size:0.82rem;color:#D91010;font-weight:700;">${log.posts_virales_detectados}</td>
+        <td style="padding:10px 12px;text-align:center;font-size:0.82rem;">${log.errores || 0}</td>
+        <td style="padding:10px 12px;text-align:center;font-size:0.82rem;">${log.duracion_segundos ? log.duracion_segundos + 's' : '—'}</td>
+        <td style="padding:10px 12px;text-align:center;">
+          <span style="color:${ec};font-size:0.78rem;font-weight:700;">${log.estado}</span>
+        </td>
+      </tr>`;
+    }).join('');
+    histBody = `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="border-bottom:2px solid var(--border-base);">
+            <th style="text-align:left;padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">FECHA/HORA</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">CUENTAS</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">NUEVOS</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">VIRALES</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">ERRORES</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">DURACIÓN</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">ESTADO</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  const secHistorial = `
+    <div class="glass-card" style="padding:22px;margin-bottom:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="font-size:1rem;font-weight:800;">📋 Historial de ejecuciones</h3>
+        <button class="btn-action" onclick="window._trRefrescarLogs()">🔄 Refrescar</button>
+      </div>
+      ${histBody}
+    </div>`;
+
+  // Umbrales
+  const cuentasUmbral = _cuentas.filter(c => c.tipo_cuenta === 'competencia' || c.tipo_cuenta === 'tienda');
+  const umbralRows = cuentasUmbral.map(c => {
+    const umbral = c.umbral_vistas
+      ? c.umbral_vistas.toLocaleString('es-CO')
+      : (c.tier === 1 ? '10.000' : '30.000') + ' (defecto)';
+    return `<tr style="border-bottom:1px solid var(--border-base);">
+      <td style="padding:10px 12px;font-size:0.83rem;font-weight:600;">@${c.usuario_ig}</td>
+      <td style="padding:10px 12px;font-size:0.82rem;color:var(--text-faint);">${c.nombre_display}</td>
+      <td style="padding:10px 12px;text-align:center;">
+        ${c.tier ? `<span style="background:${c.tier===1?'#D91010':'#F97316'};color:#fff;padding:2px 7px;border-radius:6px;font-size:0.7rem;font-weight:800;">T${c.tier}</span>` : '—'}
+      </td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.83rem;font-weight:700;">${umbral}</td>
+      <td style="padding:10px 12px;">
+        <button class="btn-action" style="font-size:0.76rem;"
+          onclick="window._trEditarUmbral('${c.id}','${c.usuario_ig}',${c.umbral_vistas || ''})">
+          ✏️ Editar
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const secUmbrales = `
+    <div class="glass-card" style="padding:22px;">
+      <h3 style="font-size:1rem;font-weight:800;margin-bottom:4px;">⚙️ Umbrales de detección</h3>
+      <p style="color:var(--text-faint);font-size:0.82rem;margin-bottom:16px;">
+        Si un post supera este número de vistas se marca como viral y genera análisis IA automáticamente.
+      </p>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="border-bottom:2px solid var(--border-base);">
+            <th style="text-align:left;padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">@USUARIO</th>
+            <th style="text-align:left;padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">NOMBRE</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">TIER</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">UMBRAL VISTAS</th>
+            <th style="padding:8px 12px;font-size:0.72rem;color:var(--text-faint);font-weight:700;">ACCIÓN</th>
+          </tr></thead>
+          <tbody>${umbralRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  return secEstado + secManual + secHistorial + secUmbrales;
+}
+
 // ─── Sync posts tab counter without full re-render ───────────────────────────
 function _syncPostsTabCount() {
   const rm = {};
@@ -524,17 +685,19 @@ function _renderUI() {
     { id:'competidores', label:'🏆 Competidores', count: _cuentas.filter(c=>c.tipo_cuenta==='competencia').length },
     { id:'posts',        label:'🔥 Posts virales', count: postsCount },
     { id:'inspiracion',  label:'💡 Inspiración',   count: _cuentas.filter(c=>c.tipo_cuenta!=='competencia').length },
+    ...(auth.isAdmin() ? [{ id:'scraping', label:'⚙️ Scraping', count: null }] : []),
   ];
 
   const tabsHTML = tabs.map(t => `
     <button class="tr-tab ${_tab===t.id?'tr-tab-active':''}" onclick="window._trTab('${t.id}')">
       ${t.label}
-      <span ${t.id==='posts'?'id="tr-posts-count"':''} style="background:var(--surface-2);color:var(--text-faint);padding:2px 7px;border-radius:99px;font-size:0.7rem;margin-left:6px;">${t.count}</span>
+      ${t.count !== null ? `<span ${t.id==='posts'?'id="tr-posts-count"':''} style="background:var(--surface-2);color:var(--text-faint);padding:2px 7px;border-radius:99px;font-size:0.7rem;margin-left:6px;">${t.count}</span>` : ''}
     </button>`).join('');
 
   let content = '';
   if (_tab === 'competidores') content = _tabCompetidores();
   else if (_tab === 'posts')   content = _tabPosts();
+  else if (_tab === 'scraping') content = _tabScraping();
   else                         content = _tabInspiracion();
 
   _renderLayout(`
@@ -589,9 +752,13 @@ function _registerHandlers() {
   if (_handlersRegistered) return;
   _handlersRegistered = true;
 
-  window._trTab = (tab) => {
+  window._trTab = async (tab) => {
     _tab = tab;
-    _renderUI();
+    _renderUI(); // render inmediato (puede mostrar "Cargando historial...")
+    if (tab === 'scraping' && _scrapingLogs === null) {
+      await _loadScrapingLogs().catch(() => { _scrapingLogs = []; });
+      _renderUI(); // re-render con datos reales
+    }
   };
 
   window._trFilter = (type, val) => {
@@ -982,5 +1149,133 @@ window._trActualizarEstado = async (recId, nuevoEstado) => {
     _renderUI();
   } catch(err) {
     _toast(`Error: ${err.message}`, 'danger');
+  }
+};
+
+// ─── Modal: Editar umbral de cuenta ──────────────────────────────────────────
+function _modalEditarUmbral(cuentaId, usuarioIg, umbralActual) {
+  const c = document.getElementById('modal-container');
+  const m = document.getElementById('modal-content');
+  if (!c || !m) return;
+
+  m.innerHTML = `
+    <div class="modal-content" style="max-width:440px;">
+      <div class="modal-header">
+        <h2>⚙️ Umbral de @${usuarioIg}</h2>
+        <button class="modal-close-btn" onclick="window.closeModal()">×</button>
+      </div>
+      <div class="modal-body" style="display:grid;gap:16px;">
+        <p style="color:var(--text-faint);font-size:0.86rem;line-height:1.6;">
+          Define cuántas vistas mínimas debe tener un post para ser marcado como viral y generar análisis IA automáticamente.
+        </p>
+        <div>
+          <label class="tr-label">Umbral de vistas *</label>
+          <input id="tru-umbral" type="number" class="tr-inp" style="width:100%;"
+            value="${umbralActual || ''}" placeholder="Ej: 10000" min="1">
+        </div>
+        <div style="background:var(--surface-2);border-radius:10px;padding:12px;font-size:0.8rem;color:var(--text-faint);">
+          💡 Referencia: Tier 1 = 10.000 (defecto) · Tier 2 = 30.000 (defecto)
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button id="tru-btn" class="btn-primary" onclick="window._trGuardarUmbral('${cuentaId}')">Guardar</button>
+      </div>
+    </div>`;
+
+  c.style.display = 'flex';
+}
+
+// ─── Modal: Resumen WhatsApp tras scraping ────────────────────────────────────
+function _modalResumenWhatsApp(resumen) {
+  const c = document.getElementById('modal-container');
+  const m = document.getElementById('modal-content');
+  if (!c || !m) return;
+
+  const msg = construirMensajeWhatsApp(resumen);
+  const { stats } = resumen;
+
+  m.innerHTML = `
+    <div class="modal-content" style="max-width:600px;">
+      <div class="modal-header">
+        <div>
+          <h2>✅ Scraping completado</h2>
+          <p style="color:var(--text-faint);font-size:0.82rem;margin-top:4px;font-weight:400;">
+            ${stats.cuentas_procesadas} cuentas · ${stats.posts_nuevos} posts nuevos · 🔥 ${stats.posts_virales} virales
+          </p>
+        </div>
+        <button class="modal-close-btn" onclick="window.closeModal()">×</button>
+      </div>
+      <div class="modal-body" style="display:grid;gap:14px;">
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;">Mensaje para WhatsApp</div>
+        <textarea id="tr-wsp-msg" class="tr-inp" style="width:100%;height:260px;font-size:0.82rem;line-height:1.7;"
+          readonly>${msg}</textarea>
+        <p style="font-size:0.8rem;color:var(--text-faint);">
+          Copia el mensaje y pégalo manualmente en WhatsApp. La integración automática con Kommo va en Sprint 3.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
+        <button class="btn-primary" onclick="
+          navigator.clipboard.writeText(document.getElementById('tr-wsp-msg').value);
+          this.textContent='✅ Copiado!';
+          setTimeout(()=>this.textContent='📋 Copiar mensaje',2000);
+        ">📋 Copiar mensaje</button>
+      </div>
+    </div>`;
+
+  c.style.display = 'flex';
+}
+
+// ─── Handlers globales: Scraping ──────────────────────────────────────────────
+window._trEjecutarScraping = async () => {
+  const btn = document.getElementById('tr-scraping-btn');
+  const log = document.getElementById('tr-scraping-log');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Ejecutando...'; }
+  if (log) { log.style.display = 'block'; log.textContent = ''; }
+
+  const append = (msg) => {
+    if (log) { log.textContent += msg + '\n'; log.scrollTop = log.scrollHeight; }
+  };
+
+  try {
+    const resumen = await ejecutarAhora(append);
+    await _loadScrapingLogs().catch(() => {});
+    _renderUI();
+    _modalResumenWhatsApp(resumen);
+  } catch (err) {
+    append(`❌ Error: ${err.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = '▶ Ejecutar scraping ahora'; }
+    _toast(`Error en scraping: ${err.message}`, 'danger');
+  }
+};
+
+window._trRefrescarLogs = async () => {
+  _scrapingLogs = null;
+  const el = document.getElementById('tr-tab-content');
+  if (el) el.innerHTML = _tabScraping();
+  await _loadScrapingLogs().catch(() => { _scrapingLogs = []; });
+  if (el) el.innerHTML = _tabScraping();
+};
+
+window._trEditarUmbral = (cuentaId, usuarioIg, umbralActual) => {
+  _modalEditarUmbral(cuentaId, usuarioIg, umbralActual);
+};
+
+window._trGuardarUmbral = async (cuentaId) => {
+  const val = parseInt(document.getElementById('tru-umbral')?.value);
+  if (!val || val < 1) { _toast('Ingresa un umbral válido (número mayor a 0).', 'warning'); return; }
+  const btn = document.getElementById('tru-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  try {
+    const { error } = await client().from('cuentas_tracker').update({ umbral_vistas: val }).eq('id', cuentaId);
+    if (error) throw error;
+    window.closeModal();
+    _toast(`✅ Umbral actualizado: ${val.toLocaleString('es-CO')} vistas`, 'success');
+    await _loadCuentas();
+    _renderUI();
+  } catch (err) {
+    _toast(`Error: ${err.message}`, 'danger');
+    if (btn) { btn.disabled = false; btn.textContent = 'Guardar'; }
   }
 };
