@@ -107,7 +107,7 @@ export async function ejecutarScrapingDiario(onProgress = null) {
 
     const duracion = Math.round((Date.now() - inicio) / 1000);
     _log(`✅ Scraping completado en ${duracion}s`);
-    _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 5}`);
+    _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 10}`);
     _log(`🔥 Virales detectados: ${stats.posts_virales}`);
     _log(`⚠️ Errores: ${stats.errores}`);
 
@@ -153,7 +153,7 @@ async function _runApifyActor(usernames) {
       'Authorization': `Bearer ${APIFY_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ usernames, resultsLimit: 5, addParentData: false }),
+    body: JSON.stringify({ usernames, resultsLimit: 10, addParentData: false }),
   });
   if (!runRes.ok) throw new Error(`Apify iniciar run: ${runRes.status} ${await runRes.text()}`);
   const runData = await runRes.json();
@@ -188,7 +188,6 @@ async function _runApifyActor(usernames) {
 // ── PROCESAMIENTO DE RESULTADOS ────────────────────────────────────────────────
 async function _procesarResultados(posts, cuentasMap) {
   const loteStats = { nuevos: 0, virales: 0, detalle: { competencia: [], tiendas: [], inspiracion: [] } };
-  const hace24h   = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   for (const post of posts) {
     try {
@@ -196,93 +195,127 @@ async function _procesarResultados(posts, cuentasMap) {
       const cuenta   = cuentasMap[username];
       if (!cuenta) continue;
 
-      // Solo posts de las últimas 24 horas
-      const fechaPost = post.timestamp ? new Date(post.timestamp) : null;
-      if (fechaPost && fechaPost < hace24h) continue;
-
       const apifyId = post.id || post.shortCode;
       if (!apifyId) continue;
 
-      // Deduplicación por apify_post_id
+      const vistas     = post.videoViewCount || post.videoPlayCount || 0;
+      const likes      = post.likesCount || 0;
+      const comentarios = post.commentsCount || 0;
+      const metrica    = vistas || likes;
+      const fechaPost  = post.timestamp ? new Date(post.timestamp) : null;
+      const caption    = post.caption || '';
+      const tipo       = _tipoContenido(post.type || post.productType);
+      const hook       = caption.substring(0, 200);
+      const cat        = _categoriaCaption(caption);
+      const amenaza    = _nivelAmenaza(metrica, cuenta);
+
+      // ── Buscar post existente ──────────────────────────────────────────────
       const { data: existing } = await client()
         .from('posts_tracker')
-        .select('id')
+        .select('id, es_viral, analisis_ia')
         .eq('apify_post_id', String(apifyId))
         .maybeSingle();
-      if (existing) continue;
 
-      const vistas   = post.videoViewCount || post.videoPlayCount || 0;
-      const likes    = post.likesCount || 0;
-      const metrica  = vistas || likes;
-      const umbral   = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
-      const esViral  = metrica >= umbral;
-      const amenaza  = _nivelAmenaza(metrica, cuenta);
-      const tipo     = _tipoContenido(post.type || post.productType);
-      const caption  = post.caption || '';
-      const hook     = caption.substring(0, 200);
-      const cat      = _categoriaCaption(caption);
+      let postId;
 
-      const { data: inserted, error: insErr } = await client()
-        .from('posts_tracker')
-        .insert([{
-          cuenta_id:           cuenta.id,
-          apify_post_id:       String(apifyId),
-          url_post:            post.url || `https://instagram.com/p/${post.shortCode}/`,
-          tipo_contenido:      tipo,
-          vistas:              vistas,
-          likes_estimados:     likes,
-          comentarios:         post.commentsCount || 0,
-          hook_texto:          hook,
-          caption_completo:    caption,
-          es_viral:            esViral,
-          nivel_amenaza:       amenaza,
-          categoria_contenido: cat,
-          fecha_publicacion:   fechaPost ? fechaPost.toISOString() : null,
-          origen:              'automatico',
-        }])
-        .select()
-        .single();
+      if (existing) {
+        // Actualizar métricas con valores frescos de Apify
+        postId = existing.id;
+        await client().from('posts_tracker').update({
+          vistas, likes_estimados: likes, comentarios,
+        }).eq('id', postId);
+      } else {
+        // Post nuevo
+        const { data: inserted, error: insErr } = await client()
+          .from('posts_tracker')
+          .insert([{
+            cuenta_id:           cuenta.id,
+            apify_post_id:       String(apifyId),
+            url_post:            post.url || `https://instagram.com/p/${post.shortCode}/`,
+            tipo_contenido:      tipo,
+            vistas, likes_estimados: likes, comentarios,
+            hook_texto:          hook,
+            caption_completo:    caption,
+            es_viral:            false, // se determina después
+            nivel_amenaza:       amenaza,
+            categoria_contenido: cat,
+            fecha_publicacion:   fechaPost ? fechaPost.toISOString() : null,
+            origen:              'automatico',
+          }])
+          .select()
+          .single();
 
-      if (insErr) {
-        if (insErr.code === '23505') continue; // race condition duplicado
-        throw insErr;
+        if (insErr) {
+          if (insErr.code === '23505') continue; // race condition
+          throw insErr;
+        }
+        postId = inserted.id;
+        loteStats.nuevos++;
       }
 
-      loteStats.nuevos++;
+      // ── Snapshot diario + crecimiento ────────────────────────────────────
+      await _guardarSnapshot(postId, vistas, likes, comentarios);
+      const crecimiento = await _calcularCrecimiento(postId, vistas);
 
-      // Análisis IA solo para virales (conservar tokens Groq)
+      await client().from('posts_tracker')
+        .update({ crecimiento_24h: crecimiento })
+        .eq('id', postId);
+
+      // ── Detección de viralidad (umbral absoluto O crecimiento >50%) ──────
+      const umbral          = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
+      const esViralUmbral   = metrica >= umbral;
+      const esViralCrec     = crecimiento > 50;
+      const esViral         = esViralUmbral || esViralCrec;
+      const eraViralAntes   = existing?.es_viral || false;
+
       if (esViral) {
-        loteStats.virales++;
-        try {
-          const ia = await _groqAnalizar(inserted, cuenta);
-          await Promise.all([
-            client().from('posts_tracker')
-              .update({ analisis_ia: ia.analisis })
-              .eq('id', inserted.id),
-            client().from('recreaciones_tracker').insert([{
-              post_id:            inserted.id,
-              guion_recreacion:   ia.guion_recreacion,
-              hook_jarapo:        ia.hook_jarapo,
-              cta_sugerido:       ia.cta_sugerido,
-              musica_sugerida:    ia.musica_sugerida,
-              checklist_produccion: ia.checklist_produccion,
-              estado:             'pendiente',
-            }]),
-          ]);
-        } catch (iaErr) {
-          console.warn('[Scraper] Error IA para post', inserted.id, ':', iaErr.message);
+        await client().from('posts_tracker').update({
+          es_viral: true, nivel_amenaza: amenaza,
+        }).eq('id', postId);
+
+        // Generar IA solo si no existe análisis previo
+        const tieneIA = existing ? !!existing.analisis_ia : false;
+        if (!tieneIA) {
+          loteStats.virales++;
+          try {
+            // Construir objeto post para _groqAnalizar
+            const postObj = {
+              tipo_contenido: tipo, vistas, hook_texto: hook,
+              caption_completo: caption, categoria_contenido: cat, nivel_amenaza: amenaza,
+            };
+            const ia = await _groqAnalizar(postObj, cuenta);
+            // Verificar si ya existe recreacion para no duplicar
+            const { data: recExist } = await client()
+              .from('recreaciones_tracker').select('id')
+              .eq('post_id', postId).maybeSingle();
+
+            await Promise.all([
+              client().from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId),
+              !recExist && client().from('recreaciones_tracker').insert([{
+                post_id:              postId,
+                guion_recreacion:     ia.guion_recreacion,
+                hook_jarapo:         ia.hook_jarapo,
+                cta_sugerido:        ia.cta_sugerido,
+                musica_sugerida:     ia.musica_sugerida,
+                checklist_produccion: ia.checklist_produccion,
+                estado:              'pendiente',
+              }]),
+            ].filter(Boolean));
+          } catch (iaErr) {
+            console.warn('[Scraper] Error IA para post', postId, ':', iaErr.message);
+          }
+        } else if (!eraViralAntes) {
+          // Pasó a viral desde hoy (crecimiento acelerado) pero ya tenía IA
+          loteStats.virales++;
         }
 
         const resumenViral = {
-          usuario_ig:    cuenta.usuario_ig,
-          tipo,
-          vistas:        metrica,
-          hook_texto:    hook,
-          nivel_amenaza: amenaza,
+          usuario_ig: cuenta.usuario_ig, tipo, vistas: metrica,
+          hook_texto: hook, nivel_amenaza: amenaza, crecimiento,
         };
-        if (cuenta.tipo_cuenta === 'competencia')       loteStats.detalle.competencia.push(resumenViral);
-        else if (cuenta.tipo_cuenta === 'tienda')       loteStats.detalle.tiendas.push(resumenViral);
-        else                                             loteStats.detalle.inspiracion.push(resumenViral);
+        if (cuenta.tipo_cuenta === 'competencia')   loteStats.detalle.competencia.push(resumenViral);
+        else if (cuenta.tipo_cuenta === 'tienda')   loteStats.detalle.tiendas.push(resumenViral);
+        else                                         loteStats.detalle.inspiracion.push(resumenViral);
       }
     } catch (err) {
       console.error('[Scraper] Error en post individual:', err.message, '| post.id:', post?.id);
@@ -290,6 +323,31 @@ async function _procesarResultados(posts, cuentasMap) {
   }
 
   return loteStats;
+}
+
+// ── SNAPSHOTS ─────────────────────────────────────────────────────────────────
+async function _guardarSnapshot(postId, vistas, likes, comentarios) {
+  const hoy = new Date().toISOString().split('T')[0];
+  await client().from('snapshot_metricas').upsert({
+    post_id: postId, vistas, likes, comentarios, fecha_snapshot: hoy,
+  }, { onConflict: 'post_id,fecha_snapshot' });
+}
+
+async function _calcularCrecimiento(postId, vistasHoy) {
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  const ayerStr = ayer.toISOString().split('T')[0];
+
+  const { data: snapAyer } = await client()
+    .from('snapshot_metricas')
+    .select('vistas')
+    .eq('post_id', postId)
+    .eq('fecha_snapshot', ayerStr)
+    .maybeSingle();
+
+  if (!snapAyer || !snapAyer.vistas || snapAyer.vistas === 0) return 0;
+  const crec = ((vistasHoy - snapAyer.vistas) / snapAyer.vistas) * 100;
+  return Math.max(0, Math.round(crec));
 }
 
 // ── GROQ ───────────────────────────────────────────────────────────────────────

@@ -434,12 +434,13 @@ function _tabPosts() {
 
         ${p.hook_texto ? `<div style="font-style:italic;padding:12px;background:var(--surface-2);border-radius:10px;font-size:0.88rem;margin-bottom:12px;line-height:1.5;">"${p.hook_texto}"</div>` : ''}
 
-        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:14px;">
+        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:14px;align-items:center;">
           <span style="color:var(--text-faint);font-size:0.82rem;">👁 <strong style="color:var(--text-main);">${(p.vistas||0).toLocaleString('es-CO')}</strong></span>
           <span style="color:var(--text-faint);font-size:0.82rem;">❤️ <strong style="color:var(--text-main);">${(p.likes_estimados||0).toLocaleString('es-CO')}</strong></span>
           <span style="color:var(--text-faint);font-size:0.82rem;">💬 <strong style="color:var(--text-main);">${(p.comentarios||0).toLocaleString('es-CO')}</strong></span>
           <span style="color:var(--text-faint);font-size:0.82rem;">📅 Pub: ${fPub}</span>
           <span style="color:var(--text-faint);font-size:0.82rem;">🔍 Det: ${fDet}</span>
+          ${p.crecimiento_24h > 0 ? `<span style="background:${p.crecimiento_24h >= 50 ? '#10B98120' : '#F9731620'};color:${p.crecimiento_24h >= 50 ? '#10B981' : '#F97316'};border:1px solid ${p.crecimiento_24h >= 50 ? '#10B98155' : '#F9731655'};padding:3px 10px;border-radius:99px;font-size:0.72rem;font-weight:700;">📈 +${Math.round(p.crecimiento_24h)}% en 24h</span>` : ''}
         </div>
 
         <div style="display:flex;flex-wrap:wrap;gap:8px;">
