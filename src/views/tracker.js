@@ -639,6 +639,24 @@ function _tabScraping() {
     </tr>`;
   }).join('');
 
+  // Sección: Cuentas sin datos (del último scraping)
+  const sinDatosUltimo = _scrapingLogs?.[0]?.resumen?.cuentas_sin_datos || [];
+  const secSinDatos = sinDatosUltimo.length === 0 ? '' : `
+    <div class="glass-card" style="padding:22px;margin-bottom:18px;border-left:4px solid #F97316;">
+      <h3 style="font-size:1rem;font-weight:800;margin-bottom:6px;color:#F97316;">⚠️ Cuentas sin datos (última ejecución)</h3>
+      <p style="color:var(--text-faint);font-size:0.82rem;margin-bottom:14px;">
+        Apify no devolvió posts para estas cuentas. Pueden tener el username incorrecto,
+        ser privadas, o haber sido suspendidas. Verifica en Instagram y corrige en la pestaña Competidores.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${sinDatosUltimo.map(u => `
+          <a href="https://instagram.com/${u}" target="_blank"
+            style="background:#F9731618;color:#F97316;border:1px solid #F9731644;padding:5px 12px;border-radius:99px;font-size:0.82rem;font-weight:600;text-decoration:none;">
+            @${u} ↗
+          </a>`).join('')}
+      </div>
+    </div>`;
+
   const secUmbrales = `
     <div class="glass-card" style="padding:22px;">
       <h3 style="font-size:1rem;font-weight:800;margin-bottom:4px;">⚙️ Umbrales de detección</h3>
@@ -659,7 +677,7 @@ function _tabScraping() {
       </div>
     </div>`;
 
-  return secEstado + secManual + secHistorial + secUmbrales;
+  return secEstado + secManual + secHistorial + secSinDatos + secUmbrales;
 }
 
 // ─── Sync posts tab counter without full re-render ───────────────────────────

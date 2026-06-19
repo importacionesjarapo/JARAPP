@@ -56,10 +56,11 @@ export async function ejecutarScrapingDiario(onProgress = null) {
   const logId = logEntry?.id;
 
   const stats = {
-    cuentas_procesadas: 0,
-    posts_nuevos: 0,
-    posts_virales: 0,
-    errores: 0,
+    cuentas_procesadas:  0,
+    posts_nuevos:        0,
+    posts_virales:       0,
+    errores:             0,
+    cuentas_sin_datos:   [],
     virales: { competencia: [], tiendas: [], inspiracion: [] },
   };
 
@@ -90,6 +91,18 @@ export async function ejecutarScrapingDiario(onProgress = null) {
 
       try {
         const posts = await _runApifyActor(usernames);
+
+        // Detectar cuentas que Apify no devolvió (username inválido o privado)
+        const usernamesConDatos = new Set(
+          posts.map(p => (p.ownerUsername || '').toLowerCase())
+        );
+        const sinDatos = usernames.filter(u => !usernamesConDatos.has(u.toLowerCase()));
+        if (sinDatos.length > 0) {
+          console.warn('[Scraper] Sin datos en este lote:', sinDatos);
+          _log(`⚠️ Sin datos: ${sinDatos.join(', ')}`);
+          stats.cuentas_sin_datos.push(...sinDatos);
+        }
+
         const loteStats = await _procesarResultados(posts, cuentasMap);
         stats.cuentas_procesadas += lote.length;
         stats.posts_nuevos       += loteStats.nuevos;
@@ -107,9 +120,12 @@ export async function ejecutarScrapingDiario(onProgress = null) {
 
     const duracion = Math.round((Date.now() - inicio) / 1000);
     _log(`✅ Scraping completado en ${duracion}s`);
-    _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 10}`);
+    _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 30}`);
     _log(`🔥 Virales detectados: ${stats.posts_virales}`);
     _log(`⚠️ Errores: ${stats.errores}`);
+    if (stats.cuentas_sin_datos.length > 0) {
+      _log(`❌ Sin datos (${stats.cuentas_sin_datos.length}): ${stats.cuentas_sin_datos.join(', ')}`);
+    }
 
     if (logId) {
       await client().from('scraping_logs').update({
@@ -119,13 +135,14 @@ export async function ejecutarScrapingDiario(onProgress = null) {
         posts_virales_detectados: stats.posts_virales,
         errores:                  stats.errores,
         duracion_segundos:        duracion,
-        resumen:                  { virales: stats.virales },
+        resumen:                  { virales: stats.virales, cuentas_sin_datos: stats.cuentas_sin_datos },
       }).eq('id', logId);
     }
 
     return {
       stats,
-      virales: stats.virales,
+      virales:           stats.virales,
+      cuentas_sin_datos: stats.cuentas_sin_datos,
       fecha: new Date().toLocaleDateString('es-CO', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       }),
@@ -154,7 +171,7 @@ async function _runApifyActor(usernames) {
       'Authorization': `Bearer ${APIFY_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ usernames, resultsLimit: 20, addParentData: false }),
+    body: JSON.stringify({ usernames, resultsLimit: 30, addParentData: false }),
   });
   if (!runRes.ok) throw new Error(`Apify iniciar run: ${runRes.status} ${await runRes.text()}`);
   const runData = await runRes.json();
@@ -384,7 +401,8 @@ async function _groqAnalizar(post, cuenta) {
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
 function _umbralDefecto(tier) {
-  return tier === 1 ? 10000 : 30000;
+  // Fallback si umbral_vistas es null en BD. Debe coincidir con los UPDATEs en Supabase.
+  return tier === 1 ? 1000 : 3000;
 }
 
 function _nivelAmenaza(vistas, cuenta) {
