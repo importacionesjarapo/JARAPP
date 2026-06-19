@@ -140,11 +140,12 @@ async function _loadCuentas() {
   const { data, error } = await client()
     .from('cuentas_tracker')
     .select('*')
-    .order('tipo_cuenta')
-    .order('tier', { ascending: true, nullsFirst: false })
-    .order('nombre_display');
+    .order('tipo_cuenta', { ascending: true })
+    .order('nombre_display', { ascending: true });
+  console.log('[Tracker] cuentas raw:', data, 'error:', error);
   if (error) throw error;
   _cuentas = data || [];
+  console.log('[Tracker] _cuentas.length:', _cuentas.length, '| sample[0]:', _cuentas[0]);
   return _cuentas;
 }
 
@@ -196,6 +197,30 @@ function _kpis() {
         <div class="kpi-strip-value" style="color:${altos.length ? '#D91010' : '#10B981'};">${altos.length}</div>
         <div class="kpi-strip-label">Amenaza alta</div>
       </div>
+    </div>`;
+}
+
+// ─── Debug helper ────────────────────────────────────────────────────────────
+function _debugSinResultados() {
+  if (_cuentas.length === 0) {
+    return `
+      <div style="text-align:center;padding:40px;color:var(--text-faint);background:var(--surface-2);border-radius:12px;margin-top:8px;">
+        <div style="font-size:2.5rem;margin-bottom:12px;">🔒</div>
+        <p style="font-weight:700;color:var(--text-main);margin-bottom:8px;">No se cargaron cuentas (array vacío)</p>
+        <p style="font-size:0.84rem;margin-bottom:12px;">Posible causa: <strong>Row Level Security (RLS)</strong> activo en <code>cuentas_tracker</code> sin política para el rol <code>anon</code>.</p>
+        <p style="font-size:0.82rem;">Solución: en Supabase → Authentication → Policies → <strong>cuentas_tracker</strong> → agregar política de lectura para <code>anon</code>.<br>O bien: desactivar RLS en esa tabla.</p>
+        <p style="font-size:0.78rem;margin-top:12px;color:#F97316;">Revisa el console.log '[Tracker] cuentas raw' en DevTools para confirmar.</p>
+      </div>`;
+  }
+  // Data arrived but tipo_cuenta filter produced 0 — show actual field values for diagnosis
+  const tiposEncontrados = [...new Set(_cuentas.map(c => c.tipo_cuenta))].join(', ');
+  const camposEjemplo = _cuentas[0] ? Object.keys(_cuentas[0]).join(', ') : '—';
+  return `
+    <div style="padding:20px;background:var(--surface-2);border-radius:12px;border:1px solid #F97316;margin-top:8px;">
+      <p style="font-weight:700;color:#F97316;margin-bottom:10px;">⚠️ Filtro sin resultados — datos presentes pero no coinciden</p>
+      <p style="font-size:0.84rem;margin-bottom:6px;"><strong>Total cuentas cargadas:</strong> ${_cuentas.length}</p>
+      <p style="font-size:0.84rem;margin-bottom:6px;"><strong>Valores de tipo_cuenta en DB:</strong> <code>${tiposEncontrados}</code></p>
+      <p style="font-size:0.84rem;"><strong>Campos disponibles:</strong> <code>${camposEjemplo}</code></p>
     </div>`;
 }
 
@@ -261,7 +286,7 @@ function _tabCompetidores() {
         value="${_filterSearch}" oninput="window._trFilter('search',this.value)">
       <button class="btn-primary" onclick="window._trAddCuenta()">+ Agregar cuenta</button>
     </div>
-    ${!lista.length ? `<div style="text-align:center;padding:60px;color:var(--text-faint);">Sin resultados.</div>` : `
+    ${!lista.length ? _debugSinResultados() : `
       <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;">
           <thead><tr style="border-bottom:2px solid var(--border-base);">
@@ -424,6 +449,7 @@ function _tabInspiracion() {
 
 // ─── Render UI ────────────────────────────────────────────────────────────────
 function _renderUI() {
+  console.log('[Tracker] _renderUI called | _cuentas:', _cuentas.length, '| _posts:', _posts.length, '| _recs:', _recs.length);
   const tabs = [
     { id:'competidores', label:'🏆 Competidores', count: _cuentas.filter(c=>c.tipo_cuenta==='competencia').length },
     { id:'posts',        label:'🔥 Posts virales', count: _posts.length },
