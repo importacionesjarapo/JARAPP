@@ -468,7 +468,7 @@ function _renderUI() {
   else                         content = _tabInspiracion();
 
   _renderLayout(`
-    <div style="max-width:1200px;">
+    <div>
       <div style="margin-bottom:20px;">
         <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:4px;">📊 Competitor Tracker</h2>
         <p style="color:var(--text-faint);font-size:0.85rem;">Monitoreo Instagram · Registro manual de posts virales · Análisis IA con Groq</p>
@@ -592,86 +592,103 @@ function _modalRegistrarPost(cuentaId, usuarioIg, nombreDisplay) {
   if (!c || !m) return;
 
   m.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">
-      <div>
-        <h3 style="font-size:1.15rem;font-weight:800;">+ Registrar post viral</h3>
-        <p style="color:var(--text-faint);font-size:0.82rem;margin-top:3px;">@${usuarioIg} · ${nombreDisplay}</p>
-      </div>
-      <button onclick="window.closeModal()" style="background:none;border:none;color:var(--text-faint);font-size:1.6rem;cursor:pointer;line-height:1;padding:0 4px;">×</button>
-    </div>
-    <div style="display:grid;gap:14px;max-height:65vh;overflow-y:auto;padding-right:4px;">
-      <div>
-        <label class="tr-label">URL del post *</label>
-        <input id="trp-url" type="url" class="tr-inp" style="width:100%;" placeholder="https://www.instagram.com/reel/...">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+    <div class="modal-content" style="max-width:800px;">
+      <div class="modal-header">
         <div>
-          <label class="tr-label">Tipo de contenido</label>
-          <select id="trp-tipo" class="tr-sel" style="width:100%;">
-            <option value="reel">Reel</option>
-            <option value="carrusel">Carrusel</option>
-            <option value="post">Post</option>
-            <option value="story">Story</option>
-          </select>
+          <h2>+ Registrar post viral</h2>
+          <p style="color:var(--text-faint);font-size:0.82rem;margin-top:4px;font-weight:400;">@${usuarioIg} · ${nombreDisplay}</p>
         </div>
+        <button class="modal-close-btn" onclick="window.closeModal()">×</button>
+      </div>
+
+      <div class="modal-body" style="display:grid;gap:18px;">
+        <!-- Fila 1: URL completa -->
         <div>
-          <label class="tr-label">Nivel de amenaza</label>
-          <select id="trp-amenaza" class="tr-sel" style="width:100%;">
-            <option value="alto">🔴 Alto</option>
-            <option value="medio" selected>🟠 Medio</option>
-            <option value="bajo">⚪ Bajo</option>
-          </select>
+          <label class="tr-label">URL del post *</label>
+          <input id="trp-url" type="url" class="tr-inp" style="width:100%;" placeholder="https://www.instagram.com/reel/...">
+        </div>
+
+        <!-- Fila 2: Tipo | Amenaza -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label class="tr-label">Tipo de contenido</label>
+            <select id="trp-tipo" class="tr-sel" style="width:100%;">
+              <option value="reel">Reel</option>
+              <option value="carrusel">Carrusel</option>
+              <option value="post">Post</option>
+              <option value="story">Story</option>
+            </select>
+          </div>
+          <div>
+            <label class="tr-label">Nivel de amenaza</label>
+            <select id="trp-amenaza" class="tr-sel" style="width:100%;">
+              <option value="alto">🔴 Alto</option>
+              <option value="medio" selected>🟠 Medio</option>
+              <option value="bajo">⚪ Bajo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Fila 3: Vistas | Likes | Comentarios -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+          <div>
+            <label class="tr-label">Vistas actuales</label>
+            <input id="trp-vistas" type="number" class="tr-inp" style="width:100%;" placeholder="10000">
+          </div>
+          <div>
+            <label class="tr-label">Likes estimados</label>
+            <input id="trp-likes" type="number" class="tr-inp" style="width:100%;" placeholder="500">
+          </div>
+          <div>
+            <label class="tr-label">Comentarios</label>
+            <input id="trp-coms" type="number" class="tr-inp" style="width:100%;" placeholder="50">
+          </div>
+        </div>
+
+        <!-- Fila 4: Hook -->
+        <div>
+          <label class="tr-label">Hook / primeras palabras del post</label>
+          <input id="trp-hook" type="text" class="tr-inp" style="width:100%;" placeholder="Las primeras palabras o idea central del reel…">
+        </div>
+
+        <!-- Fila 5: Caption -->
+        <div>
+          <label class="tr-label">Caption completo</label>
+          <textarea id="trp-caption" class="tr-inp" style="width:100%;height:110px;" placeholder="Pega el caption completo del post aquí…"></textarea>
+        </div>
+
+        <!-- Fila 6: Categoría | Fecha -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label class="tr-label">Categoría de contenido</label>
+            <select id="trp-cat" class="tr-sel" style="width:100%;">
+              <option value="historia_personal">Historia personal</option>
+              <option value="producto">Producto</option>
+              <option value="precio">Precio / Ahorro</option>
+              <option value="oferta">Oferta</option>
+              <option value="lifestyle">Lifestyle</option>
+              <option value="educativo">Educativo</option>
+            </select>
+          </div>
+          <div>
+            <label class="tr-label">Fecha de publicación</label>
+            <input id="trp-fecha" type="date" class="tr-inp" style="width:100%;" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+        </div>
+
+        <!-- Fila 7: Viral checkbox -->
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface-2);border-radius:10px;">
+          <input type="checkbox" id="trp-viral" style="width:18px;height:18px;accent-color:#D91010;flex-shrink:0;">
+          <label for="trp-viral" style="font-size:0.92rem;font-weight:600;cursor:pointer;">Marcar como viral 🔥 <span style="font-size:0.8rem;font-weight:400;color:var(--text-faint);">(activa alerta WhatsApp)</span></label>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-        <div>
-          <label class="tr-label">Vistas</label>
-          <input id="trp-vistas" type="number" class="tr-inp" style="width:100%;" placeholder="10000">
-        </div>
-        <div>
-          <label class="tr-label">Likes estimados</label>
-          <input id="trp-likes" type="number" class="tr-inp" style="width:100%;" placeholder="500">
-        </div>
-        <div>
-          <label class="tr-label">Comentarios</label>
-          <input id="trp-coms" type="number" class="tr-inp" style="width:100%;" placeholder="50">
-        </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button id="trp-btn" class="btn-primary" onclick="window._trGuardarPost('${cuentaId}')">
+          💾 Guardar y generar análisis IA
+        </button>
       </div>
-      <div>
-        <label class="tr-label">Hook / primeras palabras del post</label>
-        <input id="trp-hook" type="text" class="tr-inp" style="width:100%;" placeholder="Las primeras palabras o idea central…">
-      </div>
-      <div>
-        <label class="tr-label">Caption completo</label>
-        <textarea id="trp-caption" class="tr-inp" style="width:100%;height:90px;" placeholder="Pega el caption completo aquí…"></textarea>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <label class="tr-label">Categoría de contenido</label>
-          <select id="trp-cat" class="tr-sel" style="width:100%;">
-            <option value="historia_personal">Historia personal</option>
-            <option value="producto">Producto</option>
-            <option value="precio">Precio / Ahorro</option>
-            <option value="oferta">Oferta</option>
-            <option value="lifestyle">Lifestyle</option>
-            <option value="educativo">Educativo</option>
-          </select>
-        </div>
-        <div>
-          <label class="tr-label">Fecha de publicación</label>
-          <input id="trp-fecha" type="date" class="tr-inp" style="width:100%;" value="${new Date().toISOString().split('T')[0]}">
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <input type="checkbox" id="trp-viral" style="width:16px;height:16px;accent-color:#D91010;">
-        <label for="trp-viral" style="font-size:0.9rem;font-weight:600;cursor:pointer;">Marcar como viral 🔥</label>
-      </div>
-    </div>
-    <div style="margin-top:20px;display:flex;gap:10px;">
-      <button class="btn-secondary" onclick="window.closeModal()" style="flex:1;">Cancelar</button>
-      <button id="trp-btn" class="btn-primary" style="flex:2;" onclick="window._trGuardarPost('${cuentaId}')">
-        💾 Guardar y generar análisis IA
-      </button>
     </div>`;
 
   c.style.display = 'flex';
@@ -753,65 +770,67 @@ function _modalAgregarCuenta() {
   if (!c || !m) return;
 
   m.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <h3 style="font-size:1.15rem;font-weight:800;">+ Agregar cuenta</h3>
-      <button onclick="window.closeModal()" style="background:none;border:none;color:var(--text-faint);font-size:1.6rem;cursor:pointer;line-height:1;padding:0 4px;">×</button>
-    </div>
-    <div style="display:grid;gap:14px;">
-      <div>
-        <label class="tr-label">@Usuario de Instagram *</label>
-        <input id="trac-usr" type="text" class="tr-inp" style="width:100%;" placeholder="sin_arroba_al_inicio">
+    <div class="modal-content" style="max-width:600px;">
+      <div class="modal-header">
+        <h2>+ Agregar cuenta</h2>
+        <button class="modal-close-btn" onclick="window.closeModal()">×</button>
       </div>
-      <div>
-        <label class="tr-label">Nombre display *</label>
-        <input id="trac-nom" type="text" class="tr-inp" style="width:100%;" placeholder="Nombre legible de la cuenta">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <label class="tr-label">Tipo</label>
-          <select id="trac-tipo" class="tr-sel" style="width:100%;">
-            <option value="competencia">Competencia</option>
-            <option value="tienda">Tienda</option>
-            <option value="inspiracion">Inspiración</option>
-          </select>
+      <div class="modal-body" style="display:grid;gap:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label class="tr-label">@Usuario de Instagram *</label>
+            <input id="trac-usr" type="text" class="tr-inp" style="width:100%;" placeholder="sin_arroba_al_inicio">
+          </div>
+          <div>
+            <label class="tr-label">Nombre display *</label>
+            <input id="trac-nom" type="text" class="tr-inp" style="width:100%;" placeholder="Nombre legible">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label class="tr-label">Tipo</label>
+            <select id="trac-tipo" class="tr-sel" style="width:100%;">
+              <option value="competencia">Competencia</option>
+              <option value="tienda">Tienda</option>
+              <option value="inspiracion">Inspiración</option>
+            </select>
+          </div>
+          <div>
+            <label class="tr-label">Tier</label>
+            <select id="trac-tier" class="tr-sel" style="width:100%;">
+              <option value="">Sin tier</option>
+              <option value="1">Tier 1 (crítico)</option>
+              <option value="2">Tier 2</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div>
+            <label class="tr-label">Categoría</label>
+            <select id="trac-cat" class="tr-sel" style="width:100%;">
+              <option value="personal_shopper">Personal Shopper</option>
+              <option value="retail_usa">Retail USA</option>
+              <option value="tienda_co">Tienda CO</option>
+              <option value="sneakers">Sneakers</option>
+              <option value="marketing">Marketing</option>
+              <option value="creador">Creador</option>
+              <option value="otros">Otros</option>
+            </select>
+          </div>
+          <div>
+            <label class="tr-label">País</label>
+            <input id="trac-pais" type="text" class="tr-inp" style="width:100%;" value="Colombia">
+          </div>
         </div>
         <div>
-          <label class="tr-label">Tier</label>
-          <select id="trac-tier" class="tr-sel" style="width:100%;">
-            <option value="">Sin tier</option>
-            <option value="1">Tier 1 (crítico)</option>
-            <option value="2">Tier 2</option>
-          </select>
+          <label class="tr-label">Notas (opcional)</label>
+          <textarea id="trac-notas" class="tr-inp" style="width:100%;height:70px;" placeholder="Observaciones sobre esta cuenta…"></textarea>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div>
-          <label class="tr-label">Categoría</label>
-          <select id="trac-cat" class="tr-sel" style="width:100%;">
-            <option value="personal_shopper">Personal Shopper</option>
-            <option value="retail_usa">Retail USA</option>
-            <option value="tienda_co">Tienda CO</option>
-            <option value="sneakers">Sneakers</option>
-            <option value="marketing">Marketing</option>
-            <option value="creador">Creador</option>
-            <option value="otros">Otros</option>
-          </select>
-        </div>
-        <div>
-          <label class="tr-label">País</label>
-          <input id="trac-pais" type="text" class="tr-inp" style="width:100%;" value="Colombia">
-        </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button id="trac-btn" class="btn-primary" onclick="window._trGuardarCuenta()">Agregar cuenta</button>
       </div>
-      <div>
-        <label class="tr-label">Notas (opcional)</label>
-        <textarea id="trac-notas" class="tr-inp" style="width:100%;height:65px;" placeholder="Observaciones sobre esta cuenta…"></textarea>
-      </div>
-    </div>
-    <div style="margin-top:20px;display:flex;gap:10px;">
-      <button class="btn-secondary" onclick="window.closeModal()" style="flex:1;">Cancelar</button>
-      <button id="trac-btn" class="btn-primary" style="flex:2;" onclick="window._trGuardarCuenta()">
-        Agregar cuenta
-      </button>
     </div>`;
 
   c.style.display = 'flex';
@@ -857,19 +876,24 @@ function _modalCambiarEstado(recId, estadoActual) {
 
   const estados = ['pendiente','en_produccion','publicada','descartada'];
   m.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <h3 style="font-size:1.1rem;font-weight:800;">Cambiar estado de recreación</h3>
-      <button onclick="window.closeModal()" style="background:none;border:none;color:var(--text-faint);font-size:1.6rem;cursor:pointer;line-height:1;padding:0 4px;">×</button>
-    </div>
-    <div style="display:grid;gap:8px;">
-      ${estados.map(e => {
-        const meta = ESTADO_REC[e];
-        const activo = e === estadoActual;
-        return `<button onclick="window._trActualizarEstado('${recId}','${e}')"
-          style="background:${meta.bg};color:${meta.color};border:2px solid ${activo?meta.color:'transparent'};padding:14px 18px;border-radius:12px;font-size:0.92rem;font-weight:600;cursor:pointer;text-align:left;font-family:var(--font);">
-          ${meta.label}${activo?' ← actual':''}
-        </button>`;
-      }).join('')}
+    <div class="modal-content" style="max-width:440px;">
+      <div class="modal-header">
+        <h2>Cambiar estado</h2>
+        <button class="modal-close-btn" onclick="window.closeModal()">×</button>
+      </div>
+      <div class="modal-body" style="display:grid;gap:8px;">
+        ${estados.map(e => {
+          const meta = ESTADO_REC[e];
+          const activo = e === estadoActual;
+          return `<button onclick="window._trActualizarEstado('${recId}','${e}')"
+            style="background:${meta.bg};color:${meta.color};border:2px solid ${activo?meta.color:'transparent'};padding:14px 18px;border-radius:12px;font-size:0.92rem;font-weight:600;cursor:pointer;text-align:left;font-family:var(--font);">
+            ${meta.label}${activo?' <span style="opacity:0.6;font-size:0.8rem;font-weight:400;">← actual</span>':''}
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+      </div>
     </div>`;
 
   c.style.display = 'flex';
