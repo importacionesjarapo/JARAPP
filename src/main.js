@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -19,6 +19,7 @@ import { renderAdmin } from './views/admin.js';
 import { renderViaje } from './views/viaje.js';
 import { renderCotizador } from './views/cotizador.js';
 import { renderDocumentacion } from './views/documentacion.js';
+import { renderTracker } from './views/tracker.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
 import { AlertasService } from './services/alertas.js';
@@ -55,6 +56,7 @@ const NAV_GROUPS = [
       { view: 'purchases',   icon: 'globe',             label: 'Compras USA',  module: 'purchases'   },
       { view: 'logistics',   icon: 'truck',             label: 'Seguimientos', module: 'logistics'   },
       { view: 'viaje',       icon: 'plane',             label: 'Viaje EEUU',   module: null, roleOnly: ['admin','gerente'] },
+      { view: 'tracker',     icon: 'trending-up',       label: 'Competitor Tracker', module: null, roleOnly: ['admin','gerente'] },
     ]
   },
   {
@@ -288,7 +290,7 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg (delay 0 = próximo microtask, sin flash visible)
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp }
     });
 
     // Restaurar logo desde sessionStorage (persiste entre navegaciones)
@@ -397,7 +399,7 @@ const TITULOS = {
   clients: 'Clientes', purchases: 'Compras', logistics: 'Logística',
   finance: 'Finanzas', params: 'Parámetros', calculadora: 'Calculadora',
   admin: 'Administración', settings: 'Configuración', viaje: 'Viaje EEUU', documentacion: 'Documentación',
-  cotizador: 'Cotizador',
+  cotizador: 'Cotizador', tracker: 'Competitor Tracker',
 };
 
 export const navigateTo = (view) => {
@@ -457,13 +459,14 @@ export const navigateTo = (view) => {
     case 'viaje':        renderViaje(renderLayout, navigateTo); break;
     case 'cotizador':    renderCotizador(renderLayout, navigateTo); break;
     case 'documentacion': renderDocumentacion(renderLayout, navigateTo); break;
+    case 'tracker':       renderTracker(renderLayout, navigateTo); break;
     default: renderPlaceholder(view); break;
   }
   
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp }
     });
   }, 200);
 };
