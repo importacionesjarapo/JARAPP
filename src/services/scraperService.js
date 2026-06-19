@@ -47,6 +47,9 @@ export async function ejecutarScrapingDiario(onProgress = null) {
   _onProgress = onProgress;
   const inicio = Date.now();
 
+  // Guard: cliente Supabase disponible
+  if (!db.client) throw new Error('Cliente Supabase no inicializado. Verifica credenciales en db.js.');
+
   // Registrar inicio en scraping_logs
   const { data: logEntry } = await client()
     .from('scraping_logs')
@@ -55,12 +58,26 @@ export async function ejecutarScrapingDiario(onProgress = null) {
     .single();
   const logId = logEntry?.id;
 
+  // Cargar cuentas_sin_datos de la última ejecución completada (para auto-desactivación)
+  let sinDatosAnterior = [];
+  try {
+    const { data: lastLog } = await client()
+      .from('scraping_logs')
+      .select('resumen')
+      .eq('estado', 'completado')
+      .order('fecha_ejecucion', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    sinDatosAnterior = lastLog?.resumen?.cuentas_sin_datos || [];
+  } catch (_) {}
+
   const stats = {
-    cuentas_procesadas:  0,
-    posts_nuevos:        0,
-    posts_virales:       0,
-    errores:             0,
-    cuentas_sin_datos:   [],
+    cuentas_procesadas:     0,
+    posts_nuevos:           0,
+    posts_virales:          0,
+    errores:                0,
+    cuentas_sin_datos:      [],
+    cuentas_desactivadas:   [],
     virales: { competencia: [], tiendas: [], inspiracion: [] },
   };
 
@@ -118,6 +135,34 @@ export async function ejecutarScrapingDiario(onProgress = null) {
       if (i < lotes.length - 1) await _sleep(2000);
     }
 
+    // ── Auto-desactivar cuentas con 0 datos en 2 ejecuciones consecutivas ─────
+    if (stats.cuentas_sin_datos.length > 0 && sinDatosAnterior.length > 0) {
+      const reincidentes = stats.cuentas_sin_datos.filter(u =>
+        sinDatosAnterior.map(x => x.toLowerCase()).includes(u.toLowerCase())
+      );
+      if (reincidentes.length > 0) {
+        _log(`🔕 Desactivando ${reincidentes.length} cuenta(s) reincidentes sin datos: ${reincidentes.join(', ')}`);
+        for (const username of reincidentes) {
+          try {
+            const { error: deactErr } = await client()
+              .from('cuentas_tracker')
+              .update({
+                activo: false,
+                notas: 'Desactivada automáticamente: sin datos Apify en 2 ejecuciones consecutivas (posible cuenta privada o usuario incorrecto)',
+              })
+              .eq('usuario_ig', username);
+            if (deactErr) throw deactErr;
+            stats.cuentas_desactivadas.push(username);
+          } catch (e) {
+            console.error(`[Scraper] Error al desactivar ${username}:`, e.message);
+          }
+        }
+        if (stats.cuentas_desactivadas.length > 0) {
+          _log(`✅ Desactivadas: ${stats.cuentas_desactivadas.join(', ')}`);
+        }
+      }
+    }
+
     const duracion = Math.round((Date.now() - inicio) / 1000);
     _log(`✅ Scraping completado en ${duracion}s`);
     _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 30}`);
@@ -125,6 +170,9 @@ export async function ejecutarScrapingDiario(onProgress = null) {
     _log(`⚠️ Errores: ${stats.errores}`);
     if (stats.cuentas_sin_datos.length > 0) {
       _log(`❌ Sin datos (${stats.cuentas_sin_datos.length}): ${stats.cuentas_sin_datos.join(', ')}`);
+    }
+    if (stats.cuentas_desactivadas.length > 0) {
+      _log(`🔕 Desactivadas automáticamente (${stats.cuentas_desactivadas.length}): ${stats.cuentas_desactivadas.join(', ')}`);
     }
 
     if (logId) {
@@ -135,14 +183,19 @@ export async function ejecutarScrapingDiario(onProgress = null) {
         posts_virales_detectados: stats.posts_virales,
         errores:                  stats.errores,
         duracion_segundos:        duracion,
-        resumen:                  { virales: stats.virales, cuentas_sin_datos: stats.cuentas_sin_datos },
+        resumen: {
+          virales:               stats.virales,
+          cuentas_sin_datos:     stats.cuentas_sin_datos,
+          cuentas_desactivadas:  stats.cuentas_desactivadas,
+        },
       }).eq('id', logId);
     }
 
     return {
       stats,
-      virales:           stats.virales,
-      cuentas_sin_datos: stats.cuentas_sin_datos,
+      virales:                stats.virales,
+      cuentas_sin_datos:      stats.cuentas_sin_datos,
+      cuentas_desactivadas:   stats.cuentas_desactivadas,
       fecha: new Date().toLocaleDateString('es-CO', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       }),
@@ -200,7 +253,32 @@ async function _runApifyActor(usernames) {
     headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
   });
   if (!itemsRes.ok) throw new Error(`Apify items: ${itemsRes.status}`);
-  return await itemsRes.json();
+  const items = await itemsRes.json();
+
+  // DEBUG importaciones.nj — log raw para diagnóstico de cuentas con muchas vistas
+  if (usernames.some(u => u.toLowerCase() === 'importaciones.nj')) {
+    const njPosts = items.filter(p => (p.ownerUsername || '').toLowerCase() === 'importaciones.nj');
+    console.log(`[DEBUG importaciones.nj] Posts en lote Apify: ${njPosts.length}`);
+    if (njPosts.length > 0) {
+      console.log('[DEBUG importaciones.nj] Primer post (raw completo):', JSON.stringify(njPosts[0], null, 2));
+      console.log('[DEBUG importaciones.nj] Métricas de todos sus posts:', JSON.stringify(
+        njPosts.map(p => ({
+          id: p.id || p.shortCode,
+          type: p.type || p.productType,
+          videoViewCount: p.videoViewCount,
+          videoPlayCount: p.videoPlayCount,
+          likesCount: p.likesCount,
+          url: p.url,
+        }))
+      ));
+    } else {
+      console.warn('[DEBUG importaciones.nj] ⚠️ NO encontrado en respuesta Apify. ownerUsernames recibidos:', [
+        ...new Set(items.map(p => p.ownerUsername).filter(Boolean)),
+      ].join(', '));
+    }
+  }
+
+  return items;
 }
 
 // ── PROCESAMIENTO DE RESULTADOS ────────────────────────────────────────────────
@@ -307,18 +385,19 @@ async function _procesarResultados(posts, cuentasMap) {
               .from('recreaciones_tracker').select('id')
               .eq('post_id', postId).maybeSingle();
 
-            await Promise.all([
-              client().from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId),
-              !recExist && client().from('recreaciones_tracker').insert([{
+            // Awaits explícitos — evita el bug de Promise.all con query builders lazy de Supabase v2
+            await client().from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId);
+            if (!recExist) {
+              await client().from('recreaciones_tracker').insert([{
                 post_id:              postId,
                 guion_recreacion:     ia.guion_recreacion,
-                hook_jarapo:         ia.hook_jarapo,
-                cta_sugerido:        ia.cta_sugerido,
-                musica_sugerida:     ia.musica_sugerida,
+                hook_jarapo:          ia.hook_jarapo,
+                cta_sugerido:         ia.cta_sugerido,
+                musica_sugerida:      ia.musica_sugerida,
                 checklist_produccion: ia.checklist_produccion,
-                estado:              'pendiente',
-              }]),
-            ].filter(Boolean));
+                estado:               'pendiente',
+              }]);
+            }
           } catch (iaErr) {
             console.warn('[Scraper] Error IA para post', postId, ':', iaErr.message);
           }
@@ -345,27 +424,38 @@ async function _procesarResultados(posts, cuentasMap) {
 
 // ── SNAPSHOTS ─────────────────────────────────────────────────────────────────
 async function _guardarSnapshot(postId, vistas, likes, comentarios) {
-  const hoy = new Date().toISOString().split('T')[0];
-  await client().from('snapshot_metricas').upsert({
-    post_id: postId, vistas, likes, comentarios, fecha_snapshot: hoy,
-  }, { onConflict: 'post_id,fecha_snapshot' });
+  try {
+    const hoy = new Date().toISOString().split('T')[0];
+    const { error } = await client().from('snapshot_metricas').upsert(
+      { post_id: postId, vistas, likes, comentarios, fecha_snapshot: hoy },
+      { onConflict: 'post_id,fecha_snapshot' }
+    );
+    if (error) console.warn('[Scraper] snapshot_metricas upsert error:', error.message);
+  } catch (e) {
+    console.warn('[Scraper] _guardarSnapshot falló (¿tabla existe?):', e.message);
+  }
 }
 
 async function _calcularCrecimiento(postId, vistasHoy) {
-  const ayer = new Date();
-  ayer.setDate(ayer.getDate() - 1);
-  const ayerStr = ayer.toISOString().split('T')[0];
+  try {
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    const ayerStr = ayer.toISOString().split('T')[0];
 
-  const { data: snapAyer } = await client()
-    .from('snapshot_metricas')
-    .select('vistas')
-    .eq('post_id', postId)
-    .eq('fecha_snapshot', ayerStr)
-    .maybeSingle();
+    const { data: snapAyer } = await client()
+      .from('snapshot_metricas')
+      .select('vistas')
+      .eq('post_id', postId)
+      .eq('fecha_snapshot', ayerStr)
+      .maybeSingle();
 
-  if (!snapAyer || !snapAyer.vistas || snapAyer.vistas === 0) return 0;
-  const crec = ((vistasHoy - snapAyer.vistas) / snapAyer.vistas) * 100;
-  return Math.max(0, Math.round(crec));
+    if (!snapAyer || !snapAyer.vistas || snapAyer.vistas === 0) return 0;
+    const crec = ((vistasHoy - snapAyer.vistas) / snapAyer.vistas) * 100;
+    return Math.max(0, Math.round(crec));
+  } catch (e) {
+    console.warn('[Scraper] _calcularCrecimiento falló:', e.message);
+    return 0;
+  }
 }
 
 // ── GROQ ───────────────────────────────────────────────────────────────────────
