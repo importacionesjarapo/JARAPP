@@ -12,6 +12,7 @@ let _filterTier    = 'todos';
 let _filterSearch  = '';
 let _filterAmenaza = 'todos';
 let _filterConten  = 'todos';
+let _filterEstado  = 'todos';
 let _cuentas       = [];
 let _posts         = [];
 let _recs          = [];
@@ -310,8 +311,58 @@ function _tabPosts() {
   const recMap = {};
   _recs.forEach(r => { recMap[r.post_id] = r; });
 
+  // Counts per state (always from full dataset, independent of other filters)
+  const stateCounts = {
+    pendiente:     _posts.filter(p => recMap[p.id]?.estado === 'pendiente').length,
+    en_produccion: _posts.filter(p => recMap[p.id]?.estado === 'en_produccion').length,
+    publicada:     _posts.filter(p => recMap[p.id]?.estado === 'publicada').length,
+    descartada:    _posts.filter(p => recMap[p.id]?.estado === 'descartada').length,
+  };
+
+  // Apply all filters (combinable)
   if (_filterAmenaza !== 'todos') lista = lista.filter(p => p.nivel_amenaza === _filterAmenaza);
   if (_filterConten  !== 'todos') lista = lista.filter(p => p.tipo_contenido === _filterConten);
+  if (_filterEstado  !== 'todos') lista = lista.filter(p => recMap[p.id]?.estado === _filterEstado);
+
+  // Summary mini-cards
+  const stateCards = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
+      <div style="background:#6B72801A;border:1px solid #6B728033;border-radius:12px;padding:12px 14px;text-align:center;">
+        <div style="font-size:1.4rem;font-weight:800;color:#9CA3AF;">${stateCounts.pendiente}</div>
+        <div style="font-size:0.75rem;color:#9CA3AF;font-weight:600;margin-top:2px;">⏳ Pendiente</div>
+      </div>
+      <div style="background:#F9731618;border:1px solid #F9731633;border-radius:12px;padding:12px 14px;text-align:center;">
+        <div style="font-size:1.4rem;font-weight:800;color:#F97316;">${stateCounts.en_produccion}</div>
+        <div style="font-size:0.75rem;color:#F97316;font-weight:600;margin-top:2px;">🎬 En producción</div>
+      </div>
+      <div style="background:#DCFCE7;border:1px solid #16653433;border-radius:12px;padding:12px 14px;text-align:center;">
+        <div style="font-size:1.4rem;font-weight:800;color:#166534;">${stateCounts.publicada}</div>
+        <div style="font-size:0.75rem;color:#166534;font-weight:600;margin-top:2px;">✅ Publicada</div>
+      </div>
+      <div style="background:#FCA5A51A;border:1px solid #FCA5A555;border-radius:12px;padding:12px 14px;text-align:center;">
+        <div style="font-size:1.4rem;font-weight:800;color:#991B1B;">${stateCounts.descartada}</div>
+        <div style="font-size:0.75rem;color:#991B1B;font-weight:600;margin-top:2px;">❌ Descartada</div>
+      </div>
+    </div>`;
+
+  // State pill/tab buttons
+  const estadoPills = [
+    { val:'todos',         emoji:'',   label:'Todos' },
+    { val:'pendiente',     emoji:'⏳', label:'Pendiente' },
+    { val:'en_produccion', emoji:'🎬', label:'En producción' },
+    { val:'publicada',     emoji:'✅', label:'Publicada' },
+    { val:'descartada',    emoji:'❌', label:'Descartada' },
+  ];
+  const pillsHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      ${estadoPills.map(p => {
+        const active = _filterEstado === p.val;
+        return `<button onclick="window._trFilterPost('estado','${p.val}')"
+          style="padding:7px 16px;border-radius:99px;border:2px solid ${active?'#D91010':'var(--border-base)'};background:${active?'#D91010':'var(--surface-2)'};color:${active?'#fff':'var(--text-faint)'};font-size:0.82rem;font-weight:700;cursor:pointer;font-family:var(--font);transition:all 0.15s;">
+          ${p.emoji ? p.emoji+' ' : ''}${p.label}
+        </button>`;
+      }).join('')}
+    </div>`;
 
   const filters = `
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:center;">
@@ -331,10 +382,12 @@ function _tabPosts() {
       <span style="color:var(--text-faint);font-size:0.82rem;margin-left:auto;">${lista.length} post${lista.length!==1?'s':''}</span>
     </div>`;
 
-  if (!lista.length) return filters + `
+  if (!lista.length) return stateCards + pillsHTML + filters + `
     <div style="text-align:center;padding:60px;color:var(--text-faint);">
       <div style="font-size:3rem;margin-bottom:16px;">📭</div>
-      <p>No hay posts registrados.<br>Ve a <strong>Competidores</strong> y usa el botón <em>"+ Post viral"</em>.</p>
+      <p>No hay posts${_filterEstado !== 'todos' ? ' con este estado' : ''} registrados.<br>
+      ${_filterEstado !== 'todos' ? 'Prueba seleccionar otro estado.' : 'Ve a <strong>Competidores</strong> y usa el botón <em>"+ Post viral"</em>.'}
+      </p>
     </div>`;
 
   const cards = lista.map(p => {
@@ -405,7 +458,7 @@ function _tabPosts() {
       </div>`;
   }).join('');
 
-  return filters + cards;
+  return stateCards + pillsHTML + filters + cards;
 }
 
 // ─── Tab: Inspiración ─────────────────────────────────────────────────────────
@@ -447,19 +500,36 @@ function _tabInspiracion() {
   return sections || `<div style="text-align:center;padding:60px;color:var(--text-faint);">Sin cuentas de inspiración.</div>`;
 }
 
+// ─── Sync posts tab counter without full re-render ───────────────────────────
+function _syncPostsTabCount() {
+  const rm = {};
+  _recs.forEach(r => { rm[r.post_id] = r; });
+  const count = _filterEstado === 'todos'
+    ? _posts.length
+    : _posts.filter(p => rm[p.id]?.estado === _filterEstado).length;
+  const el = document.getElementById('tr-posts-count');
+  if (el) el.textContent = count;
+}
+
 // ─── Render UI ────────────────────────────────────────────────────────────────
 function _renderUI() {
   console.log('[Tracker] _renderUI called | _cuentas:', _cuentas.length, '| _posts:', _posts.length, '| _recs:', _recs.length);
+  const rm = {};
+  _recs.forEach(r => { rm[r.post_id] = r; });
+  const postsCount = _filterEstado === 'todos'
+    ? _posts.length
+    : _posts.filter(p => rm[p.id]?.estado === _filterEstado).length;
+
   const tabs = [
     { id:'competidores', label:'🏆 Competidores', count: _cuentas.filter(c=>c.tipo_cuenta==='competencia').length },
-    { id:'posts',        label:'🔥 Posts virales', count: _posts.length },
+    { id:'posts',        label:'🔥 Posts virales', count: postsCount },
     { id:'inspiracion',  label:'💡 Inspiración',   count: _cuentas.filter(c=>c.tipo_cuenta!=='competencia').length },
   ];
 
   const tabsHTML = tabs.map(t => `
     <button class="tr-tab ${_tab===t.id?'tr-tab-active':''}" onclick="window._trTab('${t.id}')">
       ${t.label}
-      <span style="background:var(--surface-2);color:var(--text-faint);padding:2px 7px;border-radius:99px;font-size:0.7rem;margin-left:6px;">${t.count}</span>
+      <span ${t.id==='posts'?'id="tr-posts-count"':''} style="background:var(--surface-2);color:var(--text-faint);padding:2px 7px;border-radius:99px;font-size:0.7rem;margin-left:6px;">${t.count}</span>
     </button>`).join('');
 
   let content = '';
@@ -535,8 +605,11 @@ function _registerHandlers() {
   window._trFilterPost = (type, val) => {
     if (type === 'amenaza')   _filterAmenaza = val;
     if (type === 'contenido') _filterConten  = val;
+    if (type === 'estado')    _filterEstado  = val;
     const el = document.getElementById('tr-tab-content');
     if (el) el.innerHTML = _tabPosts();
+    // Sync tab counter when estado filter changes
+    if (type === 'estado') _syncPostsTabCount();
   };
 
   window._trToggle = (id) => {
