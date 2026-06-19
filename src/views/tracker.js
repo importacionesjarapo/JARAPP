@@ -7,7 +7,7 @@ const GROQ_KEY     = import.meta.env.VITE_GROQ_API_KEY;
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 let _tab           = 'competidores';
-let _filterTipo    = 'todos';
+let _filterTipo    = 'todos-comp';
 let _filterTier    = 'todos';
 let _filterSearch  = '';
 let _filterAmenaza = 'todos';
@@ -201,9 +201,10 @@ function _kpis() {
 
 // ─── Tab: Competidores ────────────────────────────────────────────────────────
 function _tabCompetidores() {
-  let lista = _cuentas.filter(c => c.tipo_cuenta === 'competencia');
+  let lista;
   if (_filterTipo === 'tienda') lista = _cuentas.filter(c => c.tipo_cuenta === 'tienda');
   else if (_filterTipo === 'todos-comp') lista = _cuentas.filter(c => c.tipo_cuenta === 'competencia' || c.tipo_cuenta === 'tienda');
+  else lista = _cuentas.filter(c => c.tipo_cuenta === 'competencia');
   if (_filterTier !== 'todos') lista = lista.filter(c => String(c.tier) === _filterTier);
   if (_filterSearch) {
     const q = _filterSearch.toLowerCase();
@@ -247,8 +248,8 @@ function _tabCompetidores() {
   return `
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:center;">
       <select class="tr-sel" onchange="window._trFilter('tipo',this.value)">
-        <option value="todos-comp" ${_filterTipo==='todos-comp'||_filterTipo==='todos'?'selected':''}>Todos (competencia + tiendas)</option>
-        <option value="todos" ${_filterTipo==='todos'?'selected':''}>Solo competencia</option>
+        <option value="todos-comp" ${_filterTipo==='todos-comp'?'selected':''}>Todos (competencia + tiendas)</option>
+        <option value="competencia" ${_filterTipo==='competencia'?'selected':''}>Solo competencia</option>
         <option value="tienda" ${_filterTipo==='tienda'?'selected':''}>Solo tiendas</option>
       </select>
       <select class="tr-sel" onchange="window._trFilter('tier',this.value)">
@@ -498,7 +499,7 @@ function _registerHandlers() {
   };
 
   window._trFilter = (type, val) => {
-    if (type === 'tipo')   _filterTipo   = val;
+    if (type === 'tipo')   { _filterTipo = val; }
     if (type === 'tier')   _filterTier   = val;
     if (type === 'search') _filterSearch = val;
     const el = document.getElementById('tr-tab-content');
