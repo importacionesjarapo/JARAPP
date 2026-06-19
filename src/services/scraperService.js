@@ -217,18 +217,23 @@ export async function ejecutarScrapingDiario(onProgress = null) {
 
 // ── APIFY ──────────────────────────────────────────────────────────────────────
 async function _runApifyActor(usernames) {
+  const input = { usernames, resultsLimit: 30, addParentData: false };
   console.log(`[Apify] Enviando lote (${usernames.length} cuentas):`, usernames);
+  console.log('[Apify] Input enviado:', JSON.stringify(input));
+
   const runRes = await fetch(`${APIFY_BASE}/acts/${APIFY_ACTOR}/runs`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${APIFY_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ usernames, resultsLimit: 30, addParentData: false }),
+    body: JSON.stringify(input),
   });
   if (!runRes.ok) throw new Error(`Apify iniciar run: ${runRes.status} ${await runRes.text()}`);
   const runData = await runRes.json();
-  const runId   = runData.data.id;
+  const runId   = runData.data?.id;
+  console.log('[Apify] Run iniciado, ID:', runId, '| runData.data:', JSON.stringify(runData.data));
+  if (!runId) throw new Error(`Apify no devolvió runId. Respuesta: ${JSON.stringify(runData)}`);
 
   // Polling hasta SUCCEEDED (timeout 5 min)
   const TIMEOUT = 5 * 60 * 1000;
@@ -242,6 +247,7 @@ async function _runApifyActor(usernames) {
     });
     if (!stRes.ok) throw new Error(`Apify status check: ${stRes.status}`);
     const { data: run } = await stRes.json();
+    console.log(`[Apify] Status del run: ${run.status} (${Math.round((Date.now() - start) / 1000)}s)`);
 
     if (run.status === 'SUCCEEDED') break;
     if (['FAILED','ABORTED','TIMED-OUT'].includes(run.status)) {
@@ -254,6 +260,7 @@ async function _runApifyActor(usernames) {
   });
   if (!itemsRes.ok) throw new Error(`Apify items: ${itemsRes.status}`);
   const items = await itemsRes.json();
+  console.log(`[Apify] Items recibidos: ${items.length} | primeros 2:`, JSON.stringify(items?.slice(0, 2)));
 
   // DEBUG importaciones.nj — log raw para diagnóstico de cuentas con muchas vistas
   if (usernames.some(u => u.toLowerCase() === 'importaciones.nj')) {
@@ -560,4 +567,74 @@ export function construirMensajeWhatsApp(resumen) {
 
   msg += `\n🔗 Ver detalles en JARAPP → Competitor Tracker`;
   return msg;
+}
+
+// ── TEST APIFY (diagnóstico) ───────────────────────────────────────────────────
+// Llama al actor con UN SOLO username y devuelve el JSON raw sin procesar.
+// Usado desde el botón "🧪 Test Apify" del panel de Scraping.
+export async function testApifyUno(username = 'servicomprasusa1', onProgress = null) {
+  const log = (msg) => { console.log('[TestApify]', msg); onProgress?.(msg); };
+
+  log(`Iniciando test con @${username}...`);
+
+  // ── 1. Iniciar run ──────────────────────────────────────────────────────────
+  const input = { usernames: [username], resultsLimit: 5, addParentData: false };
+  log(`Input enviado: ${JSON.stringify(input)}`);
+
+  const runRes = await fetch(`${APIFY_BASE}/acts/${APIFY_ACTOR}/runs`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${APIFY_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  const runRaw = await runRes.text();
+  log(`Respuesta HTTP ${runRes.status} al iniciar run`);
+  log(`Run raw: ${runRaw.substring(0, 300)}`);
+
+  if (!runRes.ok) return { error: `HTTP ${runRes.status}`, raw: runRaw };
+
+  const runData = JSON.parse(runRaw);
+  const runId = runData.data?.id;
+  log(`Run ID: ${runId || 'NO OBTENIDO'}`);
+  if (!runId) return { error: 'No se obtuvo runId', runData };
+
+  // ── 2. Polling (timeout 3 min) ──────────────────────────────────────────────
+  const TIMEOUT = 3 * 60 * 1000;
+  const start = Date.now();
+  let lastStatus = '';
+
+  while (true) {
+    if (Date.now() - start > TIMEOUT) {
+      log('⏱ Timeout 3 min alcanzado');
+      return { error: 'Timeout 3 min', runId, lastStatus };
+    }
+    await new Promise(r => setTimeout(r, 3000));
+
+    const stRes = await fetch(`${APIFY_BASE}/actor-runs/${runId}`, {
+      headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
+    });
+    const stData = await stRes.json();
+    lastStatus = stData.data?.status || 'UNKNOWN';
+    log(`Status: ${lastStatus} (${Math.round((Date.now() - start) / 1000)}s)`);
+
+    if (lastStatus === 'SUCCEEDED') break;
+    if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(lastStatus)) {
+      return { error: `Run terminó con: ${lastStatus}`, runId, runData: stData.data };
+    }
+  }
+
+  // ── 3. Dataset items ────────────────────────────────────────────────────────
+  const itemsRes = await fetch(`${APIFY_BASE}/actor-runs/${runId}/dataset/items`, {
+    headers: { 'Authorization': `Bearer ${APIFY_TOKEN}` },
+  });
+  const items = await itemsRes.json();
+  log(`Items recibidos: ${Array.isArray(items) ? items.length : 'NO ES ARRAY'}`);
+  if (Array.isArray(items) && items.length > 0) {
+    log(`Campos del primer item: ${Object.keys(items[0]).join(', ')}`);
+    log(`ownerUsername: ${items[0].ownerUsername}`);
+    log(`videoViewCount: ${items[0].videoViewCount}`);
+    log(`likesCount: ${items[0].likesCount}`);
+  }
+
+  return { runId, status: lastStatus, itemsCount: Array.isArray(items) ? items.length : 0, items };
 }

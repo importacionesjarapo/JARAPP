@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { getEstadoScheduler, ejecutarAhora } from '../services/schedulerService.js';
-import { construirMensajeWhatsApp } from '../services/scraperService.js';
+import { construirMensajeWhatsApp, testApifyUno } from '../services/scraperService.js';
 
 const client = () => db.client;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -569,6 +569,26 @@ function _tabScraping() {
       <div id="tr-scraping-log" style="display:none;margin-top:18px;background:var(--surface-2);border-radius:12px;padding:16px;font-family:monospace;font-size:0.82rem;line-height:2;max-height:240px;overflow-y:auto;white-space:pre-wrap;"></div>
     </div>`;
 
+  const secTestApify = `
+    <div class="glass-card" style="padding:22px;margin-bottom:18px;border-left:4px solid #8B5CF6;">
+      <h3 style="font-size:1rem;font-weight:800;margin-bottom:4px;color:#8B5CF6;">🧪 Test Apify (diagnóstico)</h3>
+      <p style="color:var(--text-faint);font-size:0.84rem;margin-bottom:16px;">
+        Llama al actor con UN solo username y muestra el JSON raw para verificar que la API funciona
+        y cuáles son los campos exactos que devuelve.
+      </p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input id="tr-test-username" type="text" value="servicomprasusa1"
+          style="flex:1;min-width:180px;padding:9px 14px;border-radius:10px;border:1px solid var(--border-base);background:var(--surface-2);color:var(--text-base);font-size:0.9rem;" />
+        <button id="tr-test-btn" class="btn-primary"
+          style="background:#8B5CF6;border-color:#8B5CF6;font-size:0.9rem;white-space:nowrap;"
+          onclick="window._trTestApify()">
+          🧪 Ejecutar test
+        </button>
+      </div>
+      <div id="tr-test-log" style="display:none;margin-top:14px;background:var(--surface-2);border-radius:12px;padding:14px;font-family:monospace;font-size:0.78rem;line-height:1.8;max-height:200px;overflow-y:auto;white-space:pre-wrap;color:#10B981;"></div>
+      <div id="tr-test-result" style="display:none;margin-top:14px;"></div>
+    </div>`;
+
   // Historial
   let histBody = '';
   if (!_scrapingLogs) {
@@ -697,7 +717,7 @@ function _tabScraping() {
       </div>
     </div>`;
 
-  return secEstado + secManual + secHistorial + secSinDatos + secDesactivadas + secUmbrales;
+  return secEstado + secManual + secTestApify + secHistorial + secSinDatos + secDesactivadas + secUmbrales;
 }
 
 // ─── Sync posts tab counter without full re-render ───────────────────────────
@@ -1295,6 +1315,62 @@ window._trRefrescarLogs = async () => {
   if (el) el.innerHTML = _tabScraping();
   await _loadScrapingLogs().catch(() => { _scrapingLogs = []; });
   if (el) el.innerHTML = _tabScraping();
+};
+
+window._trTestApify = async () => {
+  const usernameInput = document.getElementById('tr-test-username');
+  const btn           = document.getElementById('tr-test-btn');
+  const logDiv        = document.getElementById('tr-test-log');
+  const resultDiv     = document.getElementById('tr-test-result');
+  const username = (usernameInput?.value || 'servicomprasusa1').trim();
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Probando...'; }
+  if (logDiv)    { logDiv.style.display = 'block'; logDiv.textContent = ''; }
+  if (resultDiv) { resultDiv.style.display = 'none'; resultDiv.innerHTML = ''; }
+
+  const append = (msg) => {
+    if (logDiv) { logDiv.textContent += msg + '\n'; logDiv.scrollTop = logDiv.scrollHeight; }
+  };
+
+  try {
+    const result = await testApifyUno(username, append);
+
+    // Mostrar resultado raw en pantalla
+    const hasItems = Array.isArray(result.items) && result.items.length > 0;
+    const colorHeader = hasItems ? '#10B981' : (result.error ? '#EF4444' : '#F97316');
+    const titulo = result.error
+      ? `❌ Error: ${result.error}`
+      : hasItems
+        ? `✅ ${result.itemsCount} posts encontrados para @${username}`
+        : `⚠️ Run completado pero 0 items devueltos`;
+
+    if (resultDiv) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = `
+        <div style="border-left:4px solid ${colorHeader};padding:14px 16px;border-radius:10px;background:var(--surface-2);margin-top:4px;">
+          <div style="font-weight:800;font-size:0.9rem;color:${colorHeader};margin-bottom:10px;">${titulo}</div>
+          ${hasItems ? `
+            <div style="font-size:0.8rem;color:var(--text-faint);margin-bottom:8px;font-weight:600;">
+              Campos disponibles: <code>${Object.keys(result.items[0]).join(', ')}</code>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text-faint);margin-bottom:8px;font-weight:600;">
+              Métricas primer post — videoViewCount: <strong>${result.items[0].videoViewCount ?? 'undefined'}</strong>
+              | videoPlayCount: <strong>${result.items[0].videoPlayCount ?? 'undefined'}</strong>
+              | likesCount: <strong>${result.items[0].likesCount ?? 'undefined'}</strong>
+              | ownerUsername: <strong>${result.items[0].ownerUsername ?? 'undefined'}</strong>
+            </div>` : ''}
+          <details style="margin-top:8px;">
+            <summary style="cursor:pointer;font-size:0.82rem;color:#8B5CF6;font-weight:700;">Ver JSON raw completo</summary>
+            <pre style="margin-top:8px;font-size:0.72rem;overflow-x:auto;max-height:300px;white-space:pre-wrap;color:var(--text-base);">${JSON.stringify(result, null, 2)}</pre>
+          </details>
+        </div>`;
+    }
+  } catch (err) {
+    append(`❌ Excepción: ${err.message}`);
+    console.error('[TestApify] Excepción:', err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🧪 Ejecutar test'; }
+  }
 };
 
 window._trEditarUmbral = (cuentaId, usuarioIg, umbralActual) => {
