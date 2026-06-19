@@ -316,16 +316,18 @@ async function _procesarResultados(posts, cuentasMap) {
       const apifyId = post.id || post.shortCode;
       if (!apifyId) continue;
 
-      const vistas     = post.videoViewCount || post.videoPlayCount || 0;
-      const likes      = post.likesCount || 0;
+      const tipo        = _tipoContenido(post.type);          // 'Video'→reel, 'Sidecar'→carrusel, 'Image'→post
+      const esVideo     = tipo === 'reel';
+      const vistas      = post.videoViewCount || post.videoPlayCount || 0;
+      const likes       = post.likesCount || 0;
       const comentarios = post.commentsCount || 0;
-      const metrica    = vistas || likes;
-      const fechaPost  = post.timestamp ? new Date(post.timestamp) : null;
-      const caption    = post.caption || '';
-      const tipo       = _tipoContenido(post.type || post.productType);
-      const hook       = caption.substring(0, 200);
-      const cat        = _categoriaCaption(caption);
-      const amenaza    = _nivelAmenaza(metrica, cuenta);
+      // Para videos la métrica es vistas; para fotos/carruseles es likes (sin videoViewCount)
+      const metrica     = esVideo ? vistas : likes;
+      const fechaPost   = post.timestamp ? new Date(post.timestamp) : null;
+      const caption     = post.caption || '';
+      const hook        = caption.substring(0, 200);
+      const cat         = _categoriaCaption(caption);
+      const amenaza     = _nivelAmenaza(vistas || likes * 10, cuenta);
 
       // ── Buscar post existente ──────────────────────────────────────────────
       const { data: existing } = await client()
@@ -380,10 +382,13 @@ async function _procesarResultados(posts, cuentasMap) {
         .eq('id', postId);
 
       // ── Detección de viralidad (umbral absoluto O crecimiento >50%) ──────
-      const umbral          = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
-      const esViralUmbral   = metrica >= umbral;
-      const esViralCrec     = crecimiento > 50;
-      const esViral         = esViralUmbral || esViralCrec;
+      const umbralBase    = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
+      // Videos: comparar vistas vs umbral completo
+      // Fotos/carruseles: los likes son ~10% de vistas → umbral dividido entre 10
+      const umbral        = esVideo ? umbralBase : Math.max(1, Math.round(umbralBase / 10));
+      const esViralUmbral = metrica >= umbral;
+      const esViralCrec   = crecimiento > 50;
+      const esViral       = esViralUmbral || esViralCrec;
       const eraViralAntes   = existing?.es_viral || false;
 
       if (esViral) {
