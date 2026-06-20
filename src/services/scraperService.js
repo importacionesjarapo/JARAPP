@@ -2,6 +2,14 @@ import { db } from '../db.js';
 
 const client = () => db.client;
 
+// Obtiene el cliente dinámicamente en el momento de uso — patron solicitado para evitar
+// problemas de orden de inicialización de módulos y garantizar disponibilidad en cada llamada.
+async function _obtenerCliente() {
+  const { db: _db } = await import('../db.js');
+  if (!_db?.client) throw new Error('[Scraper] Supabase client no disponible — db.client es null');
+  return _db.client;
+}
+
 const APIFY_TOKEN = import.meta.env.VITE_APIFY_TOKEN;
 const APIFY_ACTOR = 'apify~instagram-profile-scraper';
 const APIFY_BASE  = 'https://api.apify.com/v2';
@@ -377,6 +385,8 @@ async function _runApifyActor(usernames) {
 
 // ── PROCESAMIENTO DE RESULTADOS ────────────────────────────────────────────────
 async function _procesarResultados(posts, cuentasMap) {
+  // Obtener cliente dinámicamente — garantiza disponibilidad después del polling de Apify
+  const sb = await _obtenerCliente();
   const loteStats = { nuevos: 0, virales: 0, detalle: { competencia: [], tiendas: [], inspiracion: [] } };
 
   for (const post of posts) {
@@ -385,27 +395,27 @@ async function _procesarResultados(posts, cuentasMap) {
       const cuenta   = cuentasMap[username];
       if (!cuenta) continue;
 
-      // Preferir shortCode (string alfanumérico corto) sobre id numérico —
-      // los IDs de Instagram son enteros de 20 dígitos que JS no puede representar
-      // con precisión en float64, por lo que String(post.id) daría un valor incorrecto.
-      const apifyId = post.shortCode || String(post.id ?? '');
+      // shortCode es el identificador canónico — los IDs numéricos de Instagram (19-20 dígitos)
+      // pierden precisión en float64. Sanitizar para eliminar surrogates solitarios que PostgreSQL rechaza.
+      const apifyId = _sanitizeUnicode(post.shortCode || String(post.id ?? ''), 50);
       if (!apifyId) continue;
 
-      const tipo        = _tipoContenido(post.type);          // 'Video'→reel, 'Sidecar'→carrusel, 'Image'→post
+      const tipo        = _tipoContenido(post.type);
       const esVideo     = tipo === 'reel';
       const vistas      = post.videoViewCount || post.videoPlayCount || 0;
       const likes       = post.likesCount || 0;
       const comentarios = post.commentsCount || 0;
-      // Para videos la métrica es vistas; para fotos/carruseles es likes (sin videoViewCount)
       const metrica     = esVideo ? vistas : likes;
       const fechaPost   = post.timestamp ? new Date(post.timestamp) : null;
-      const caption     = post.caption || '';
-      const hook        = caption.substring(0, 200);
+      const captionRaw  = post.caption || '';
+      // Sanitizar caption antes de truncar para evitar surrogates solitarios en PostgreSQL
+      const caption     = _sanitizeUnicode(captionRaw);
+      const hook        = _sanitizeUnicode(captionRaw, 200); // trunca por code points, no bytes
       const cat         = _categoriaCaption(caption);
       const amenaza     = _nivelAmenaza(vistas || likes * 10, cuenta);
 
       // ── Buscar post existente ──────────────────────────────────────────────
-      const { data: existing } = await client()
+      const { data: existing } = await sb
         .from('posts_tracker')
         .select('id, es_viral, analisis_ia')
         .eq('apify_post_id', apifyId)
@@ -414,14 +424,12 @@ async function _procesarResultados(posts, cuentasMap) {
       let postId;
 
       if (existing) {
-        // Actualizar métricas con valores frescos de Apify
         postId = existing.id;
-        const { error: updErr } = await client().from('posts_tracker').update({
+        const { error: updErr } = await sb.from('posts_tracker').update({
           vistas, likes_estimados: likes, comentarios,
         }).eq('id', postId);
         if (updErr) console.warn('[Scraper] UPDATE métricas error:', updErr.message);
       } else {
-        // Post nuevo — usar .maybeSingle() para no fallar si RLS bloquea el SELECT de retorno
         const payload = {
           cuenta_id:           cuenta.id,
           apify_post_id:       apifyId,
@@ -438,7 +446,7 @@ async function _procesarResultados(posts, cuentasMap) {
           fecha_publicacion:   fechaPost ? fechaPost.toISOString() : null,
           origen:              'automatico',
         };
-        const { data: inserted, error: insErr } = await client()
+        const { data: inserted, error: insErr } = await sb
           .from('posts_tracker')
           .insert([payload])
           .select('id')
@@ -455,12 +463,12 @@ async function _procesarResultados(posts, cuentasMap) {
         }
         postId = inserted?.id;
         if (!postId) {
-          // INSERT exitoso pero SELECT bloqueado por RLS — buscar el id insertado
-          const { data: found } = await client()
+          // INSERT exitoso pero RLS bloquea el SELECT de retorno — buscar por apify_post_id
+          const { data: found } = await sb
             .from('posts_tracker').select('id').eq('apify_post_id', apifyId).maybeSingle();
           postId = found?.id;
         }
-        if (!postId) continue; // no se pudo obtener el id — saltar este post
+        if (!postId) continue;
         loteStats.nuevos++;
       }
 
@@ -469,7 +477,7 @@ async function _procesarResultados(posts, cuentasMap) {
       const crecimiento = await _calcularCrecimiento(postId, vistas);
 
       if (crecimiento > 0) {
-        const { error: crecErr } = await client().from('posts_tracker')
+        const { error: crecErr } = await sb.from('posts_tracker')
           .update({ crecimiento_24h: crecimiento })
           .eq('id', postId);
         if (crecErr) console.warn('[Scraper] UPDATE crecimiento_24h error (¿columna existe?):', crecErr.message);
@@ -486,7 +494,7 @@ async function _procesarResultados(posts, cuentasMap) {
       const eraViralAntes   = existing?.es_viral || false;
 
       if (esViral) {
-        await client().from('posts_tracker').update({
+        await sb.from('posts_tracker').update({
           es_viral: true, nivel_amenaza: amenaza,
         }).eq('id', postId);
 
@@ -495,21 +503,18 @@ async function _procesarResultados(posts, cuentasMap) {
         if (!tieneIA) {
           loteStats.virales++;
           try {
-            // Construir objeto post para _groqAnalizar
             const postObj = {
               tipo_contenido: tipo, vistas, hook_texto: hook,
               caption_completo: caption, categoria_contenido: cat, nivel_amenaza: amenaza,
             };
             const ia = await _groqAnalizar(postObj, cuenta);
-            // Verificar si ya existe recreacion para no duplicar
-            const { data: recExist } = await client()
+            const { data: recExist } = await sb
               .from('recreaciones_tracker').select('id')
               .eq('post_id', postId).maybeSingle();
 
-            // Awaits explícitos — evita el bug de Promise.all con query builders lazy de Supabase v2
-            await client().from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId);
+            await sb.from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId);
             if (!recExist) {
-              await client().from('recreaciones_tracker').insert([{
+              await sb.from('recreaciones_tracker').insert([{
                 post_id:              postId,
                 guion_recreacion:     ia.guion_recreacion,
                 hook_jarapo:          ia.hook_jarapo,
@@ -546,8 +551,9 @@ async function _procesarResultados(posts, cuentasMap) {
 // ── SNAPSHOTS ─────────────────────────────────────────────────────────────────
 async function _guardarSnapshot(postId, vistas, likes, comentarios) {
   try {
+    const sb  = await _obtenerCliente();
     const hoy = new Date().toISOString().split('T')[0];
-    const { error } = await client().from('snapshot_metricas').upsert(
+    const { error } = await sb.from('snapshot_metricas').upsert(
       { post_id: postId, vistas, likes, comentarios, fecha_snapshot: hoy },
       { onConflict: 'post_id,fecha_snapshot' }
     );
@@ -559,11 +565,12 @@ async function _guardarSnapshot(postId, vistas, likes, comentarios) {
 
 async function _calcularCrecimiento(postId, vistasHoy) {
   try {
+    const sb   = await _obtenerCliente();
     const ayer = new Date();
     ayer.setDate(ayer.getDate() - 1);
     const ayerStr = ayer.toISOString().split('T')[0];
 
-    const { data: snapAyer } = await client()
+    const { data: snapAyer } = await sb
       .from('snapshot_metricas')
       .select('vistas')
       .eq('post_id', postId)
@@ -611,6 +618,28 @@ async function _groqAnalizar(post, cuenta) {
 }
 
 // ── HELPERS ────────────────────────────────────────────────────────────────────
+
+// Elimina surrogates solitarios (UTF-16) que PostgreSQL rechaza en campos TEXT.
+// También trunca por code points (no por code units) para no partir pares surrogate.
+function _sanitizeUnicode(str, maxCodePoints) {
+  if (!str) return '';
+  let clean = '';
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      // High surrogate — válido solo si va seguido de low surrogate
+      const next = i + 1 < str.length ? str.charCodeAt(i + 1) : 0;
+      if (next >= 0xDC00 && next <= 0xDFFF) { clean += str[i] + str[i + 1]; i++; }
+      // else: surrogate solitario → descartar
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      // Low surrogate sin su high surrogate → descartar
+    } else {
+      clean += str[i];
+    }
+  }
+  return maxCodePoints ? [...clean].slice(0, maxCodePoints).join('') : clean;
+}
+
 function _umbralDefecto(tier) {
   // Fallback si umbral_vistas es null en BD. Debe coincidir con los UPDATEs en Supabase.
   return tier === 1 ? 1000 : 3000;

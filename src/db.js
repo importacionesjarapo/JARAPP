@@ -19,7 +19,9 @@ class Database {
     
     if (this.supabaseUrl && this.supabaseKey) {
       try {
-        this.client = createClient(this.supabaseUrl, this.supabaseKey);
+        this.client = createClient(this.supabaseUrl, this.supabaseKey, {
+          realtime: { params: { eventsPerSecond: -1 } },
+        });
       } catch (e) {
         console.error('Error init Supabase', e);
       }
@@ -34,7 +36,9 @@ class Database {
     localStorage.setItem('JARAPO_SUPA_KEY', key);
     
     try {
-      this.client = createClient(url, key);
+      this.client = createClient(url, key, {
+        realtime: { params: { eventsPerSecond: -1 } },
+      });
     } catch(e) {
       console.error(e);
     }
