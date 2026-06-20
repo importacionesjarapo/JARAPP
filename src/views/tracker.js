@@ -623,6 +623,11 @@ function _tabScraping() {
     const rows = _scrapingLogs.map(log => {
       const fecha = new Date(log.fecha_ejecucion).toLocaleString('es-CO', { day:'numeric', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit' });
       const ec = log.estado === 'completado' ? '#10B981' : log.estado === 'error' ? '#D91010' : '#F97316';
+      const errorConVirales = log.estado === 'error' && (log.posts_virales_detectados || 0) > 0;
+      const estadoCell = errorConVirales
+        ? `<span style="color:#F97316;font-size:0.78rem;font-weight:700;cursor:help;"
+            title="El scraping detectó virales pero terminó con advertencias">⚠️ advertencias</span>`
+        : `<span style="color:${ec};font-size:0.78rem;font-weight:700;">${log.estado}</span>`;
       return `<tr style="border-bottom:1px solid var(--border-base);">
         <td style="padding:10px 12px;font-size:0.82rem;">${fecha}</td>
         <td style="padding:10px 12px;text-align:center;font-size:0.82rem;">${log.cuentas_procesadas}</td>
@@ -630,9 +635,7 @@ function _tabScraping() {
         <td style="padding:10px 12px;text-align:center;font-size:0.82rem;color:#D91010;font-weight:700;">${log.posts_virales_detectados}</td>
         <td style="padding:10px 12px;text-align:center;font-size:0.82rem;">${log.errores || 0}</td>
         <td style="padding:10px 12px;text-align:center;font-size:0.82rem;">${log.duracion_segundos ? log.duracion_segundos + 's' : '—'}</td>
-        <td style="padding:10px 12px;text-align:center;">
-          <span style="color:${ec};font-size:0.78rem;font-weight:700;">${log.estado}</span>
-        </td>
+        <td style="padding:10px 12px;text-align:center;">${estadoCell}</td>
       </tr>`;
     }).join('');
     histBody = `

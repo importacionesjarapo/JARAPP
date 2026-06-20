@@ -42,7 +42,7 @@ Responde SOLO en JSON con esta estructura exacta:
 let _onProgress  = null;
 let _cancelado   = false;  // flag de cancelación manual
 let _iaCount     = 0;      // análisis IA generados en la ejecución actual
-const TIMEOUT_MS        = 8 * 60 * 1000; // 8 minutos máximo
+const TIMEOUT_MS        = 12 * 60 * 1000; // 12 minutos máximo
 const MAX_IA_POR_RUN    = 10;            // límite para no agotar el rate limit de Groq
 const GROQ_DELAY_MS     = 3000;          // delay entre llamadas a Groq (anti rate-limit)
 
@@ -190,6 +190,7 @@ export async function ejecutarScrapingDiario(onProgress = null) {
     const lotes = [];
     for (let i = 0; i < cuentas.length; i += BATCH) lotes.push(cuentas.slice(i, i + BATCH));
 
+    let _timedOut = false;
     for (let i = 0; i < lotes.length; i++) {
       // ── Chequeos de interrupción ─────────────────────────────────────────────
       if (_cancelado) {
@@ -201,9 +202,10 @@ export async function ejecutarScrapingDiario(onProgress = null) {
       }
       const transcurrido = Date.now() - inicio;
       if (transcurrido > TIMEOUT_MS) {
-        _log(`⏱ Timeout (${Math.round(transcurrido / 60000)} min) — cancelando scraping.`);
-        await _finalizarLog('error', { error: 'Timeout 8 minutos' });
-        throw new Error('Timeout 8 minutos — scraping cancelado automáticamente.');
+        const restantes = lotes.length - i;
+        _log(`⏱ Timeout (${Math.round(transcurrido / 60000)} min) — ${restantes} lote(s) pendiente(s). Los posts ya procesados quedan guardados.`);
+        _timedOut = true;
+        break; // no throw — el cierre normal (completado) corre igual
       }
 
       const lote = lotes[i];
@@ -269,7 +271,7 @@ export async function ejecutarScrapingDiario(onProgress = null) {
     }
 
     const duracion = Math.round((Date.now() - inicio) / 1000);
-    _log(`✅ Scraping completado en ${duracion}s`);
+    _log(`✅ Scraping completado en ${duracion}s${_timedOut ? ' (parcial — timeout)' : ''}`);
     _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 30}`);
     _log(`🔥 Virales detectados: ${stats.posts_virales}`);
     if (stats.errores > 0) _log(`⚠️ Errores: ${stats.errores}`);
@@ -280,7 +282,8 @@ export async function ejecutarScrapingDiario(onProgress = null) {
       _log(`🔕 Desactivadas (${stats.cuentas_desactivadas.length}): ${stats.cuentas_desactivadas.join(', ')}`);
     }
 
-    await _finalizarLog('completado');
+    // El estado siempre es 'completado' — si hubo timeout, queda en el resumen pero los datos son válidos
+    await _finalizarLog('completado', _timedOut ? { advertencia: `Timeout ${Math.round(TIMEOUT_MS / 60000)} min — procesado parcial` } : {});
 
     return {
       stats,
