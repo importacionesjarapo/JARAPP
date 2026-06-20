@@ -55,10 +55,33 @@ export async function ejecutarScrapingDiario(onProgress = null) {
   _cancelado  = false;
   const inicio = Date.now();
 
+  // ── Diagnóstico completo del cliente Supabase ─────────────────────────────
+  console.log('=== [Scraper] DIAGNÓSTICO SUPABASE ===');
+  console.log('[Scraper] typeof db:', typeof db);
+  console.log('[Scraper] typeof db.client:', typeof db.client);
+  console.log('[Scraper] db.client === null:', db.client === null);
+  console.log('[Scraper] db.client === undefined:', db.client === undefined);
+  console.log('[Scraper] db.supabaseUrl:', db?.supabaseUrl);
+  const _c = client();
+  console.log('[Scraper] typeof client():', typeof _c);
+  console.log('[Scraper] client() value:', _c);
+  // Test real: leer cuentas_tracker (tabla que sí funciona en tracker.js)
+  if (_c) {
+    try {
+      const _testRes = await _c.from('cuentas_tracker').select('id').limit(1);
+      console.log('[Scraper] TEST cuentas_tracker →',
+        _testRes.error ? `ERROR ${_testRes.error.code}: ${_testRes.error.message}` : `OK (${_testRes.data?.length} filas)`);
+    } catch (e) {
+      console.error('[Scraper] TEST cuentas_tracker → EXCEPCIÓN:', e.message);
+    }
+  }
+  console.log('=== [Scraper] FIN DIAGNÓSTICO ===');
+
   // Guard: cliente Supabase disponible
   if (!db.client) {
-    console.error('[Scraper] db.client es null/undefined', { db: typeof db, url: db?.supabaseUrl });
-    throw new Error('Supabase client no inicializado — revisa credenciales en db.js.');
+    const msg = `Supabase client no inicializado — db.client es ${db.client === null ? 'null' : 'undefined'}. URL: ${db?.supabaseUrl}`;
+    _log(`❌ ${msg}`);
+    throw new Error(msg);
   }
   _log(`🔌 Cliente Supabase OK: ${db.supabaseUrl?.substring(0, 40)}...`);
 
