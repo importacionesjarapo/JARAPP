@@ -385,7 +385,10 @@ async function _procesarResultados(posts, cuentasMap) {
       const cuenta   = cuentasMap[username];
       if (!cuenta) continue;
 
-      const apifyId = post.id || post.shortCode;
+      // Preferir shortCode (string alfanumérico corto) sobre id numérico —
+      // los IDs de Instagram son enteros de 20 dígitos que JS no puede representar
+      // con precisión en float64, por lo que String(post.id) daría un valor incorrecto.
+      const apifyId = post.shortCode || String(post.id ?? '');
       if (!apifyId) continue;
 
       const tipo        = _tipoContenido(post.type);          // 'Video'→reel, 'Sidecar'→carrusel, 'Image'→post
@@ -405,7 +408,7 @@ async function _procesarResultados(posts, cuentasMap) {
       const { data: existing } = await client()
         .from('posts_tracker')
         .select('id, es_viral, analisis_ia')
-        .eq('apify_post_id', String(apifyId))
+        .eq('apify_post_id', apifyId)
         .maybeSingle();
 
       let postId;
@@ -413,35 +416,51 @@ async function _procesarResultados(posts, cuentasMap) {
       if (existing) {
         // Actualizar métricas con valores frescos de Apify
         postId = existing.id;
-        await client().from('posts_tracker').update({
+        const { error: updErr } = await client().from('posts_tracker').update({
           vistas, likes_estimados: likes, comentarios,
         }).eq('id', postId);
+        if (updErr) console.warn('[Scraper] UPDATE métricas error:', updErr.message);
       } else {
-        // Post nuevo
+        // Post nuevo — usar .maybeSingle() para no fallar si RLS bloquea el SELECT de retorno
+        const payload = {
+          cuenta_id:           cuenta.id,
+          apify_post_id:       apifyId,
+          url_post:            post.url || (post.shortCode ? `https://instagram.com/p/${post.shortCode}/` : ''),
+          tipo_contenido:      tipo,
+          vistas,
+          likes_estimados:     likes,
+          comentarios,
+          hook_texto:          hook,
+          caption_completo:    caption,
+          es_viral:            false,
+          nivel_amenaza:       amenaza,
+          categoria_contenido: cat,
+          fecha_publicacion:   fechaPost ? fechaPost.toISOString() : null,
+          origen:              'automatico',
+        };
         const { data: inserted, error: insErr } = await client()
           .from('posts_tracker')
-          .insert([{
-            cuenta_id:           cuenta.id,
-            apify_post_id:       String(apifyId),
-            url_post:            post.url || `https://instagram.com/p/${post.shortCode}/`,
-            tipo_contenido:      tipo,
-            vistas, likes_estimados: likes, comentarios,
-            hook_texto:          hook,
-            caption_completo:    caption,
-            es_viral:            false, // se determina después
-            nivel_amenaza:       amenaza,
-            categoria_contenido: cat,
-            fecha_publicacion:   fechaPost ? fechaPost.toISOString() : null,
-            origen:              'automatico',
-          }])
-          .select()
-          .single();
+          .insert([payload])
+          .select('id')
+          .maybeSingle();
 
         if (insErr) {
-          if (insErr.code === '23505') continue; // race condition
+          if (insErr.code === '23505') continue; // race condition — post ya existe
+          console.error('[Scraper] INSERT posts_tracker error:', {
+            message: insErr.message, code: insErr.code,
+            details: insErr.details, hint: insErr.hint,
+            apify_post_id: apifyId, cuenta: cuenta.usuario_ig,
+          });
           throw insErr;
         }
-        postId = inserted.id;
+        postId = inserted?.id;
+        if (!postId) {
+          // INSERT exitoso pero SELECT bloqueado por RLS — buscar el id insertado
+          const { data: found } = await client()
+            .from('posts_tracker').select('id').eq('apify_post_id', apifyId).maybeSingle();
+          postId = found?.id;
+        }
+        if (!postId) continue; // no se pudo obtener el id — saltar este post
         loteStats.nuevos++;
       }
 
@@ -449,9 +468,12 @@ async function _procesarResultados(posts, cuentasMap) {
       await _guardarSnapshot(postId, vistas, likes, comentarios);
       const crecimiento = await _calcularCrecimiento(postId, vistas);
 
-      await client().from('posts_tracker')
-        .update({ crecimiento_24h: crecimiento })
-        .eq('id', postId);
+      if (crecimiento > 0) {
+        const { error: crecErr } = await client().from('posts_tracker')
+          .update({ crecimiento_24h: crecimiento })
+          .eq('id', postId);
+        if (crecErr) console.warn('[Scraper] UPDATE crecimiento_24h error (¿columna existe?):', crecErr.message);
+      }
 
       // ── Detección de viralidad (umbral absoluto O crecimiento >50%) ──────
       const umbralBase    = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
