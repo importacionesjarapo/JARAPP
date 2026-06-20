@@ -41,7 +41,10 @@ Responde SOLO en JSON con esta estructura exacta:
 // Callback de progreso inyectado por el caller (panel de Scraping)
 let _onProgress  = null;
 let _cancelado   = false;  // flag de cancelación manual
-const TIMEOUT_MS = 8 * 60 * 1000; // 8 minutos máximo
+let _iaCount     = 0;      // análisis IA generados en la ejecución actual
+const TIMEOUT_MS        = 8 * 60 * 1000; // 8 minutos máximo
+const MAX_IA_POR_RUN    = 10;            // límite para no agotar el rate limit de Groq
+const GROQ_DELAY_MS     = 3000;          // delay entre llamadas a Groq (anti rate-limit)
 
 export function cancelarScraping() {
   _cancelado = true;
@@ -61,6 +64,7 @@ function _sleep(ms) {
 export async function ejecutarScrapingDiario(onProgress = null) {
   _onProgress = onProgress;
   _cancelado  = false;
+  _iaCount    = 0;
   const inicio = Date.now();
 
   // ── Diagnóstico completo del cliente Supabase ─────────────────────────────
@@ -454,12 +458,11 @@ async function _procesarResultados(posts, cuentasMap) {
 
         if (insErr) {
           if (insErr.code === '23505') continue; // race condition — post ya existe
-          console.error('[Scraper] INSERT posts_tracker error:', {
+          console.warn('[Scraper] INSERT posts_tracker error (saltando post, no interrumpir lote):', {
             message: insErr.message, code: insErr.code,
-            details: insErr.details, hint: insErr.hint,
             apify_post_id: apifyId, cuenta: cuenta.usuario_ig,
           });
-          throw insErr;
+          continue; // no throw — un post fallido no debe romper el lote completo
         }
         postId = inserted?.id;
         if (!postId) {
@@ -498,34 +501,41 @@ async function _procesarResultados(posts, cuentasMap) {
           es_viral: true, nivel_amenaza: amenaza,
         }).eq('id', postId);
 
-        // Generar IA solo si no existe análisis previo
+        // Generar IA solo si: es viral nuevo + no tiene análisis previo + bajo el límite por ejecución
         const tieneIA = existing ? !!existing.analisis_ia : false;
         if (!tieneIA) {
           loteStats.virales++;
-          try {
-            const postObj = {
-              tipo_contenido: tipo, vistas, hook_texto: hook,
-              caption_completo: caption, categoria_contenido: cat, nivel_amenaza: amenaza,
-            };
-            const ia = await _groqAnalizar(postObj, cuenta);
-            const { data: recExist } = await sb
-              .from('recreaciones_tracker').select('id')
-              .eq('post_id', postId).maybeSingle();
+          if (_iaCount < MAX_IA_POR_RUN) {
+            _iaCount++;
+            try {
+              await _sleep(GROQ_DELAY_MS); // anti rate-limit: 3s entre llamadas a Groq
+              const postObj = {
+                tipo_contenido: tipo, vistas, hook_texto: hook,
+                caption_completo: caption, categoria_contenido: cat, nivel_amenaza: amenaza,
+              };
+              const ia = await _groqAnalizar(postObj, cuenta);
+              const { data: recExist } = await sb
+                .from('recreaciones_tracker').select('id')
+                .eq('post_id', postId).maybeSingle();
 
-            await sb.from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId);
-            if (!recExist) {
-              await sb.from('recreaciones_tracker').insert([{
-                post_id:              postId,
-                guion_recreacion:     ia.guion_recreacion,
-                hook_jarapo:          ia.hook_jarapo,
-                cta_sugerido:         ia.cta_sugerido,
-                musica_sugerida:      ia.musica_sugerida,
-                checklist_produccion: ia.checklist_produccion,
-                estado:               'pendiente',
-              }]);
+              await sb.from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId);
+              if (!recExist) {
+                await sb.from('recreaciones_tracker').insert([{
+                  post_id:              postId,
+                  guion_recreacion:     ia.guion_recreacion,
+                  hook_jarapo:          ia.hook_jarapo,
+                  cta_sugerido:         ia.cta_sugerido,
+                  musica_sugerida:      ia.musica_sugerida,
+                  checklist_produccion: ia.checklist_produccion,
+                  estado:               'pendiente',
+                }]);
+              }
+            } catch (iaErr) {
+              _iaCount--; // revertir para no contar intentos fallidos
+              console.warn('[Scraper] Error IA para post', postId, ':', iaErr.message);
             }
-          } catch (iaErr) {
-            console.warn('[Scraper] Error IA para post', postId, ':', iaErr.message);
+          } else {
+            _log(`⏭ IA omitida para @${cuenta.usuario_ig} (límite ${MAX_IA_POR_RUN} alcanzado — usar "Generar pendientes" en Posts virales)`);
           }
         } else if (!eraViralAntes) {
           // Pasó a viral desde hoy (crecimiento acelerado) pero ya tenía IA
@@ -710,6 +720,77 @@ export function construirMensajeWhatsApp(resumen) {
 
   msg += `\n🔗 Ver detalles en JARAPP → Competitor Tracker`;
   return msg;
+}
+
+// ── ANÁLISIS IA PENDIENTES ────────────────────────────────────────────────────
+// Procesa posts con es_viral=true pero sin analisis_ia, de 5 en 5 con 3s de delay.
+// Se llama desde el botón "Generar análisis pendientes" en la pestaña Posts virales.
+export async function generarAnalisisPendientes(onProgress = null) {
+  const _prog = (msg) => { console.log('[IA-Pendientes]', msg); onProgress?.(msg); };
+  const sb = await _obtenerCliente();
+
+  const { data: pendientes, error } = await sb
+    .from('posts_tracker')
+    .select('*, cuenta:cuenta_id(id,usuario_ig,nombre_display,tier,umbral_vistas,tipo_cuenta)')
+    .eq('es_viral', true)
+    .is('analisis_ia', null)
+    .order('fecha_deteccion', { ascending: false });
+
+  if (error) throw new Error(`Error cargando posts pendientes: ${error.message}`);
+  if (!pendientes?.length) {
+    _prog('✅ No hay posts virales sin análisis IA pendientes.');
+    return { procesados: 0, errores: 0, total: 0 };
+  }
+
+  _prog(`📋 ${pendientes.length} posts virales sin análisis IA. Procesando con delay de 3s entre cada uno...`);
+
+  let procesados = 0;
+  let errores    = 0;
+
+  for (let i = 0; i < pendientes.length; i++) {
+    const post   = pendientes[i];
+    const cuenta = post.cuenta;
+    if (!cuenta) { errores++; continue; }
+
+    if (i > 0) await _sleep(GROQ_DELAY_MS); // 3s anti rate-limit
+
+    try {
+      _prog(`⏳ ${i + 1}/${pendientes.length} — @${cuenta.usuario_ig} (${post.tipo_contenido || 'post'})`);
+      const postObj = {
+        tipo_contenido:      post.tipo_contenido || 'post',
+        vistas:              post.vistas || 0,
+        hook_texto:          post.hook_texto || '',
+        caption_completo:    post.caption_completo || '',
+        categoria_contenido: post.categoria_contenido || '',
+        nivel_amenaza:       post.nivel_amenaza || '',
+      };
+      const ia = await _groqAnalizar(postObj, cuenta);
+
+      const { data: recExist } = await sb
+        .from('recreaciones_tracker').select('id').eq('post_id', post.id).maybeSingle();
+
+      await sb.from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', post.id);
+      if (!recExist) {
+        await sb.from('recreaciones_tracker').insert([{
+          post_id:              post.id,
+          guion_recreacion:     ia.guion_recreacion,
+          hook_jarapo:          ia.hook_jarapo,
+          cta_sugerido:         ia.cta_sugerido,
+          musica_sugerida:      ia.musica_sugerida,
+          checklist_produccion: ia.checklist_produccion,
+          estado:               'pendiente',
+        }]);
+      }
+      procesados++;
+      _prog(`✅ ${procesados} ok — @${cuenta.usuario_ig}`);
+    } catch (iaErr) {
+      errores++;
+      _prog(`⚠️ Error en post ${post.id}: ${iaErr.message}`);
+    }
+  }
+
+  _prog(`🏁 Completado: ${procesados} generados, ${errores} errores.`);
+  return { procesados, errores, total: pendientes.length };
 }
 
 // ── TEST APIFY (diagnóstico) ───────────────────────────────────────────────────

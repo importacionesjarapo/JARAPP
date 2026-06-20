@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { getEstadoScheduler, ejecutarAhora } from '../services/schedulerService.js';
-import { construirMensajeWhatsApp, testApifyUno, cancelarScraping } from '../services/scraperService.js';
+import { construirMensajeWhatsApp, testApifyUno, cancelarScraping, generarAnalisisPendientes } from '../services/scraperService.js';
 
 const client = () => db.client;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -339,6 +339,22 @@ function _tabPosts() {
   if (_filterConten  !== 'todos') lista = lista.filter(p => p.tipo_contenido === _filterConten);
   if (_filterEstado  !== 'todos') lista = lista.filter(p => recMap[p.id]?.estado === _filterEstado);
 
+  // Conteo de posts virales sin análisis IA
+  const sinIA = _posts.filter(p => p.es_viral && !p.analisis_ia).length;
+  const btnPendientes = sinIA > 0 ? `
+    <div style="background:#7C3AED11;border:1px solid #7C3AED44;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <span style="font-weight:700;color:#7C3AED;">${sinIA} post${sinIA!==1?'s':''} viral${sinIA!==1?'es':''} sin análisis IA</span>
+        <span style="color:var(--text-faint);font-size:0.83rem;"> · máx 10 por ejecución, 3s de delay entre llamadas</span>
+      </div>
+      <button id="tr-generar-pendientes-btn" class="btn-action"
+        style="background:#7C3AED20;color:#7C3AED;border:1px solid #7C3AED55;white-space:nowrap;"
+        onclick="window._trGenerarPendientes()">
+        🤖 Generar análisis pendientes
+      </button>
+    </div>
+    <div id="tr-generar-pendientes-log" style="display:none;background:#0D0D0D;border-radius:10px;padding:14px;margin-bottom:16px;font-family:monospace;font-size:0.79rem;color:#A78BFA;max-height:180px;overflow-y:auto;"></div>` : '';
+
   // Summary mini-cards
   const stateCards = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
@@ -397,7 +413,7 @@ function _tabPosts() {
       <span style="color:var(--text-faint);font-size:0.82rem;margin-left:auto;">${lista.length} post${lista.length!==1?'s':''}</span>
     </div>`;
 
-  if (!lista.length) return stateCards + pillsHTML + filters + `
+  if (!lista.length) return btnPendientes + stateCards + pillsHTML + filters + `
     <div style="text-align:center;padding:60px;color:var(--text-faint);">
       <div style="font-size:3rem;margin-bottom:16px;">📭</div>
       <p>No hay posts${_filterEstado !== 'todos' ? ' con este estado' : ''} registrados.<br>
@@ -474,7 +490,7 @@ function _tabPosts() {
       </div>`;
   }).join('');
 
-  return stateCards + pillsHTML + filters + cards;
+  return btnPendientes + stateCards + pillsHTML + filters + cards;
 }
 
 // ─── Tab: Inspiración ─────────────────────────────────────────────────────────
@@ -861,6 +877,29 @@ function _registerHandlers() {
 
   window._trEstado = (recId, estadoActual) => {
     _modalCambiarEstado(recId, estadoActual);
+  };
+
+  window._trGenerarPendientes = async () => {
+    const btn = document.getElementById('tr-generar-pendientes-btn');
+    const log = document.getElementById('tr-generar-pendientes-log');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando…'; }
+    if (log) { log.style.display = 'block'; log.innerHTML = ''; }
+    const append = (msg) => {
+      if (!log) return;
+      log.innerHTML += `<div>${msg}</div>`;
+      log.scrollTop = log.scrollHeight;
+    };
+    try {
+      const res = await generarAnalisisPendientes(append);
+      append(`✅ Listo: ${res.procesados} generados${res.errores ? `, ${res.errores} errores` : ''}`);
+      await Promise.all([_loadPosts(), _loadRecs()]);
+      _renderUI();
+    } catch (err) {
+      append(`❌ Error: ${err.message}`);
+      _toast(`Error generando análisis: ${err.message}`, 'danger');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🤖 Generar análisis pendientes'; }
+    }
   };
 
   window._trGenIA = async (postId, btn) => {
