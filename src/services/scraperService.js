@@ -258,8 +258,6 @@ export async function ejecutarScrapingDiario(onProgress = null) {
 
     const duracion = Math.round((Date.now() - inicio) / 1000);
     _log(`✅ Scraping completado en ${duracion}s`);
-    const duracion = Math.round((Date.now() - inicio) / 1000);
-    _log(`✅ Scraping completado en ${duracion}s`);
     _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 30}`);
     _log(`🔥 Virales detectados: ${stats.posts_virales}`);
     if (stats.errores > 0) _log(`⚠️ Errores: ${stats.errores}`);
