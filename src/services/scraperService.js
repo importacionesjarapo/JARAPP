@@ -31,7 +31,14 @@ Responde SOLO en JSON con esta estructura exacta:
 }`;
 
 // Callback de progreso inyectado por el caller (panel de Scraping)
-let _onProgress = null;
+let _onProgress  = null;
+let _cancelado   = false;  // flag de cancelación manual
+const TIMEOUT_MS = 8 * 60 * 1000; // 8 minutos máximo
+
+export function cancelarScraping() {
+  _cancelado = true;
+  console.log('[Scraper] Cancelación solicitada.');
+}
 
 function _log(msg) {
   console.log('[Scraper]', msg);
@@ -45,18 +52,39 @@ function _sleep(ms) {
 // ── PRINCIPAL ──────────────────────────────────────────────────────────────────
 export async function ejecutarScrapingDiario(onProgress = null) {
   _onProgress = onProgress;
+  _cancelado  = false;
   const inicio = Date.now();
 
   // Guard: cliente Supabase disponible
-  if (!db.client) throw new Error('Cliente Supabase no inicializado. Verifica credenciales en db.js.');
+  if (!db.client) {
+    console.error('[Scraper] db.client es null/undefined', { db: typeof db, url: db?.supabaseUrl });
+    throw new Error('Supabase client no inicializado — revisa credenciales en db.js.');
+  }
+  _log(`🔌 Cliente Supabase OK: ${db.supabaseUrl?.substring(0, 40)}...`);
 
-  // Registrar inicio en scraping_logs
-  const { data: logEntry } = await client()
-    .from('scraping_logs')
-    .insert([{ estado: 'ejecutando' }])
-    .select()
-    .single();
-  const logId = logEntry?.id;
+  // Registrar inicio en scraping_logs — fail-safe (si falla, continuamos con logId=null)
+  let logId = null;
+  try {
+    const { data: logEntry, error: logErr } = await client()
+      .from('scraping_logs')
+      .insert([{
+        estado:                   'ejecutando',
+        cuentas_procesadas:       0,
+        posts_nuevos_detectados:  0,
+        posts_virales_detectados: 0,
+        errores:                  0,
+      }])
+      .select('id')
+      .maybeSingle();
+    if (logErr) {
+      console.error('[Scraper] Error al crear scraping_log (no crítico):', logErr.message, '| code:', logErr.code);
+    } else {
+      logId = logEntry?.id || null;
+    }
+  } catch (e) {
+    console.error('[Scraper] Excepción al crear scraping_log:', e.message);
+  }
+  _log(logId ? `📝 Log de ejecución registrado (ID: ${logId})` : '⚠️ No se pudo registrar log (continuando de todos modos)');
 
   // Cargar cuentas_sin_datos de la última ejecución completada (para auto-desactivación)
   let sinDatosAnterior = [];
@@ -81,6 +109,30 @@ export async function ejecutarScrapingDiario(onProgress = null) {
     virales: { competencia: [], tiendas: [], inspiracion: [] },
   };
 
+  // Helper para guardar estado final en scraping_logs
+  const _finalizarLog = async (estado, extra = {}) => {
+    if (!logId) return;
+    const duracion = Math.round((Date.now() - inicio) / 1000);
+    try {
+      await client().from('scraping_logs').update({
+        estado,
+        cuentas_procesadas:       stats.cuentas_procesadas,
+        posts_nuevos_detectados:  stats.posts_nuevos,
+        posts_virales_detectados: stats.posts_virales,
+        errores:                  stats.errores,
+        duracion_segundos:        duracion,
+        resumen: {
+          virales:              stats.virales,
+          cuentas_sin_datos:    stats.cuentas_sin_datos,
+          cuentas_desactivadas: stats.cuentas_desactivadas,
+          ...extra,
+        },
+      }).eq('id', logId);
+    } catch (e) {
+      console.error('[Scraper] Error al actualizar log:', e.message);
+    }
+  };
+
   try {
     // Obtener cuentas activas
     _log('⏳ Obteniendo cuentas de Supabase...');
@@ -88,7 +140,10 @@ export async function ejecutarScrapingDiario(onProgress = null) {
       .from('cuentas_tracker')
       .select('*')
       .eq('activo', true);
-    if (errCuentas) throw errCuentas;
+    if (errCuentas) {
+      console.error('[Scraper] Error al leer cuentas_tracker:', errCuentas.message, '| code:', errCuentas.code);
+      throw new Error(`Error leyendo cuentas_tracker: ${errCuentas.message}`);
+    }
 
     _log(`⏳ ${cuentas.length} cuentas activas encontradas`);
 
@@ -101,6 +156,21 @@ export async function ejecutarScrapingDiario(onProgress = null) {
     for (let i = 0; i < cuentas.length; i += BATCH) lotes.push(cuentas.slice(i, i + BATCH));
 
     for (let i = 0; i < lotes.length; i++) {
+      // ── Chequeos de interrupción ─────────────────────────────────────────────
+      if (_cancelado) {
+        _log('⏹ Scraping cancelado por el usuario.');
+        await _finalizarLog('cancelado');
+        return { stats, virales: stats.virales, cuentas_sin_datos: stats.cuentas_sin_datos,
+          cuentas_desactivadas: stats.cuentas_desactivadas, cancelado: true,
+          fecha: new Date().toLocaleDateString('es-CO') };
+      }
+      const transcurrido = Date.now() - inicio;
+      if (transcurrido > TIMEOUT_MS) {
+        _log(`⏱ Timeout (${Math.round(transcurrido / 60000)} min) — cancelando scraping.`);
+        await _finalizarLog('error', { error: 'Timeout 8 minutos' });
+        throw new Error('Timeout 8 minutos — scraping cancelado automáticamente.');
+      }
+
       const lote = lotes[i];
       const usernames = lote.map(c => c.usuario_ig);
       const preview = usernames.slice(0, 3).join(', ') + (usernames.length > 3 ? '...' : '');
@@ -165,52 +235,33 @@ export async function ejecutarScrapingDiario(onProgress = null) {
 
     const duracion = Math.round((Date.now() - inicio) / 1000);
     _log(`✅ Scraping completado en ${duracion}s`);
+    const duracion = Math.round((Date.now() - inicio) / 1000);
+    _log(`✅ Scraping completado en ${duracion}s`);
     _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 30}`);
     _log(`🔥 Virales detectados: ${stats.posts_virales}`);
-    _log(`⚠️ Errores: ${stats.errores}`);
+    if (stats.errores > 0) _log(`⚠️ Errores: ${stats.errores}`);
     if (stats.cuentas_sin_datos.length > 0) {
       _log(`❌ Sin datos (${stats.cuentas_sin_datos.length}): ${stats.cuentas_sin_datos.join(', ')}`);
     }
     if (stats.cuentas_desactivadas.length > 0) {
-      _log(`🔕 Desactivadas automáticamente (${stats.cuentas_desactivadas.length}): ${stats.cuentas_desactivadas.join(', ')}`);
+      _log(`🔕 Desactivadas (${stats.cuentas_desactivadas.length}): ${stats.cuentas_desactivadas.join(', ')}`);
     }
 
-    if (logId) {
-      await client().from('scraping_logs').update({
-        estado: 'completado',
-        cuentas_procesadas:       stats.cuentas_procesadas,
-        posts_nuevos_detectados:  stats.posts_nuevos,
-        posts_virales_detectados: stats.posts_virales,
-        errores:                  stats.errores,
-        duracion_segundos:        duracion,
-        resumen: {
-          virales:               stats.virales,
-          cuentas_sin_datos:     stats.cuentas_sin_datos,
-          cuentas_desactivadas:  stats.cuentas_desactivadas,
-        },
-      }).eq('id', logId);
-    }
+    await _finalizarLog('completado');
 
     return {
       stats,
-      virales:                stats.virales,
-      cuentas_sin_datos:      stats.cuentas_sin_datos,
-      cuentas_desactivadas:   stats.cuentas_desactivadas,
+      virales:              stats.virales,
+      cuentas_sin_datos:    stats.cuentas_sin_datos,
+      cuentas_desactivadas: stats.cuentas_desactivadas,
       fecha: new Date().toLocaleDateString('es-CO', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       }),
     };
 
   } catch (err) {
-    const duracion = Math.round((Date.now() - inicio) / 1000);
-    if (logId) {
-      await client().from('scraping_logs').update({
-        estado: 'error',
-        errores: stats.errores + 1,
-        duracion_segundos: duracion,
-        resumen: { error: err.message },
-      }).eq('id', logId).catch(() => {});
-    }
+    console.error('[Scraper] Error fatal:', err.message);
+    await _finalizarLog('error', { error: err.message }).catch(() => {});
     throw err;
   }
 }

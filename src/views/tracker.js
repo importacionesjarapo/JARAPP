@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { getEstadoScheduler, ejecutarAhora } from '../services/schedulerService.js';
-import { construirMensajeWhatsApp, testApifyUno } from '../services/scraperService.js';
+import { construirMensajeWhatsApp, testApifyUno, cancelarScraping } from '../services/scraperService.js';
 
 const client = () => db.client;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -562,10 +562,18 @@ function _tabScraping() {
       <h3 style="font-size:1rem;font-weight:800;margin-bottom:4px;">▶ Ejecución manual</h3>
       <p style="color:var(--text-faint);font-size:0.84rem;margin-bottom:16px;">
         Inicia el scraping inmediatamente. Puede tardar varios minutos según el número de cuentas.
+        Timeout automático: 8 minutos.
       </p>
-      <button id="tr-scraping-btn" class="btn-primary" style="font-size:0.92rem;" onclick="window._trEjecutarScraping()">
-        ▶ Ejecutar scraping ahora
-      </button>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button id="tr-scraping-btn" class="btn-primary" style="font-size:0.92rem;" onclick="window._trEjecutarScraping()">
+          ▶ Ejecutar scraping ahora
+        </button>
+        <button id="tr-cancelar-btn" class="btn-action"
+          style="display:none;background:#EF444420;color:#EF4444;border:1px solid #EF444455;font-size:0.9rem;"
+          onclick="window._trCancelarScraping()">
+          ⏹ Cancelar
+        </button>
+      </div>
       <div id="tr-scraping-log" style="display:none;margin-top:18px;background:var(--surface-2);border-radius:12px;padding:16px;font-family:monospace;font-size:0.82rem;line-height:2;max-height:240px;overflow-y:auto;white-space:pre-wrap;"></div>
     </div>`;
 
@@ -1288,25 +1296,40 @@ function _modalResumenWhatsApp(resumen) {
 
 // ─── Handlers globales: Scraping ──────────────────────────────────────────────
 window._trEjecutarScraping = async () => {
-  const btn = document.getElementById('tr-scraping-btn');
-  const log = document.getElementById('tr-scraping-log');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Ejecutando...'; }
-  if (log) { log.style.display = 'block'; log.textContent = ''; }
+  const btn    = document.getElementById('tr-scraping-btn');
+  const btnCan = document.getElementById('tr-cancelar-btn');
+  const log    = document.getElementById('tr-scraping-log');
+
+  if (btn)    { btn.disabled = true; btn.textContent = '⏳ Ejecutando...'; }
+  if (btnCan) { btnCan.style.display = 'inline-flex'; }
+  if (log)    { log.style.display = 'block'; log.textContent = ''; }
 
   const append = (msg) => {
     if (log) { log.textContent += msg + '\n'; log.scrollTop = log.scrollHeight; }
   };
 
+  const resetBtns = () => {
+    if (btn)    { btn.disabled = false; btn.textContent = '▶ Ejecutar scraping ahora'; }
+    if (btnCan) { btnCan.style.display = 'none'; }
+  };
+
   try {
     const resumen = await ejecutarAhora(append);
+    resetBtns();
     await _loadScrapingLogs().catch(() => {});
     _renderUI();
-    _modalResumenWhatsApp(resumen);
+    if (!resumen?.cancelado) _modalResumenWhatsApp(resumen);
   } catch (err) {
     append(`❌ Error: ${err.message}`);
-    if (btn) { btn.disabled = false; btn.textContent = '▶ Ejecutar scraping ahora'; }
+    resetBtns();
     _toast(`Error en scraping: ${err.message}`, 'danger');
   }
+};
+
+window._trCancelarScraping = () => {
+  cancelarScraping();
+  const btnCan = document.getElementById('tr-cancelar-btn');
+  if (btnCan) { btnCan.disabled = true; btnCan.textContent = '⏹ Cancelando...'; }
 };
 
 window._trRefrescarLogs = async () => {
