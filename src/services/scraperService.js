@@ -60,6 +60,47 @@ function _sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ── ACTUALIZAR LOG FINAL ───────────────────────────────────────────────────────
+// Función standalone con _obtenerCliente() y retry — garantiza que el log no quede en 'ejecutando'
+async function _actualizarLogFinal(logId, estado, stats, inicio, timedOut = false) {
+  if (!logId) return;
+  const duracion = Math.round((Date.now() - inicio) / 1000);
+  const payload = {
+    estado,
+    cuentas_procesadas:       stats.cuentas_procesadas,
+    posts_nuevos_detectados:  stats.posts_nuevos,
+    posts_virales_detectados: stats.posts_virales,
+    errores:                  stats.errores,
+    duracion_segundos:        duracion,
+    resumen: {
+      virales:              stats.virales,
+      cuentas_sin_datos:    stats.cuentas_sin_datos,
+      cuentas_desactivadas: stats.cuentas_desactivadas,
+      ...(timedOut ? { advertencia: `Timeout ${Math.round(TIMEOUT_MS / 60000)} min — procesado parcial` } : {}),
+    },
+  };
+
+  // Primer intento
+  try {
+    const sb = await _obtenerCliente();
+    await sb.from('scraping_logs').update(payload).eq('id', logId);
+    console.log('[Scraper] Log finalizado correctamente:', estado, `(${duracion}s)`);
+    return;
+  } catch (e) {
+    console.error('[Scraper] Error al finalizar log (intento 1):', e.message);
+  }
+
+  // Reintento a los 2 segundos — el cliente podría estar temporalmente no disponible
+  await _sleep(2000);
+  try {
+    const sb = await _obtenerCliente();
+    await sb.from('scraping_logs').update({ estado, duracion_segundos: duracion }).eq('id', logId);
+    console.log('[Scraper] Log finalizado (reintento):', estado);
+  } catch (e2) {
+    console.error('[Scraper] Error al finalizar log (intento 2 — log quedará en "ejecutando"):', e2.message);
+  }
+}
+
 // ── PRINCIPAL ──────────────────────────────────────────────────────────────────
 export async function ejecutarScrapingDiario(onProgress = null) {
   _onProgress = onProgress;
@@ -67,159 +108,95 @@ export async function ejecutarScrapingDiario(onProgress = null) {
   _iaCount    = 0;
   const inicio = Date.now();
 
-  // ── Diagnóstico completo del cliente Supabase ─────────────────────────────
-  console.log('=== [Scraper] DIAGNÓSTICO SUPABASE ===');
-  console.log('[Scraper] typeof db:', typeof db);
-  console.log('[Scraper] typeof db.client:', typeof db.client);
-  console.log('[Scraper] db.client === null:', db.client === null);
-  console.log('[Scraper] db.client === undefined:', db.client === undefined);
-  console.log('[Scraper] db.supabaseUrl:', db?.supabaseUrl);
-  const _c = client();
-  console.log('[Scraper] typeof client():', typeof _c);
-  console.log('[Scraper] client() value:', _c);
-  // Test real: leer cuentas_tracker (tabla que sí funciona en tracker.js)
-  if (_c) {
-    try {
-      const _testRes = await _c.from('cuentas_tracker').select('id').limit(1);
-      console.log('[Scraper] TEST cuentas_tracker →',
-        _testRes.error ? `ERROR ${_testRes.error.code}: ${_testRes.error.message}` : `OK (${_testRes.data?.length} filas)`);
-    } catch (e) {
-      console.error('[Scraper] TEST cuentas_tracker → EXCEPCIÓN:', e.message);
-    }
-  }
-  console.log('=== [Scraper] FIN DIAGNÓSTICO ===');
-
-  // Guard: cliente Supabase disponible
   if (!db.client) {
-    const msg = `Supabase client no inicializado — db.client es ${db.client === null ? 'null' : 'undefined'}. URL: ${db?.supabaseUrl}`;
+    const msg = `Supabase client no inicializado — db.client es ${db.client === null ? 'null' : 'undefined'}`;
     _log(`❌ ${msg}`);
     throw new Error(msg);
   }
   _log(`🔌 Cliente Supabase OK: ${db.supabaseUrl?.substring(0, 40)}...`);
 
-  // Registrar inicio en scraping_logs — fail-safe (si falla, continuamos con logId=null)
+  // Registrar inicio en scraping_logs via _obtenerCliente()
   let logId = null;
   try {
-    const { data: logEntry, error: logErr } = await client()
+    const sb = await _obtenerCliente();
+    const { data: logEntry, error: logErr } = await sb
       .from('scraping_logs')
-      .insert([{
-        estado:                   'ejecutando',
-        cuentas_procesadas:       0,
-        posts_nuevos_detectados:  0,
-        posts_virales_detectados: 0,
-        errores:                  0,
-      }])
+      .insert([{ estado: 'ejecutando', cuentas_procesadas: 0, posts_nuevos_detectados: 0, posts_virales_detectados: 0, errores: 0 }])
       .select('id')
       .maybeSingle();
-    if (logErr) {
-      console.error('[Scraper] Error al crear scraping_log (no crítico):', logErr.message, '| code:', logErr.code);
-    } else {
-      logId = logEntry?.id || null;
-    }
+    if (logErr) console.error('[Scraper] Error al crear scraping_log:', logErr.message, '| code:', logErr.code);
+    else logId = logEntry?.id || null;
   } catch (e) {
     console.error('[Scraper] Excepción al crear scraping_log:', e.message);
   }
-  _log(logId ? `📝 Log de ejecución registrado (ID: ${logId})` : '⚠️ No se pudo registrar log (continuando de todos modos)');
-
-  // Cargar cuentas_sin_datos de la última ejecución completada (para auto-desactivación)
-  let sinDatosAnterior = [];
-  try {
-    const { data: lastLog } = await client()
-      .from('scraping_logs')
-      .select('resumen')
-      .eq('estado', 'completado')
-      .order('fecha_ejecucion', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    sinDatosAnterior = lastLog?.resumen?.cuentas_sin_datos || [];
-  } catch (_) {}
+  _log(logId ? `📝 Log registrado (ID: ${logId})` : '⚠️ No se pudo registrar log (continuando de todos modos)');
 
   const stats = {
-    cuentas_procesadas:     0,
-    posts_nuevos:           0,
-    posts_virales:          0,
-    errores:                0,
+    cuentas_procesadas: 0,
+    posts_nuevos:       0,
+    posts_virales:      0,
+    errores:            0,
     cuentas_sin_datos:      [],
     cuentas_desactivadas:   [],
     virales: { competencia: [], tiendas: [], inspiracion: [] },
   };
 
-  // Helper para guardar estado final en scraping_logs
-  const _finalizarLog = async (estado, extra = {}) => {
-    if (!logId) return;
-    const duracion = Math.round((Date.now() - inicio) / 1000);
-    try {
-      await client().from('scraping_logs').update({
-        estado,
-        cuentas_procesadas:       stats.cuentas_procesadas,
-        posts_nuevos_detectados:  stats.posts_nuevos,
-        posts_virales_detectados: stats.posts_virales,
-        errores:                  stats.errores,
-        duracion_segundos:        duracion,
-        resumen: {
-          virales:              stats.virales,
-          cuentas_sin_datos:    stats.cuentas_sin_datos,
-          cuentas_desactivadas: stats.cuentas_desactivadas,
-          ...extra,
-        },
-      }).eq('id', logId);
-    } catch (e) {
-      console.error('[Scraper] Error al actualizar log:', e.message);
-    }
-  };
+  let _estadoFinal   = 'completado';
+  let _timedOut      = false;
+  let _timeoutHandle = null;
 
   try {
+    // Cargar cuentas_sin_datos de la última ejecución (para auto-desactivación)
+    let sinDatosAnterior = [];
+    try {
+      const sb = await _obtenerCliente();
+      const { data: lastLog } = await sb
+        .from('scraping_logs').select('resumen')
+        .eq('estado', 'completado').order('fecha_ejecucion', { ascending: false }).limit(1).maybeSingle();
+      sinDatosAnterior = lastLog?.resumen?.cuentas_sin_datos || [];
+    } catch (_) {}
+
     // Obtener cuentas activas
     _log('⏳ Obteniendo cuentas de Supabase...');
-    const { data: cuentas, error: errCuentas } = await client()
-      .from('cuentas_tracker')
-      .select('*')
-      .eq('activo', true);
-    if (errCuentas) {
-      console.error('[Scraper] Error al leer cuentas_tracker:', errCuentas.message, '| code:', errCuentas.code);
-      throw new Error(`Error leyendo cuentas_tracker: ${errCuentas.message}`);
-    }
-
+    const sbMain = await _obtenerCliente();
+    const { data: cuentas, error: errCuentas } = await sbMain.from('cuentas_tracker').select('*').eq('activo', true);
+    if (errCuentas) throw new Error(`Error leyendo cuentas_tracker: ${errCuentas.message}`);
     _log(`⏳ ${cuentas.length} cuentas activas encontradas`);
 
     const cuentasMap = {};
     cuentas.forEach(c => { cuentasMap[c.usuario_ig.toLowerCase()] = c; });
 
-    // Dividir en lotes de 20
     const BATCH = 20;
     const lotes = [];
     for (let i = 0; i < cuentas.length; i += BATCH) lotes.push(cuentas.slice(i, i + BATCH));
 
-    let _timedOut = false;
+    // Timeout externo via setTimeout — setea _timedOut para que el loop se detenga limpiamente
+    // El finally siempre corre _actualizarLogFinal con el estado correcto
+    _timeoutHandle = setTimeout(() => {
+      _timedOut = true;
+      _log(`⏱ Timeout (${Math.round(TIMEOUT_MS / 60000)} min) — los lotes pendientes no se procesarán.`);
+    }, TIMEOUT_MS);
+
     for (let i = 0; i < lotes.length; i++) {
-      // ── Chequeos de interrupción ─────────────────────────────────────────────
       if (_cancelado) {
         _log('⏹ Scraping cancelado por el usuario.');
-        await _finalizarLog('cancelado');
-        return { stats, virales: stats.virales, cuentas_sin_datos: stats.cuentas_sin_datos,
-          cuentas_desactivadas: stats.cuentas_desactivadas, cancelado: true,
-          fecha: new Date().toLocaleDateString('es-CO') };
+        _estadoFinal = 'cancelado';
+        break;
       }
-      const transcurrido = Date.now() - inicio;
-      if (transcurrido > TIMEOUT_MS) {
-        const restantes = lotes.length - i;
-        _log(`⏱ Timeout (${Math.round(transcurrido / 60000)} min) — ${restantes} lote(s) pendiente(s). Los posts ya procesados quedan guardados.`);
-        _timedOut = true;
-        break; // no throw — el cierre normal (completado) corre igual
+      if (_timedOut) {
+        _log(`⏱ Detenido — ${lotes.length - i} lote(s) pendiente(s). Posts ya guardados son válidos.`);
+        break;
       }
 
-      const lote = lotes[i];
+      const lote     = lotes[i];
       const usernames = lote.map(c => c.usuario_ig);
-      const preview = usernames.slice(0, 3).join(', ') + (usernames.length > 3 ? '...' : '');
+      const preview   = usernames.slice(0, 3).join(', ') + (usernames.length > 3 ? '...' : '');
       _log(`⏳ Procesando lote ${i + 1}/${lotes.length} (${preview})`);
 
       try {
         const posts = await _runApifyActor(usernames);
 
-        // Detectar cuentas que Apify no devolvió (username inválido o privado)
-        const usernamesConDatos = new Set(
-          posts.map(p => (p.ownerUsername || '').toLowerCase())
-        );
+        const usernamesConDatos = new Set(posts.map(p => (p.ownerUsername || '').toLowerCase()));
         const sinDatos = usernames.filter(u => !usernamesConDatos.has(u.toLowerCase()));
         if (sinDatos.length > 0) {
           console.warn('[Scraper] Sin datos en este lote:', sinDatos);
@@ -242,63 +219,58 @@ export async function ejecutarScrapingDiario(onProgress = null) {
       if (i < lotes.length - 1) await _sleep(2000);
     }
 
-    // ── Auto-desactivar cuentas con 0 datos en 2 ejecuciones consecutivas ─────
-    if (stats.cuentas_sin_datos.length > 0 && sinDatosAnterior.length > 0) {
+    // Auto-desactivar cuentas con 0 datos en 2 ejecuciones consecutivas (solo si no cancelado)
+    if (_estadoFinal !== 'cancelado' && stats.cuentas_sin_datos.length > 0 && sinDatosAnterior.length > 0) {
       const reincidentes = stats.cuentas_sin_datos.filter(u =>
         sinDatosAnterior.map(x => x.toLowerCase()).includes(u.toLowerCase())
       );
       if (reincidentes.length > 0) {
-        _log(`🔕 Desactivando ${reincidentes.length} cuenta(s) reincidentes sin datos: ${reincidentes.join(', ')}`);
+        _log(`🔕 Desactivando ${reincidentes.length} cuenta(s) reincidentes: ${reincidentes.join(', ')}`);
+        const sbDeact = await _obtenerCliente();
         for (const username of reincidentes) {
           try {
-            const { error: deactErr } = await client()
-              .from('cuentas_tracker')
-              .update({
-                activo: false,
-                notas: 'Desactivada automáticamente: sin datos Apify en 2 ejecuciones consecutivas (posible cuenta privada o usuario incorrecto)',
-              })
-              .eq('usuario_ig', username);
+            const { error: deactErr } = await sbDeact.from('cuentas_tracker').update({
+              activo: false,
+              notas:  'Desactivada automáticamente: sin datos Apify en 2 ejecuciones consecutivas (posible cuenta privada o usuario incorrecto)',
+            }).eq('usuario_ig', username);
             if (deactErr) throw deactErr;
             stats.cuentas_desactivadas.push(username);
           } catch (e) {
             console.error(`[Scraper] Error al desactivar ${username}:`, e.message);
           }
         }
-        if (stats.cuentas_desactivadas.length > 0) {
-          _log(`✅ Desactivadas: ${stats.cuentas_desactivadas.join(', ')}`);
-        }
+        if (stats.cuentas_desactivadas.length > 0) _log(`✅ Desactivadas: ${stats.cuentas_desactivadas.join(', ')}`);
       }
     }
 
     const duracion = Math.round((Date.now() - inicio) / 1000);
-    _log(`✅ Scraping completado en ${duracion}s${_timedOut ? ' (parcial — timeout)' : ''}`);
-    _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 30}`);
-    _log(`🔥 Virales detectados: ${stats.posts_virales}`);
-    if (stats.errores > 0) _log(`⚠️ Errores: ${stats.errores}`);
-    if (stats.cuentas_sin_datos.length > 0) {
-      _log(`❌ Sin datos (${stats.cuentas_sin_datos.length}): ${stats.cuentas_sin_datos.join(', ')}`);
+    _log(`✅ Scraping ${_estadoFinal === 'cancelado' ? 'cancelado' : 'completado'} en ${duracion}s${_timedOut ? ' (parcial — timeout)' : ''}`);
+    if (_estadoFinal !== 'cancelado') {
+      _log(`📊 Posts analizados: ${stats.cuentas_procesadas * 30}`);
+      _log(`🔥 Virales: ${stats.posts_virales}`);
+      if (stats.errores > 0)               _log(`⚠️ Errores: ${stats.errores}`);
+      if (stats.cuentas_sin_datos.length)  _log(`❌ Sin datos: ${stats.cuentas_sin_datos.join(', ')}`);
+      if (stats.cuentas_desactivadas.length) _log(`🔕 Desactivadas: ${stats.cuentas_desactivadas.join(', ')}`);
     }
-    if (stats.cuentas_desactivadas.length > 0) {
-      _log(`🔕 Desactivadas (${stats.cuentas_desactivadas.length}): ${stats.cuentas_desactivadas.join(', ')}`);
-    }
-
-    // El estado siempre es 'completado' — si hubo timeout, queda en el resumen pero los datos son válidos
-    await _finalizarLog('completado', _timedOut ? { advertencia: `Timeout ${Math.round(TIMEOUT_MS / 60000)} min — procesado parcial` } : {});
 
     return {
       stats,
       virales:              stats.virales,
       cuentas_sin_datos:    stats.cuentas_sin_datos,
       cuentas_desactivadas: stats.cuentas_desactivadas,
-      fecha: new Date().toLocaleDateString('es-CO', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-      }),
+      cancelado:            _estadoFinal === 'cancelado',
+      fecha: new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
     };
 
   } catch (err) {
-    console.error('[Scraper] Error fatal:', err.message);
-    await _finalizarLog('error', { error: err.message }).catch(() => {});
-    throw err;
+    console.error('[Scraper] Error general:', err.message);
+    _estadoFinal = 'error';
+    throw err; // re-throw para que el caller vea el error
+
+  } finally {
+    // SIEMPRE corre — garantiza que el log no quede pegado en 'ejecutando'
+    clearTimeout(_timeoutHandle);
+    await _actualizarLogFinal(logId, _estadoFinal, stats, inicio, _timedOut);
   }
 }
 
