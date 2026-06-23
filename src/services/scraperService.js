@@ -387,11 +387,16 @@ async function _procesarResultados(posts, cuentasMap) {
       const metrica     = esVideo ? vistas : likes;
       const fechaPost   = post.timestamp ? new Date(post.timestamp) : null;
       const captionRaw  = post.caption || '';
-      // Sanitizar caption antes de truncar para evitar surrogates solitarios en PostgreSQL
       const caption     = _sanitizeUnicode(captionRaw);
-      const hook        = _sanitizeUnicode(captionRaw, 200); // trunca por code points, no bytes
+      const hook        = _sanitizeUnicode(captionRaw, 200);
       const cat         = _categoriaCaption(caption);
       const amenaza     = _nivelAmenaza(vistas || likes * 10, cuenta);
+
+      // Umbral calculado antes del lookup para decidir si insertar posts nuevos
+      // Videos: umbral_vistas completo; fotos/carruseles: likes ≈ 10% de vistas → umbral/10
+      const umbralBase    = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
+      const umbral        = esVideo ? umbralBase : Math.max(1, Math.round(umbralBase / 10));
+      const esViralUmbral = metrica >= umbral;
 
       // ── Buscar post existente ──────────────────────────────────────────────
       const { data: existing } = await sb
@@ -403,12 +408,14 @@ async function _procesarResultados(posts, cuentasMap) {
       let postId;
 
       if (existing) {
+        // Post ya en BD → actualizar métricas siempre (el post ya superó umbral en algún momento)
         postId = existing.id;
         const { error: updErr } = await sb.from('posts_tracker').update({
           vistas, likes_estimados: likes, comentarios,
         }).eq('id', postId);
         if (updErr) console.warn('[Scraper] UPDATE métricas error:', updErr.message);
-      } else {
+      } else if (esViralUmbral) {
+        // Post nuevo que supera el umbral → insertar directamente como viral
         const payload = {
           cuenta_id:           cuenta.id,
           apify_post_id:       apifyId,
@@ -419,7 +426,7 @@ async function _procesarResultados(posts, cuentasMap) {
           comentarios,
           hook_texto:          hook,
           caption_completo:    caption,
-          es_viral:            false,
+          es_viral:            true,
           nivel_amenaza:       amenaza,
           categoria_contenido: cat,
           fecha_publicacion:   fechaPost ? fechaPost.toISOString() : null,
@@ -432,25 +439,28 @@ async function _procesarResultados(posts, cuentasMap) {
           .maybeSingle();
 
         if (insErr) {
-          if (insErr.code === '23505') continue; // race condition — post ya existe
-          console.warn('[Scraper] INSERT posts_tracker error (saltando post, no interrumpir lote):', {
+          if (insErr.code === '23505') continue;
+          console.warn('[Scraper] INSERT posts_tracker error (saltando post):', {
             message: insErr.message, code: insErr.code,
             apify_post_id: apifyId, cuenta: cuenta.usuario_ig,
           });
-          continue; // no throw — un post fallido no debe romper el lote completo
+          continue;
         }
         postId = inserted?.id;
         if (!postId) {
-          // INSERT exitoso pero RLS bloquea el SELECT de retorno — buscar por apify_post_id
           const { data: found } = await sb
             .from('posts_tracker').select('id').eq('apify_post_id', apifyId).maybeSingle();
           postId = found?.id;
         }
         if (!postId) continue;
         loteStats.nuevos++;
+      } else {
+        // Post nuevo por debajo del umbral → no guardar en posts_tracker
+        // Se re-evaluará en futuras ejecuciones cuando (si) supera el umbral
+        continue;
       }
 
-      // ── Snapshot diario + crecimiento ────────────────────────────────────
+      // ── Snapshot diario + crecimiento (solo para posts que están en posts_tracker) ──
       await _guardarSnapshot(postId, vistas, likes, comentarios);
       const crecimiento = await _calcularCrecimiento(postId, vistas);
 
@@ -461,15 +471,10 @@ async function _procesarResultados(posts, cuentasMap) {
         if (crecErr) console.warn('[Scraper] UPDATE crecimiento_24h error (¿columna existe?):', crecErr.message);
       }
 
-      // ── Detección de viralidad (umbral absoluto O crecimiento >50%) ──────
-      const umbralBase    = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
-      // Videos: comparar vistas vs umbral completo
-      // Fotos/carruseles: los likes son ~10% de vistas → umbral dividido entre 10
-      const umbral        = esVideo ? umbralBase : Math.max(1, Math.round(umbralBase / 10));
-      const esViralUmbral = metrica >= umbral;
+      // ── Detección de viralidad (umbral O crecimiento >50%) ──────────────
       const esViralCrec   = crecimiento > 50;
       const esViral       = esViralUmbral || esViralCrec;
-      const eraViralAntes   = existing?.es_viral || false;
+      const eraViralAntes = existing?.es_viral || false;
 
       if (esViral) {
         await sb.from('posts_tracker').update({
@@ -631,13 +636,22 @@ function _umbralDefecto(tier) {
 }
 
 function _nivelAmenaza(vistas, cuenta) {
-  if (cuenta.tier === 1) {
-    if (vistas > 50000)  return 'alto';
-    if (vistas > 10000)  return 'medio';
+  const tipo = cuenta.tipo_cuenta || '';
+  // Tiendas e inspiración: umbrales más altos, no son competencia directa
+  if (tipo === 'tienda' || tipo === 'inspiracion') {
+    if (vistas > 200000) return 'alto';
+    if (vistas > 50000)  return 'medio';
     return 'bajo';
   }
+  // Competencia tier 1 (más cercanos a Jarapo en nicho/audiencia)
+  if (cuenta.tier === 1) {
+    if (vistas > 50000) return 'alto';
+    if (vistas > 10000) return 'medio';
+    return 'bajo';
+  }
+  // Competencia tier 2
   if (vistas > 100000) return 'alto';
-  if (vistas > 30000)  return 'medio';
+  if (vistas > 20000)  return 'medio';
   return 'bajo';
 }
 
