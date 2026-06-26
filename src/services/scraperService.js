@@ -382,7 +382,7 @@ async function _procesarResultados(posts, cuentasMap) {
       const tipo        = _tipoContenido(post.type);
       const esVideo     = tipo === 'reel';
       const vistas      = post.videoViewCount || post.videoPlayCount || 0;
-      const likes       = post.likesCount || 0;
+      const likes       = post.likesCount || post.likes || post.likeCount || post.engagement?.likes || 0;
       const comentarios = post.commentsCount || 0;
       const metrica     = esVideo ? vistas : likes;
       const fechaPost   = post.timestamp ? new Date(post.timestamp) : null;
@@ -390,12 +390,12 @@ async function _procesarResultados(posts, cuentasMap) {
       const caption     = _sanitizeUnicode(captionRaw);
       const hook        = _sanitizeUnicode(captionRaw, 200);
       const cat         = _categoriaCaption(caption);
-      const amenaza     = _nivelAmenaza(vistas || likes * 10, cuenta);
+      const amenaza     = _nivelAmenaza(metrica, cuenta, tipo);
 
       // Umbral calculado antes del lookup para decidir si insertar posts nuevos
-      // Videos: umbral_vistas completo; fotos/carruseles: likes ≈ 10% de vistas → umbral/10
+      // Reels: umbral_vistas completo; carruseles/posts: likes ≈ 5% de vistas → umbral/20
       const umbralBase    = cuenta.umbral_vistas || _umbralDefecto(cuenta.tier);
-      const umbral        = esVideo ? umbralBase : Math.max(1, Math.round(umbralBase / 10));
+      const umbral        = esVideo ? umbralBase : Math.max(1, Math.round(umbralBase / 20));
       const esViralUmbral = metrica >= umbral;
 
       // ── Buscar post existente ──────────────────────────────────────────────
@@ -635,23 +635,45 @@ function _umbralDefecto(tier) {
   return tier === 1 ? 1000 : 3000;
 }
 
-function _nivelAmenaza(vistas, cuenta) {
-  const tipo = cuenta.tipo_cuenta || '';
-  // Tiendas e inspiración: umbrales más altos, no son competencia directa
-  if (tipo === 'tienda' || tipo === 'inspiracion') {
-    if (vistas > 200000) return 'alto';
-    if (vistas > 50000)  return 'medio';
+function _nivelAmenaza(metrica, cuenta, tipo = 'reel') {
+  const tipoCuenta = cuenta.tipo_cuenta || '';
+  const esVideo    = tipo === 'reel';
+
+  // Tiendas e inspiración: no son competencia directa
+  if (tipoCuenta === 'tienda' || tipoCuenta === 'inspiracion') {
+    if (esVideo) {
+      if (metrica > 200000) return 'alto';
+      if (metrica > 50000)  return 'medio';
+      return 'bajo';
+    }
+    // carrusel/post: comparar por likes
+    if (metrica > 5000) return 'alto';
+    if (metrica > 1000) return 'medio';
     return 'bajo';
   }
+
   // Competencia tier 1 (más cercanos a Jarapo en nicho/audiencia)
   if (cuenta.tier === 1) {
-    if (vistas > 50000) return 'alto';
-    if (vistas > 10000) return 'medio';
+    if (esVideo) {
+      if (metrica > 50000) return 'alto';
+      if (metrica > 10000) return 'medio';
+      return 'bajo';
+    }
+    // carrusel/post: comparar por likes
+    if (metrica > 2000) return 'alto';
+    if (metrica > 500)  return 'medio';
     return 'bajo';
   }
+
   // Competencia tier 2
-  if (vistas > 100000) return 'alto';
-  if (vistas > 20000)  return 'medio';
+  if (esVideo) {
+    if (metrica > 100000) return 'alto';
+    if (metrica > 20000)  return 'medio';
+    return 'bajo';
+  }
+  // carrusel/post: comparar por likes
+  if (metrica > 5000) return 'alto';
+  if (metrica > 1000) return 'medio';
   return 'bajo';
 }
 
