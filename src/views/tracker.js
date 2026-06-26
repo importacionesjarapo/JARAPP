@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { getEstadoScheduler, ejecutarAhora } from '../services/schedulerService.js';
+import { getEstadoScheduler } from '../services/schedulerService.js';
 import { construirMensajeWhatsApp, testApifyUno, cancelarScraping, generarAnalisisPendientes } from '../services/scraperService.js';
 
 const client = () => db.client;
@@ -567,9 +567,9 @@ function _tabScraping() {
           <div style="font-size:0.9rem;font-weight:700;color:${estadoColor};">${ultimoEstado}</div>
         </div>
       </div>
-      <div style="background:#F9731615;border:1px solid #F9731633;border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#F97316;">
-        ⚠️ El scheduler solo corre mientras JARAPP esté abierto en el navegador.
-        En Sprint 3 se migrará a Supabase Edge Functions para ejecución continua.
+      <div style="background:#10B98115;border:1px solid #10B98133;border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#10B981;">
+        ✅ Scraping automático activo vía Supabase Edge Functions —
+        corre todos los días entre 7:00 y 7:10 AM aunque JARAPP esté cerrado.
       </div>
     </div>`;
 
@@ -1356,11 +1356,33 @@ window._trEjecutarScraping = async () => {
   };
 
   try {
-    const resumen = await ejecutarAhora(append);
+    for (let lote = 0; lote <= 4; lote++) {
+      append(`📦 Enviando lote ${lote + 1}/5...`);
+      const res = await fetch(
+        'https://vygfsqdveudpzytnnhiq.supabase.co/functions/v1/scraping-diario',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ lote }),
+        }
+      );
+      if (!res.ok) {
+        const txt = await res.text().catch(() => res.status);
+        throw new Error(`Lote ${lote}: HTTP ${res.status} — ${txt}`);
+      }
+      append(`✅ Lote ${lote + 1}/5 completado`);
+      if (lote < 4) {
+        append('⏳ Esperando 5 segundos...');
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+    append('🎉 Todos los lotes completados');
     resetBtns();
     await _loadScrapingLogs().catch(() => {});
     _renderUI();
-    if (!resumen?.cancelado) _modalResumenWhatsApp(resumen);
   } catch (err) {
     append(`❌ Error: ${err.message}`);
     resetBtns();

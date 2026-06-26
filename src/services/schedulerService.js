@@ -1,6 +1,6 @@
 // Ejecuta el scraping diario a las 7:00 AM hora Colombia (UTC-5 = 12:00 UTC).
-// IMPORTANTE: Solo corre mientras JARAPP esté abierto en el navegador.
-// En Sprint 3 se migrará a Supabase Edge Functions para ejecución continua.
+// ✅ Scraping automático activo vía Supabase Edge Functions —
+// corre todos los días entre 7:00 y 7:10 AM aunque JARAPP esté cerrado.
 
 import { ejecutarScrapingDiario } from './scraperService.js';
 
