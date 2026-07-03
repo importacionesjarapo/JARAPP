@@ -3,6 +3,7 @@ import { formatCOP, formatUSD, renderError, showToast, getLogisticaFase, getLogi
 
 // ─── Cached data ───────────────────────────────────────────────────────────────
 let _finCache = null;
+let _finMetodosPagoCache = [];
 let _finRenderLayout = null;
 let _finNavigateTo = null;
 let _finActiveMain = 'ingresos'; // 'ingresos' | 'egresos'
@@ -445,6 +446,24 @@ function getFinPanelHTML(main, subView, cache) {
     }
 }
 
+// ─── Helper: opciones de métodos de pago (dinámico + fallback) ─────────────────
+const _FIN_METODOS_FALLBACK = [
+    { nombre: 'Transferencia Bancolombia' },
+    { nombre: 'Nequi' },
+    { nombre: 'Efectivo' },
+    { nombre: 'Tarjeta de Crédito', valor: 'Tarjeta' },
+];
+const _buildFinMetodosOptions = () => {
+    const fuente = _finMetodosPagoCache.length
+        ? _finMetodosPagoCache.filter(m => m.activo !== false).sort((a,b) => (a.orden||0)-(b.orden||0))
+        : _FIN_METODOS_FALLBACK;
+    return fuente.map(m => {
+        const val   = m.valor || m.nombre;
+        const label = m.nombre;
+        return `<option value="${val}">${label}</option>`;
+    }).join('');
+};
+
 // ─── Main render ───────────────────────────────────────────────────────────────
 export const renderFinance = async (renderLayout, navigateTo) => {
     _finRenderLayout = renderLayout;
@@ -452,14 +471,16 @@ export const renderFinance = async (renderLayout, navigateTo) => {
 
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Finanzas...</div>`);
 
-    const [gastosList, ventasList, comprasList, logisticaList, configList] = await Promise.all([
+    const [gastosList, ventasList, comprasList, logisticaList, configList, metodosPagoList] = await Promise.all([
         db.fetchData('Gastos'),
         db.fetchData('Ventas'),
         db.fetchData('Compras'),
         db.fetchData('Logistica'),
         db.fetchData('Configuracion'),
+        db.fetchData('MetodosPago'),
     ]);
     const configData = configList?.error ? [] : (configList || []);
+    _finMetodosPagoCache = metodosPagoList?.error ? [] : (metodosPagoList || []);
 
     const gastos   = gastosList.error  ? [] : gastosList;
     const ventas   = ventasList.error  ? [] : ventasList;
@@ -572,10 +593,7 @@ export const renderFinance = async (renderLayout, navigateTo) => {
                 <div><label>Valor a Abonar (COP)</label><input type="number" id="valor_abono" required min="1" max="${saldoPendiente}"></div>
                 <div><label>Método de Pago</label>
                     <select name="metodo_pago" required>
-                        <option value="Transferencia Bancolombia">Transferencia Bancolombia</option>
-                        <option value="Nequi">Nequi</option>
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Tarjeta">Tarjeta de Crédito</option>
+                        ${_buildFinMetodosOptions()}
                     </select>
                 </div>
                 <div>

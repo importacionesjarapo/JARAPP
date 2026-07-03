@@ -8,12 +8,14 @@ export const renderParams = async (renderLayout, navigateTo) => {
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Parámetros Globales...</div>`);
 
     const hoy = new Date().toISOString().split('T')[0];
-    const [list, metas, trmHoy] = await Promise.all([
+    const [list, metas, trmHoy, metodosPagoList] = await Promise.all([
         db.fetchData('Configuracion'),
         db.fetchData('MetasDashboard'),
         TRMService.getTRMParaFecha(hoy),
+        db.fetchData('MetodosPago'),
     ]);
     if (list.error) return renderError(renderLayout, list.error, navigateTo);
+    const metodosPago = metodosPagoList?.error ? [] : (metodosPagoList || []);
 
     // ── Parámetros del sistema (Configuracion) ──
     const grouped = {
@@ -143,6 +145,27 @@ export const renderParams = async (renderLayout, navigateTo) => {
       </div>
 
       ${renderMetasSection()}
+
+      <!-- Métodos de Pago -->
+      <div class="glass-card" style="margin-bottom:2rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem;">
+              <div>
+                  <h3 style="margin:0 0 4px 0;">💳 Métodos de Pago</h3>
+                  <p style="margin:0; opacity:0.55; font-size:0.82rem;">Configura los medios de pago disponibles al registrar abonos en Ventas y Finanzas.</p>
+              </div>
+              ${canEdit ? `<button class="btn-action" onclick="window.modalMetodoPago()">+ Agregar</button>` : ''}
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              ${metodosPago.length === 0 ? '<span style="opacity:0.4; font-size:0.8rem;">Ninguno registrado — se usarán los métodos por defecto.</span>' : ''}
+              ${metodosPago.sort((a,b)=>(a.orden||0)-(b.orden||0)).map(m => `
+                  <div style="background:var(--glass-hover); border:1px solid var(--glass-border); padding:8px 14px; border-radius:12px; display:flex; gap:10px; align-items:center;">
+                      <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${m.color||'#6B7280'}; flex-shrink:0;"></span>
+                      <span style="font-weight:700;">${m.nombre}</span>
+                      ${canEdit ? `<button onclick="window.deleteMetodoPago('${m.id}','${m.nombre}')" style="background:none; border:none; color:var(--primary-red); cursor:pointer; opacity:0.5; font-size:1.1rem; padding:0;">&times;</button>` : ''}
+                  </div>
+              `).join('')}
+          </div>
+      </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
           ${renderGroup('Marcas', 'Marca', grouped.Marca)}
@@ -278,6 +301,81 @@ export const renderParams = async (renderLayout, navigateTo) => {
             showToast(`✅ Meta "${labelMeta}" guardada`, 'success');
             // Invalidar caché del dashboard
             if (window.invalidateDashCache) window.invalidateDashCache();
+            navigateTo('params');
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    };
+
+    // Modal: Agregar Método de Pago
+    window.modalMetodoPago = () => {
+        const container = document.getElementById('modal-container');
+        const content   = document.getElementById('modal-content');
+        content.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title">💳 Agregar Método de Pago</h2>
+                        <p style="opacity:0.6; font-size:0.85rem; margin-top:4px;">Disponible al registrar abonos en Ventas y Finanzas.</p>
+                    </div>
+                    <button onclick="window.closeModal()" class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-metodo-pago" style="display:flex; flex-direction:column; gap:1.5rem;">
+                        <div class="form-group">
+                            <label class="form-label">Nombre del método *</label>
+                            <input type="text" id="mp-nombre" required placeholder="Ej: Daviplata, PSE, Billetera Virtual…"
+                                style="width:100%; padding:9px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.95rem; font-family:inherit; box-sizing:border-box;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Color del badge</label>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <input type="color" id="mp-color" value="#6B7280" style="width:48px; height:36px; border:none; border-radius:8px; cursor:pointer; background:none;">
+                                <span style="font-size:0.8rem; opacity:0.5;">Se muestra en el historial de abonos</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Orden de aparición</label>
+                            <input type="number" id="mp-orden" min="0" value="${metodosPago.length}"
+                                style="width:80px; padding:9px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.95rem; font-family:inherit;">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+                    <button type="submit" form="form-metodo-pago" class="btn-primary" id="btn-save-mp">Guardar</button>
+                </div>
+            </div>`;
+        container.style.display = 'flex';
+
+        document.getElementById('form-metodo-pago').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn    = document.getElementById('btn-save-mp');
+            const nombre = document.getElementById('mp-nombre').value.trim();
+            const color  = document.getElementById('mp-color').value;
+            const orden  = parseInt(document.getElementById('mp-orden').value) || 0;
+            if (!nombre) { showToast('El nombre es obligatorio.', 'error'); return; }
+            btn.disabled = true; btn.innerText = 'Guardando...';
+            try {
+                const payload = { id: Date.now().toString(), nombre, color, activo: true, orden };
+                await db.postData('MetodosPago', payload, 'INSERT');
+                window.closeModal();
+                showToast('✅ Método de pago agregado', 'success');
+                navigateTo('params');
+            } catch (err) {
+                showToast(err.message, 'error');
+                btn.disabled = false; btn.innerText = 'Guardar';
+            }
+        };
+    };
+
+    // Eliminar Método de Pago
+    window.deleteMetodoPago = async (id, nombre) => {
+        const ok = await window.customConfirm('Eliminar Método de Pago', `¿Eliminar "${nombre}"? Los abonos ya registrados con este método no se verán afectados.`);
+        if (!ok) return;
+        try {
+            await db.postData('MetodosPago', { id }, 'DELETE');
+            showToast(`Método "${nombre}" eliminado`, 'success');
             navigateTo('params');
         } catch (err) {
             showToast(err.message, 'error');

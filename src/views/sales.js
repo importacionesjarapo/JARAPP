@@ -8,6 +8,7 @@ let localVentasFiltered = []; // Added for filter
 let localClientesCache = [];
 let localProductosCache = [];
 let localLogisticaCache = [];
+let _metodosPagoCache = [];
 let _salesRenderLayout = null;
 let _salesNavigateTo = null;
 let _salesActiveView = 'tabla';
@@ -437,6 +438,24 @@ function attachGroupToggles() {
     }
 }
 
+// ─── Helper: opciones de métodos de pago (dinámico + fallback) ─────────────────
+const _METODOS_FALLBACK = [
+    { nombre: 'Transferencia Bancolombia' },
+    { nombre: 'Nequi' },
+    { nombre: 'Efectivo' },
+    { nombre: 'Tarjeta de Crédito', valor: 'Tarjeta' },
+];
+const _buildMetodosOptions = () => {
+    const fuente = _metodosPagoCache.length
+        ? _metodosPagoCache.filter(m => m.activo !== false).sort((a,b) => (a.orden||0)-(b.orden||0))
+        : _METODOS_FALLBACK;
+    return fuente.map(m => {
+        const val   = m.valor || m.nombre;
+        const label = m.nombre;
+        return `<option value="${val}">${label}</option>`;
+    }).join('');
+};
+
 // ─── Main render ───────────────────────────────────────────────────────────────
 export const renderSales = async (renderLayout, navigateTo) => {
     _salesRenderLayout = renderLayout;
@@ -445,11 +464,12 @@ export const renderSales = async (renderLayout, navigateTo) => {
 
     renderLayout(`<div style="text-align:center;padding:5rem;"><div class="loader"></div> Sincronizando Facturación...</div>`);
 
-    const [list, clientesList, productosList, logisticaList] = await Promise.all([
+    const [list, clientesList, productosList, logisticaList, metodosPagoList] = await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Clientes'),
         db.fetchData('Productos'),
         db.fetchData('Logistica'),
+        db.fetchData('MetodosPago'),
     ]);
     if (list.error) return renderError(renderLayout, list.error, navigateTo);
 
@@ -457,6 +477,7 @@ export const renderSales = async (renderLayout, navigateTo) => {
     localClientesCache  = clientesList.error  ? [] : clientesList;
     localProductosCache = productosList.error ? [] : productosList;
     localLogisticaCache = logisticaList.error ? [] : logisticaList;
+    _metodosPagoCache   = metodosPagoList?.error ? [] : (metodosPagoList || []);
     
     // Apply filters matching
     localVentasFiltered = [...localVentasCache];
@@ -498,10 +519,7 @@ export const renderSales = async (renderLayout, navigateTo) => {
                             <div class="form-group">
                                 <label class="form-label">Método de Pago</label>
                                 <select name="metodo_pago" required>
-                                    <option value="Transferencia Bancolombia">Transferencia Bancolombia</option>
-                                    <option value="Nequi">Nequi</option>
-                                    <option value="Efectivo">Efectivo</option>
-                                    <option value="Tarjeta">Tarjeta de Crédito</option>
+                                    ${_buildMetodosOptions()}
                                 </select>
                             </div>
                             <div class="form-group full-width" style="grid-column: span 3;">
@@ -1279,8 +1297,12 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
 
     // ─── Historial de Abonos ─────────────────────────────────────────────────────
     const metodoBadge = (m) => {
-        const map = {'Transferencia Bancolombia':'#0077b6','Nequi':'#7209b7','Efectivo':'var(--success-green)','Tarjeta':'#f77f00','Pago Inicial':'var(--info-blue)'};
-        return `<span style="font-size:0.68rem;padding:2px 8px;border-radius:8px;background:${map[m]||'var(--glass-hover)'};color:#fff;font-weight:700;white-space:nowrap;">${m||'N/A'}</span>`;
+        const colorMap = { 'Pago Inicial': 'var(--info-blue)' };
+        _metodosPagoCache.forEach(mp => { colorMap[mp.nombre] = mp.color || '#6B7280'; });
+        // Fallback para métodos registrados antes de la parametrización
+        const fallback = {'Transferencia Bancolombia':'#0077b6','Nequi':'#7209b7','Efectivo':'var(--success-green)','Tarjeta':'#f77f00'};
+        const color = colorMap[m] || fallback[m] || 'var(--glass-hover)';
+        return `<span style="font-size:0.68rem;padding:2px 8px;border-radius:8px;background:${color};color:#fff;font-weight:700;white-space:nowrap;">${m||'N/A'}</span>`;
     };
     const abonosHTML = abonos.length > 0
         ? abonos.map((ab,i) => `
