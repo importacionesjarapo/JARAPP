@@ -463,7 +463,7 @@ function _tabPosts() {
           ${p.url_post ? `<a href="${p.url_post}" target="_blank" class="btn-action" style="text-decoration:none;">Ver post ↗</a>` : ''}
           ${p.analisis_ia ? `<button class="btn-action" onclick="window._trToggle('tria-${p.id}')">📊 Análisis IA</button>` : ''}
           ${rec ? `<button class="btn-action" onclick="window._trToggle('trrec-${p.id}')">🎬 Recreación</button>` : ''}
-          ${rec ? `<button class="btn-action" onclick="window._trEstado('${rec.id}','${rec.estado}')">Cambiar estado</button>` : ''}
+          <button class="btn-action" onclick="window._trEstado('${rec?.id||''}','${rec?.estado||'pendiente'}','${p.id}')">Cambiar estado</button>
           ${!p.analisis_ia ? `<button class="btn-action" style="border-color:#7C3AED;color:#7C3AED;" onclick="window._trGenIA('${p.id}',this)">✨ Generar IA</button>` : ''}
         </div>
 
@@ -882,8 +882,8 @@ function _registerHandlers() {
     _modalAgregarCuenta();
   };
 
-  window._trEstado = (recId, estadoActual) => {
-    _modalCambiarEstado(recId, estadoActual);
+  window._trEstado = (recId, estadoActual, postId) => {
+    _modalCambiarEstado(recId, estadoActual, postId);
   };
 
   window._trGenerarPendientes = async () => {
@@ -1222,7 +1222,7 @@ window._trGuardarCuenta = async () => {
 };
 
 // ─── Modal: Cambiar estado recreación ────────────────────────────────────────
-function _modalCambiarEstado(recId, estadoActual) {
+function _modalCambiarEstado(recId, estadoActual, postId) {
   const c = document.getElementById('modal-container');
   const m = document.getElementById('modal-content');
   if (!c || !m) return;
@@ -1238,7 +1238,7 @@ function _modalCambiarEstado(recId, estadoActual) {
         ${estados.map(e => {
           const meta = ESTADO_REC[e];
           const activo = e === estadoActual;
-          return `<button onclick="window._trActualizarEstado('${recId}','${e}')"
+          return `<button onclick="window._trActualizarEstado('${recId}','${e}','${postId||''}')"
             style="background:${meta.bg};color:${meta.color};border:2px solid ${activo?meta.color:'transparent'};padding:14px 18px;border-radius:12px;font-size:0.92rem;font-weight:600;cursor:pointer;text-align:left;font-family:var(--font);">
             ${meta.label}${activo?' <span style="opacity:0.6;font-size:0.8rem;font-weight:400;">← actual</span>':''}
           </button>`;
@@ -1252,10 +1252,20 @@ function _modalCambiarEstado(recId, estadoActual) {
   c.style.display = 'flex';
 }
 
-window._trActualizarEstado = async (recId, nuevoEstado) => {
+window._trActualizarEstado = async (recId, nuevoEstado, postId) => {
   try {
-    const { error } = await client().from('recreaciones_tracker').update({ estado: nuevoEstado }).eq('id', recId);
-    if (error) throw error;
+    if (recId) {
+      // Recreación existente → actualizar estado
+      const { error } = await client().from('recreaciones_tracker').update({ estado: nuevoEstado }).eq('id', recId);
+      if (error) throw error;
+    } else {
+      // Sin recreación — crearla con el estado seleccionado
+      const { error } = await client().from('recreaciones_tracker').insert([{
+        post_id: postId,
+        estado:  nuevoEstado,
+      }]);
+      if (error) throw error;
+    }
     window.closeModal();
     _toast(`Estado actualizado: ${ESTADO_REC[nuevoEstado]?.label}`, 'success');
     await Promise.all([_loadPosts(), _loadRecs()]);
