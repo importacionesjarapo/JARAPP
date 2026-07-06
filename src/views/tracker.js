@@ -515,15 +515,19 @@ function _tabInspiracion() {
           ${items.map(c => {
             const ini = (c.nombre_display||'?').charAt(0).toUpperCase();
             return `
-              <a href="https://instagram.com/${c.usuario_ig}" target="_blank" style="text-decoration:none;">
-                <div class="glass-card tr-inspo-card" style="padding:14px;display:flex;align-items:center;gap:10px;border-left:3px solid ${meta.color};">
+              <div class="glass-card tr-inspo-card" style="padding:14px;border-left:3px solid ${meta.color};">
+                <a href="https://instagram.com/${c.usuario_ig}" target="_blank" style="text-decoration:none;display:flex;align-items:center;gap:10px;margin-bottom:10px;">
                   <div style="width:38px;height:38px;border-radius:10px;background:${meta.color}22;color:${meta.color};display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;flex-shrink:0;">${ini}</div>
                   <div style="overflow:hidden;min-width:0;">
                     <div style="font-weight:600;font-size:0.85rem;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@${c.usuario_ig}</div>
                     <div style="font-size:0.73rem;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.nombre_display}</div>
                   </div>
-                </div>
-              </a>`;
+                </a>
+                <button class="btn-action" style="width:100%;border-color:#D91010;color:#D91010;font-size:0.78rem;"
+                  onclick="window._trPost('${c.id}','${c.usuario_ig}','${(c.nombre_display||'').replace(/'/g,"\\'").replace(/"/g,'\\"')}')">
+                  + Post viral
+                </button>
+              </div>`;
           }).join('')}
         </div>
       </div>`;
