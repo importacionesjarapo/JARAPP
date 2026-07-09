@@ -21,6 +21,7 @@ let _posts         = [];
 let _recs          = [];
 let _scrapingLogs  = null; // null = aún no cargados
 let _renderLayout  = null;
+let _selDescartados = new Set(); // post.id seleccionados en vista Descartada
 
 // ─── Styles (injected once) ───────────────────────────────────────────────────
 function _injectStyles() {
@@ -68,6 +69,7 @@ const ESTADO_REC = {
   en_produccion: { bg:'#F9731622', color:'#F97316', label:'En producción' },
   publicada:     { bg:'#10B98122', color:'#10B981', label:'Publicada' },
   descartada:    { bg:'#D9101022', color:'#D91010', label:'Descartada' },
+  referencia:    { bg:'#EEF2FF', color:'#4338CA', label:'Referencia', icon:'📚', sub:'Técnica, formato o información útil para aplicar después' },
 };
 const CAT_INSPO = {
   retail_usa: { label:'🛍 Retail USA',       color:'#3B82F6' },
@@ -76,6 +78,15 @@ const CAT_INSPO = {
   marketing:  { label:'📣 Marketing',        color:'#7C3AED' },
   creador:    { label:'🎬 Creadores',        color:'#D91010' },
   otros:      { label:'📦 Otros',            color:'#6B7280' },
+};
+const CAT_CONTENIDO = {
+  historia_personal: { label:'Historia personal', color:'#D91010' },
+  producto:           { label:'Producto',          color:'#3B82F6' },
+  precio:             { label:'Precio / Ahorro',   color:'#10B981' },
+  oferta:             { label:'Oferta',             color:'#F97316' },
+  lifestyle:           { label:'Lifestyle',          color:'#7C3AED' },
+  educativo:           { label:'Educativo',          color:'#4338CA' },
+  otros:               { label:'Otros',              color:'#6B7280' },
 };
 
 function _bdg(bg, color, text) {
@@ -332,6 +343,7 @@ function _tabPosts() {
     en_produccion: _posts.filter(p => recMap[p.id]?.estado === 'en_produccion').length,
     publicada:     _posts.filter(p => recMap[p.id]?.estado === 'publicada').length,
     descartada:    _posts.filter(p => recMap[p.id]?.estado === 'descartada').length,
+    referencia:    _posts.filter(p => recMap[p.id]?.estado === 'referencia').length,
   };
 
   // Apply all filters (combinable)
@@ -357,7 +369,7 @@ function _tabPosts() {
 
   // Summary mini-cards
   const stateCards = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;">
       <div style="background:#6B72801A;border:1px solid #6B728033;border-radius:12px;padding:12px 14px;text-align:center;">
         <div style="font-size:1.4rem;font-weight:800;color:#9CA3AF;">${stateCounts.pendiente}</div>
         <div style="font-size:0.75rem;color:#9CA3AF;font-weight:600;margin-top:2px;">⏳ Pendiente</div>
@@ -374,6 +386,10 @@ function _tabPosts() {
         <div style="font-size:1.4rem;font-weight:800;color:#991B1B;">${stateCounts.descartada}</div>
         <div style="font-size:0.75rem;color:#991B1B;font-weight:600;margin-top:2px;">❌ Descartada</div>
       </div>
+      <div style="background:#EEF2FF;border:1px solid #4338CA33;border-radius:12px;padding:12px 14px;text-align:center;">
+        <div style="font-size:1.4rem;font-weight:800;color:#4338CA;">${stateCounts.referencia}</div>
+        <div style="font-size:0.75rem;color:#4338CA;font-weight:600;margin-top:2px;">📚 Referencia</div>
+      </div>
     </div>`;
 
   // State pill/tab buttons
@@ -383,6 +399,7 @@ function _tabPosts() {
     { val:'en_produccion', emoji:'🎬', label:'En producción' },
     { val:'publicada',     emoji:'✅', label:'Publicada' },
     { val:'descartada',    emoji:'❌', label:'Descartada' },
+    { val:'referencia',    emoji:'📚', label:'Referencia' },
   ];
   const pillsHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
@@ -410,7 +427,11 @@ function _tabPosts() {
         <option value="post"     ${_filterConten==='post'?    'selected':''}>Post</option>
         <option value="story"    ${_filterConten==='story'?   'selected':''}>Story</option>
       </select>
-      <span style="color:var(--text-faint);font-size:0.82rem;margin-left:auto;">${lista.length} post${lista.length!==1?'s':''}</span>
+      <span style="color:var(--text-faint);font-size:0.82rem;${_filterEstado==='descartada' && lista.length ? '' : 'margin-left:auto;'}">${lista.length} post${lista.length!==1?'s':''}</span>
+      ${_filterEstado === 'descartada' && lista.length ? `
+        <button class="btn-action" style="margin-left:auto;background:#D9101018;color:#D91010;border:1px solid #D9101055;font-weight:700;" onclick="window._trLimpiarDescartados()">
+          🗑 Limpiar descartados
+        </button>` : ''}
     </div>`;
 
   if (!lista.length) return btnPendientes + stateCards + pillsHTML + filters + `
@@ -439,7 +460,10 @@ function _tabPosts() {
             <span style="background:var(--surface-2);color:var(--text-faint);padding:4px 10px;border-radius:8px;font-size:0.73rem;font-weight:600;">${(p.tipo_contenido||'—').toUpperCase()}</span>
             ${p.es_viral ? `<span style="background:#D9101022;color:#D91010;border:1px solid #D9101055;padding:4px 10px;border-radius:8px;font-size:0.73rem;font-weight:700;">🔥 VIRAL</span>` : ''}
           </div>
-          ${er ? `<span style="background:${er.bg};color:${er.color};border:1px solid ${er.color}55;padding:4px 10px;border-radius:8px;font-size:0.72rem;font-weight:600;">${er.label}</span>` : ''}
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${er ? `<span style="background:${er.bg};color:${er.color};border:1px solid ${er.color}55;padding:4px 10px;border-radius:8px;font-size:0.72rem;font-weight:600;">${er.icon ? er.icon+' ' : ''}${er.label}</span>` : ''}
+            ${_filterEstado === 'descartada' ? `<input type="checkbox" style="width:18px;height:18px;accent-color:#D91010;cursor:pointer;" ${_selDescartados.has(p.id)?'checked':''} onchange="window._trToggleSelDescartada('${p.id}')">` : ''}
+          </div>
         </div>
 
         <div style="margin-bottom:10px;">
@@ -490,7 +514,19 @@ function _tabPosts() {
       </div>`;
   }).join('');
 
-  return btnPendientes + stateCards + pillsHTML + filters + cards;
+  return btnPendientes + stateCards + pillsHTML + filters + cards + _barraSeleccionDescartados();
+}
+
+// ─── Barra flotante de selección (vista Descartada) ──────────────────────────
+function _barraSeleccionDescartados() {
+  const n = _selDescartados.size;
+  if (!n || _filterEstado !== 'descartada') return '';
+  return `
+    <div style="position:fixed;bottom:0;left:0;right:0;background:var(--surface-1);border-top:2px solid #D91010;padding:14px 24px;display:flex;align-items:center;justify-content:center;gap:16px;z-index:9000;box-shadow:0 -8px 24px rgba(0,0,0,0.25);">
+      <span style="font-weight:700;font-size:0.9rem;">${n} post${n!==1?'s':''} seleccionado${n!==1?'s':''}</span>
+      <button class="btn-action" style="background:#D91010;color:#fff;border:none;font-weight:700;" onclick="window._trEliminarSeleccionados()">Eliminar seleccionados</button>
+      <button class="btn-action" onclick="window._trLimpiarSeleccion()">Cancelar</button>
+    </div>`;
 }
 
 // ─── Tab: Inspiración ─────────────────────────────────────────────────────────
@@ -534,6 +570,73 @@ function _tabInspiracion() {
   }).join('');
 
   return sections || `<div style="text-align:center;padding:60px;color:var(--text-faint);">Sin cuentas de inspiración.</div>`;
+}
+
+// ─── Tab: Referencia ──────────────────────────────────────────────────────────
+function _tabReferencia() {
+  const recMap = {};
+  _recs.forEach(r => { recMap[r.post_id] = r; });
+  const lista = _posts.filter(p => recMap[p.id]?.estado === 'referencia');
+
+  if (!lista.length) {
+    return `
+      <div style="text-align:center;padding:60px;color:var(--text-faint);">
+        <div style="font-size:3rem;margin-bottom:16px;">📚</div>
+        <p>No hay posts marcados como referencia todavía.<br>
+        Usa <em>"Cambiar estado"</em> en un post viral y selecciona <strong>📚 Referencia</strong>.</p>
+      </div>`;
+  }
+
+  const grouped = {};
+  lista.forEach(p => {
+    const cat = p.categoria_contenido && CAT_CONTENIDO[p.categoria_contenido] ? p.categoria_contenido : 'otros';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(p);
+  });
+
+  return Object.entries(CAT_CONTENIDO).map(([cat, meta]) => {
+    const items = grouped[cat];
+    if (!items?.length) return '';
+    return `
+      <div style="margin-bottom:28px;">
+        <h3 style="font-size:0.95rem;font-weight:700;color:${meta.color};margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid ${meta.color}33;">
+          ${meta.label} <span style="font-weight:400;font-size:0.82rem;color:var(--text-faint);">(${items.length})</span>
+        </h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+          ${items.map(p => _refCard(p, recMap[p.id])).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function _refCard(p, rec) {
+  const cu   = p.cuenta || {};
+  const meta = CAT_CONTENIDO[p.categoria_contenido] || CAT_CONTENIDO.otros;
+
+  return `
+    <div class="glass-card tr-card" style="padding:16px;">
+      <div style="margin-bottom:10px;">${_bdg(meta.color+'22', meta.color, meta.label)}</div>
+      <div style="margin-bottom:8px;">
+        <a href="https://instagram.com/${cu.usuario_ig||''}" target="_blank" style="font-weight:700;color:var(--text-main);text-decoration:none;font-size:0.9rem;"
+          onmouseover="this.style.color='#D91010'" onmouseout="this.style.color='var(--text-main)'">@${cu.usuario_ig||'—'}</a>
+      </div>
+      ${p.hook_texto ? `<div style="font-style:italic;padding:10px;background:var(--surface-2);border-radius:10px;font-size:0.85rem;margin-bottom:10px;line-height:1.5;">"${p.hook_texto}"</div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">
+        <span style="color:var(--text-faint);font-size:0.8rem;">👁 <strong style="color:var(--text-main);">${(p.vistas||0).toLocaleString('es-CO')}</strong></span>
+        <span style="color:var(--text-faint);font-size:0.8rem;">❤️ <strong style="color:var(--text-main);">${(p.likes_estimados||0).toLocaleString('es-CO')}</strong></span>
+        <span style="color:var(--text-faint);font-size:0.8rem;">💬 <strong style="color:var(--text-main);">${(p.comentarios||0).toLocaleString('es-CO')}</strong></span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${p.url_post ? `<a href="${p.url_post}" target="_blank" class="btn-action" style="text-decoration:none;">Ver post ↗</a>` : ''}
+        ${p.analisis_ia ? `<button class="btn-action" onclick="window._trToggle('trefia-${p.id}')">Ver análisis IA</button>` : ''}
+        <button class="btn-action" style="border-color:#F97316;color:#F97316;" onclick="window._trMoverProduccion('${rec.id}')">Mover a producción</button>
+        <button class="btn-action" style="border-color:#D91010;color:#D91010;" onclick="window._trEliminarRef('${rec.id}')">Eliminar</button>
+      </div>
+      ${p.analisis_ia ? `
+        <div id="trefia-${p.id}" style="display:none;margin-top:12px;padding:14px;background:var(--surface-2);border-radius:10px;">
+          <p style="font-size:0.84rem;line-height:1.6;white-space:pre-wrap;">${p.analisis_ia}</p>
+        </div>` : ''}
+    </div>`;
 }
 
 // ─── Tab: Scraping (solo admin) ───────────────────────────────────────────────
@@ -771,10 +874,13 @@ function _renderUI() {
     ? _posts.length
     : _posts.filter(p => rm[p.id]?.estado === _filterEstado).length;
 
+  const referenciaCount = _posts.filter(p => rm[p.id]?.estado === 'referencia').length;
+
   const tabs = [
     { id:'competidores', label:'🏆 Competidores', count: _cuentas.filter(c=>c.tipo_cuenta==='competencia').length },
     { id:'posts',        label:'🔥 Posts virales', count: postsCount },
     { id:'inspiracion',  label:'💡 Inspiración',   count: _cuentas.filter(c=>c.tipo_cuenta!=='competencia').length },
+    { id:'referencia',   label:'📚 Referencia',    count: referenciaCount },
     ...(auth.isAdmin() ? [{ id:'scraping', label:'⚙️ Scraping', count: null }] : []),
   ];
 
@@ -787,6 +893,7 @@ function _renderUI() {
   let content = '';
   if (_tab === 'competidores') content = _tabCompetidores();
   else if (_tab === 'posts')   content = _tabPosts();
+  else if (_tab === 'referencia') content = _tabReferencia();
   else if (_tab === 'scraping') content = _tabScraping();
   else                         content = _tabInspiracion();
 
@@ -862,11 +969,24 @@ function _registerHandlers() {
   window._trFilterPost = (type, val) => {
     if (type === 'amenaza')   _filterAmenaza = val;
     if (type === 'contenido') _filterConten  = val;
-    if (type === 'estado')    _filterEstado  = val;
+    if (type === 'estado')  { _filterEstado  = val; _selDescartados.clear(); }
     const el = document.getElementById('tr-tab-content');
     if (el) el.innerHTML = _tabPosts();
     // Sync tab counter when estado filter changes
     if (type === 'estado') _syncPostsTabCount();
+  };
+
+  window._trToggleSelDescartada = (postId) => {
+    if (_selDescartados.has(postId)) _selDescartados.delete(postId);
+    else _selDescartados.add(postId);
+    const el = document.getElementById('tr-tab-content');
+    if (el) el.innerHTML = _tabPosts();
+  };
+
+  window._trLimpiarSeleccion = () => {
+    _selDescartados.clear();
+    const el = document.getElementById('tr-tab-content');
+    if (el) el.innerHTML = _tabPosts();
   };
 
   window._trToggle = (id) => {
@@ -1227,7 +1347,7 @@ function _modalCambiarEstado(recId, estadoActual, postId) {
   const m = document.getElementById('modal-content');
   if (!c || !m) return;
 
-  const estados = ['pendiente','en_produccion','publicada','descartada'];
+  const estados = ['pendiente','en_produccion','publicada','descartada','referencia'];
   m.innerHTML = `
     <div class="modal-content" style="max-width:440px;">
       <div class="modal-header">
@@ -1240,7 +1360,8 @@ function _modalCambiarEstado(recId, estadoActual, postId) {
           const activo = e === estadoActual;
           return `<button onclick="window._trActualizarEstado('${recId}','${e}','${postId||''}')"
             style="background:${meta.bg};color:${meta.color};border:2px solid ${activo?meta.color:'transparent'};padding:14px 18px;border-radius:12px;font-size:0.92rem;font-weight:600;cursor:pointer;text-align:left;font-family:var(--font);">
-            ${meta.label}${activo?' <span style="opacity:0.6;font-size:0.8rem;font-weight:400;">← actual</span>':''}
+            <div>${meta.icon ? meta.icon+' ' : ''}${meta.label}${activo?' <span style="opacity:0.6;font-size:0.8rem;font-weight:400;">← actual</span>':''}</div>
+            ${meta.sub ? `<div style="font-size:0.76rem;font-weight:400;opacity:0.75;margin-top:4px;">${meta.sub}</div>` : ''}
           </button>`;
         }).join('')}
       </div>
@@ -1268,6 +1389,146 @@ window._trActualizarEstado = async (recId, nuevoEstado, postId) => {
     }
     window.closeModal();
     _toast(`Estado actualizado: ${ESTADO_REC[nuevoEstado]?.label}`, 'success');
+    await Promise.all([_loadPosts(), _loadRecs()]);
+    _renderUI();
+  } catch(err) {
+    _toast(`Error: ${err.message}`, 'danger');
+  }
+};
+
+// ─── Handlers: Referencia ─────────────────────────────────────────────────────
+window._trMoverProduccion = async (recId) => {
+  try {
+    const { error } = await client().from('recreaciones_tracker').update({ estado: 'en_produccion' }).eq('id', recId);
+    if (error) throw error;
+    _toast('🎬 Movido a en producción', 'success');
+    await Promise.all([_loadPosts(), _loadRecs()]);
+    _renderUI();
+  } catch(err) {
+    _toast(`Error: ${err.message}`, 'danger');
+  }
+};
+
+window._trEliminarRef = async (recId) => {
+  if (!window.confirm('¿Eliminar este registro de referencia? Esta acción no se puede deshacer.')) return;
+  try {
+    const { error } = await client().from('recreaciones_tracker').delete().eq('id', recId);
+    if (error) throw error;
+    _toast('🗑 Referencia eliminada', 'success');
+    await Promise.all([_loadPosts(), _loadRecs()]);
+    _renderUI();
+  } catch(err) {
+    _toast(`Error: ${err.message}`, 'danger');
+  }
+};
+
+// ─── Modal: Confirmar eliminación (genérico) ─────────────────────────────────
+function _modalConfirmarEliminar(titulo, mensaje, btnLabel, handlerName) {
+  const c = document.getElementById('modal-container');
+  const m = document.getElementById('modal-content');
+  if (!c || !m) return;
+
+  m.innerHTML = `
+    <div class="modal-content" style="max-width:440px;">
+      <div class="modal-header">
+        <h2>${titulo}</h2>
+        <button class="modal-close-btn" onclick="window.closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:0.9rem;line-height:1.6;color:var(--text-main);">${mensaje}</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button class="btn-primary" style="background:#D91010;border-color:#D91010;" onclick="window.${handlerName}()">${btnLabel}</button>
+      </div>
+    </div>`;
+
+  c.style.display = 'flex';
+}
+
+// ─── Elimina recreaciones + posts automáticos huérfanos ──────────────────────
+async function _eliminarRecreacionesYPosts(recIds, postIds) {
+  if (recIds.length) {
+    const { error: errRec } = await client().from('recreaciones_tracker').delete().in('id', recIds);
+    if (errRec) throw errRec;
+  }
+  if (!postIds.length) return;
+
+  const { data: quedan, error: errQuedan } = await client()
+    .from('recreaciones_tracker')
+    .select('post_id')
+    .in('post_id', postIds);
+  if (errQuedan) throw errQuedan;
+
+  const conRecreacion = new Set((quedan || []).map(r => r.post_id));
+  const sinRecreacion = postIds.filter(id => !conRecreacion.has(id));
+  if (sinRecreacion.length) {
+    const { error: errPost } = await client()
+      .from('posts_tracker')
+      .delete()
+      .in('id', sinRecreacion)
+      .eq('origen', 'automatico');
+    if (errPost) throw errPost;
+  }
+}
+
+// ─── Handlers: Limpiar descartados ────────────────────────────────────────────
+window._trLimpiarDescartados = () => {
+  const recMap = {};
+  _recs.forEach(r => { recMap[r.post_id] = r; });
+  const count = _posts.filter(p => recMap[p.id]?.estado === 'descartada').length;
+  if (!count) return;
+  _modalConfirmarEliminar(
+    '🗑 Limpiar descartados',
+    `¿Eliminar todos los ${count} posts descartados? Esta acción no se puede deshacer.`,
+    'Sí, eliminar todos',
+    '_trEjecutarLimpiarDescartados',
+  );
+};
+
+window._trEjecutarLimpiarDescartados = async () => {
+  try {
+    const recMap = {};
+    _recs.forEach(r => { recMap[r.post_id] = r; });
+    const descartados = _posts.filter(p => recMap[p.id]?.estado === 'descartada');
+    const recIds  = descartados.map(p => recMap[p.id].id);
+    const postIds = descartados.map(p => p.id);
+
+    await _eliminarRecreacionesYPosts(recIds, postIds);
+
+    window.closeModal();
+    _toast('🗑 Descartados eliminados', 'success');
+    _selDescartados.clear();
+    await Promise.all([_loadPosts(), _loadRecs()]);
+    _renderUI();
+  } catch(err) {
+    _toast(`Error: ${err.message}`, 'danger');
+  }
+};
+
+window._trEliminarSeleccionados = () => {
+  const n = _selDescartados.size;
+  if (!n) return;
+  _modalConfirmarEliminar(
+    '🗑 Eliminar seleccionados',
+    `¿Eliminar los ${n} posts seleccionados? Esta acción no se puede deshacer.`,
+    'Sí, eliminar',
+    '_trEjecutarEliminarSeleccionados',
+  );
+};
+
+window._trEjecutarEliminarSeleccionados = async () => {
+  try {
+    const recMap = {};
+    _recs.forEach(r => { recMap[r.post_id] = r; });
+    const postIds = [..._selDescartados];
+    const recIds  = postIds.map(id => recMap[id]?.id).filter(Boolean);
+
+    await _eliminarRecreacionesYPosts(recIds, postIds);
+
+    window.closeModal();
+    _toast('🗑 Posts eliminados', 'success');
+    _selDescartados.clear();
     await Promise.all([_loadPosts(), _loadRecs()]);
     _renderUI();
   } catch(err) {
