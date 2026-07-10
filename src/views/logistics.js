@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { renderError, showToast, uploadImageToSupabase, downloadExcel, renderPagination, paginate, formatCOP } from '../utils.js';
+import { TablaPro } from '../components/tabla-pro.js';
 
 let _logStartDate = '';
 let _logEndDate = '';
@@ -20,8 +21,62 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
     
     // Handle potential error if table doesn't exist yet
     const guiasInt = Array.isArray(guiasIntRaw) ? guiasIntRaw : [];
-    
+
     if (list.error) return renderError(renderLayout, list.error, navigateTo);
+
+    // ── TablaPro: Envíos EEUU a Colombia (Relación de Guías Internacionales) ───
+    // items/sumaInd/dif se calculan por closure contra `list` (Logistica) y
+    // `ventas`, ya cargados arriba — no son columnas reales de GuiasInternacionales.
+    // Nota: guías sin ítems de Logistica asociados ahora SÍ aparecen (antes se
+    // ocultaban); TablaPro no puede excluir filas por una condición de join.
+    const _montarTablaEnviosEEUU = () => {
+        const tabla = new TablaPro({
+            containerId: 'envios-eeuu-tabla-container',
+            tabla: 'GuiasInternacionales',
+            supabase: db.client,
+            searchColumns: ['numero_guia', 'courier'],
+            columnas: [
+                { key: 'numero_guia', label: 'Nº Guía / Courier', width: '180px',
+                  render: (v, row) => `<strong style="color:var(--info-blue);font-family:monospace;font-size:1.1rem;">${v}</strong><br><span style="font-size:0.75rem;opacity:0.6;">${row.courier || 'N/A'}</span>` },
+                { key: 'fecha_creacion', label: 'Fecha Creación', width: '120px',
+                  render: (v) => v ? v.split('T')[0] : 'N/A' },
+                { key: '_items', label: 'Productos', width: '110px', sortable: false,
+                  render: (_v, row) => {
+                      const items = list.filter(l => l.guia_internacional_id?.toString() === row.id.toString());
+                      return `<span style="background:rgba(255,255,255,0.1);padding:2px 8px;border-radius:10px;font-weight:bold;font-size:0.8rem;">${items.length} ítems</span>`;
+                  } },
+                { key: 'valor_cop', label: 'Valor Total Guía', width: '150px',
+                  render: (v, row) => `<div style="font-weight:700;color:var(--success-green);">${formatCOP(v || 0)}</div><div style="font-size:0.75rem;opacity:0.6;">$${row.valor_usd || 0} USD</div>` },
+                { key: '_sumaCobrado', label: 'Suma Cobrado', width: '150px', sortable: false,
+                  render: (_v, row) => {
+                      const items = list.filter(l => l.guia_internacional_id?.toString() === row.id.toString());
+                      let sumaInd = 0;
+                      items.forEach(item => {
+                          const v = ventas.find(vt => vt.id.toString() === item.venta_id?.toString());
+                          sumaInd += v?.valor_envio_internacional || 0;
+                      });
+                      return `<span style="font-weight:700;color:#FFB703;">${formatCOP(sumaInd)}</span><br><span style="font-size:0.7rem;opacity:0.6;">Cobrado a clientes</span>`;
+                  } },
+                { key: '_difFlete', label: 'Dif. Flete', width: '150px', sortable: false,
+                  render: (_v, row) => {
+                      const items = list.filter(l => l.guia_internacional_id?.toString() === row.id.toString());
+                      let sumaInd = 0;
+                      items.forEach(item => {
+                          const v = ventas.find(vt => vt.id.toString() === item.venta_id?.toString());
+                          sumaInd += v?.valor_envio_internacional || 0;
+                      });
+                      const dif = sumaInd - (row.valor_cop || 0);
+                      const difColor = dif >= 0 ? 'var(--success-green)' : 'var(--primary-red)';
+                      const difIcon = dif >= 0 ? '💹' : '⚠️';
+                      return `<span style="font-weight:700;color:${difColor};">${difIcon} ${formatCOP(Math.abs(dif))}</span><br><span style="font-size:0.7rem;opacity:0.6;">${dif >= 0 ? 'Ganancia flete' : 'Diferencia flete'}</span>`;
+                  } },
+            ],
+            acciones: (row) => `<button class="btn-action" onclick="window.modalDetalleGuia('${row.id}');event.stopPropagation()">👁️ Ver Detalle</button>`,
+            onRowClick: (row) => window.modalDetalleGuia(row.id),
+            altura: '65vh',
+        });
+        tabla.mount();
+    };
 
     const applyLogFilter = () => {
         _logStartDate = document.getElementById('log-date-start').value;
@@ -143,7 +198,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
           ${auth.canAccess('feat_usa') ? `<button class="tab-btn ${_logActiveTab === 'eeuu' ? 'active' : ''}" onclick="window.switchLogTab('eeuu')" style="background:none; border:none; color:${_logActiveTab === 'eeuu' ? 'var(--primary-red)' : 'var(--text-main)'}; font-weight:700; cursor:pointer; padding:5px 15px; border-bottom: 2px solid ${_logActiveTab === 'eeuu' ? 'var(--primary-red)' : 'transparent'}; transition:all 0.3s;">Envíos EEUU a Colombia</button>` : ''}
       </div>
       
-      ${_logActiveTab === 'eeuu' && auth.canAccess('feat_usa') ? renderEnviosEEUU(list, ventas, clientes, compras, productos, guiasInt) : `
+      ${_logActiveTab === 'eeuu' && auth.canAccess('feat_usa') ? `<div id="envios-eeuu-tabla-container"></div>` : `
       ${summaryHtml}
 
       <div id="list-body">
@@ -288,6 +343,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
       `}
     `;
     renderLayout(html);
+    if (_logActiveTab === 'eeuu' && auth.canAccess('feat_usa')) _montarTablaEnviosEEUU();
     if(window.lucide) window.lucide.createIcons();
     setTimeout(() => { attachLogSearch(); }, 150);
 
@@ -1066,78 +1122,10 @@ export const createLogisticsModal = async (id, navigateTo) => {
 };
 
 // --- New Submodule: Envíos EEUU a Colombia ---
-const renderEnviosEEUU = (list, ventas, clientes, compras, productos, guiasInt) => {
-    if (guiasInt.length === 0) {
-        return `
-            <div class="glass-card" style="text-align:center; padding:4rem; opacity:0.6;">
-                <div style="font-size:3rem; margin-bottom:1rem;">📦</div>
-                <h3>No hay guías internacionales registradas</h3>
-                <p>Las guías aparecerán aquí cuando consolides envíos desde Bodega USA.</p>
-            </div>
-        `;
-    }
-
-    return `
-        <div class="glass-card" style="padding:0; overflow:hidden; border:1px solid rgba(255,255,255,0.1);">
-            <div style="background:rgba(255,255,255,0.05); padding:1rem 1.5rem; border-bottom:1px solid var(--glass-border);">
-                <h3 style="margin:0; font-size:1.1rem;">Relación de Guías Internacionales</h3>
-            </div>
-            <div style="overflow-x:auto;">
-                <table style="width:100%; text-align:left; border-collapse:collapse; white-space: nowrap;">
-                    <thead style="opacity: 0.5; font-size: 0.7rem; background:rgba(0,0,0,0.2);">
-                        <tr>
-                            <th style="padding:15px 20px;">Nº GUÍA / COURIER</th>
-                            <th style="padding:15px 20px;">FECHA CREACIÓN</th>
-                            <th style="padding:15px 20px;">PRODUCTOS</th>
-                            <th style="padding:15px 20px;">VALOR TOTAL GUÍA</th>
-                            <th style="padding:15px 20px;">SUMA COBRADO</th>
-                            <th style="padding:15px 20px;">DIF. FLETE</th>
-                            <th style="padding:15px 20px; text-align:right;">ACCIÓN</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${guiasInt.reverse().map(g => {
-                            const items = list.filter(l => l.guia_internacional_id?.toString() === g.id.toString());
-                            if (items.length === 0) return '';
-                            let sumaInd = 0;
-                            items.forEach(item => {
-                                const v = ventas.find(vt => vt.id.toString() === item.venta_id?.toString());
-                                sumaInd += v?.valor_envio_internacional || 0;
-                            });
-                            const dif = sumaInd - (g.valor_cop || 0);
-                            const difColor = dif >= 0 ? 'var(--success-green)' : 'var(--primary-red)';
-                            const difIcon = dif >= 0 ? '💹' : '⚠️';
-                            return `
-                                <tr class="log-row">
-                                    <td style="padding:15px 20px;">
-                                        <strong style="color:var(--info-blue); font-family:monospace; font-size:1.1rem;">${g.numero_guia}</strong><br>
-                                        <span style="font-size:0.75rem; opacity:0.6;">${g.courier || 'N/A'}</span>
-                                    </td>
-                                    <td style="padding:15px 20px;">${g.fecha_creacion ? g.fecha_creacion.split('T')[0] : 'N/A'}</td>
-                                    <td style="padding:15px 20px;">
-                                        <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:10px; font-weight:bold; font-size:0.8rem;">${items.length} ítems</span>
-                                    </td>
-                                    <td style="padding:15px 20px;">
-                                        <div style="font-weight:700; color:var(--success-green);">${formatCOP(g.valor_cop || 0)}</div>
-                                        <div style="font-size:0.75rem; opacity:0.6;">$${g.valor_usd || 0} USD</div>
-                                    </td>
-                                    <td style="padding:15px 20px; font-weight:700; color:#FFB703;">${formatCOP(sumaInd)}<br><span style="font-size:0.7rem; opacity:0.6; font-weight:400;">Cobrado a clientes</span></td>
-                                    <td style="padding:15px 20px;">
-                                        <span style="font-weight:700; color:${difColor};">${difIcon} ${formatCOP(Math.abs(dif))}</span><br>
-                                        <span style="font-size:0.7rem; opacity:0.6;">${dif >= 0 ? 'Ganancia flete' : 'Diferencia flete'}</span>
-                                    </td>
-                                    <td style="padding:15px 20px; text-align:right;">
-                                        <button class="btn-action" onclick="window.modalDetalleGuia('${g.id}')">👁️ Ver Detalle</button>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-};
+// TablaPro para "Envíos EEUU a Colombia" se monta desde dentro de renderLogistics
+// (ver _montarTablaEnviosEEUU), ya que necesita cerrar sobre `list`/`ventas`
+// cargados en esa función — este módulo no mantiene cachés a nivel de módulo
+// como los demás (cada cambio de tab vuelve a llamar renderLogistics completo).
 
 window.modalDetalleGuia = async (guiaId) => {
     const container = document.getElementById('modal-container');
