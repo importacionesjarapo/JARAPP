@@ -379,6 +379,17 @@ async function _procesarResultados(posts, cuentasMap) {
       const apifyId = _sanitizeUnicode(post.shortCode || String(post.id ?? ''), 50);
       if (!apifyId) continue;
 
+      // Lista negra: posts eliminados manualmente no se vuelven a agregar
+      const { data: enListaNegra } = await sb
+        .from('posts_descartados_permanente')
+        .select('id')
+        .eq('apify_post_id', apifyId)
+        .maybeSingle();
+      if (enListaNegra) {
+        console.log(`[Scraper] Post en lista negra, ignorando: ${apifyId}`);
+        continue;
+      }
+
       const tipo        = _tipoContenido(post.type);
       const esVideo     = tipo === 'reel';
       const vistas      = post.videoViewCount || post.videoPlayCount || 0;

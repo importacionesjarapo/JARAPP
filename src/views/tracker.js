@@ -1483,6 +1483,25 @@ async function _eliminarRecreacionesYPosts(recIds, postIds) {
   const conRecreacion = new Set((quedan || []).map(r => r.post_id));
   const sinRecreacion = postIds.filter(id => !conRecreacion.has(id));
   if (sinRecreacion.length) {
+    // Antes de borrar, registrar los apify_post_id en la lista negra para
+    // que el scraper no vuelva a agregar estos posts.
+    const { data: postsAEliminar, error: errSel } = await client()
+      .from('posts_tracker')
+      .select('id, apify_post_id, cuenta_id')
+      .in('id', sinRecreacion);
+    if (errSel) throw errSel;
+
+    const listaNegraItems = (postsAEliminar || [])
+      .filter(p => p.apify_post_id)
+      .map(p => ({ apify_post_id: p.apify_post_id }));
+
+    if (listaNegraItems.length > 0) {
+      const { error: errBlacklist } = await client()
+        .from('posts_descartados_permanente')
+        .upsert(listaNegraItems, { onConflict: 'apify_post_id' });
+      if (errBlacklist) throw errBlacklist;
+    }
+
     const { error: errPost } = await client()
       .from('posts_tracker')
       .delete()
