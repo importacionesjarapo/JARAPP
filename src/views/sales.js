@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { formatCOP, formatUSD, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { formatCOP, formatUSD, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel } from '../utils.js';
+import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let localVentasCache = [];
@@ -124,80 +125,75 @@ window.openSalesKPI = (kpiName) => {
     window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
-// ─── VIEW: Tabla ───────────────────────────────────────────────────────────────
-const renderViewTabla = (ventas) => {
-    const sorted = [...ventas].reverse();
-    return `
-    <div class="purchase-view-panel">
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead><tr>
-                    <th style="min-width:120px;">Orden / Fecha</th>
-                    <th style="min-width:260px;">Producto</th>
-                    <th style="min-width:200px;">Cliente</th>
-                    <th style="min-width:220px;">Fase Logística</th>
-                    <th style="min-width:290px;">Finanzas</th>
-                    <th class="text-right" style="min-width:140px;">Acciones</th>
-                </tr></thead>
-                <tbody>
-                ${sorted.length > 0 ? sorted.map(v => {
-                    const saldo   = parseInt(v.saldo_pendiente)||0;
-                    const abonado = parseInt(v.abonos_acumulados)||0;
-                    const total   = parseInt(v.valor_total_cop)||0;
-                    const c       = localClientesCache.find(x => x.id.toString() === v.cliente_id.toString());
-                    const prod    = localProductosCache.find(p => p.id.toString() === v.producto_id?.toString());
-                    const fecha   = normDate(v.fecha)||'N/A';
-                    const fase    = getLogisticaFase(v.id, localLogisticaCache, v.estado_orden||'Procesando');
-                    const col     = getLogisticaColor(fase);
-                    const sf = `${v.id.toString().slice(-4)} ${fecha} ${prod?prod.marca:''} ${prod?prod.nombre_producto:''} ${c&&c.nombre?c.nombre:''} ${fase} ${v.tipo_venta}`;
-                    return `
-                    <tr class="sale-item-filterable" data-venta-id="${v.id}" data-text="${sf.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">
-                        <td>
-                            <div class="cell-number">#${v.id.toString().slice(-4)}</div>
-                            <span class="cell-subtitle">${fecha}</span>
-                        </td>
-                        <td>
-                            <div style="display:flex;align-items:center;gap:12px;">
-                                ${prod?(prod.url_imagen?`<img src="${prod.url_imagen}" style="width:40px;height:40px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--glass-border);">`:`<div style="width:40px;height:40px;background:var(--glass-hover);border-radius:8px;flex-shrink:0;"></div>`):''}
-                                <div style="min-width:0;">
-                                    <div style="font-weight:800;font-size:0.75rem;color:var(--primary-red);">${prod?prod.marca:''}</div>
-                                    <div class="cell-title" style="max-width:200px;">${prod?prod.nombre_producto:'<span style="opacity:0.4;">Sin producto</span>'}</div>
-                                </div>
+// ─── VIEW: Tabla (TablaPro) ────────────────────────────────────────────────────
+// Cliente/Producto/Fase Logística se resuelven contra las cachés ya cargadas
+// (localClientesCache/localProductosCache/localLogisticaCache) por closure,
+// ya que no son columnas reales de la tabla Ventas.
+function _montarTablaVentas() {
+    const tabla = new TablaPro({
+        containerId: 'ventas-tabla-container',
+        tabla: 'Ventas',
+        supabase: db.client,
+        searchColumns: ['estado_orden', 'tipo_venta'],
+        columnas: [
+            { key: 'fecha', label: 'Orden / Fecha', width: '120px',
+              render: (v, row) => `<div class="cell-number">#${row.id.toString().slice(-4)}</div><span class="cell-subtitle">${normDate(v)||'N/A'}</span>` },
+            { key: 'producto_id', label: 'Producto', width: '240px', sortable: false,
+              render: (v) => {
+                  const prod = localProductosCache.find(p => p.id.toString() === v?.toString());
+                  if (!prod) return '<span style="opacity:0.4;">Sin producto</span>';
+                  return `<div style="display:flex;align-items:center;gap:12px;">
+                            ${prod.url_imagen ? `<img src="${prod.url_imagen}" style="width:36px;height:36px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border);">` : ''}
+                            <div style="min-width:0;">
+                              <div style="font-weight:800;font-size:0.72rem;color:var(--primary-red);">${prod.marca||''}</div>
+                              <div class="cell-title" style="max-width:180px;">${prod.nombre_producto||''}</div>
                             </div>
-                        </td>
-                        <td>
-                            <div class="cell-title" style="max-width:180px;">${c&&c.nombre?c.nombre:'<span style="opacity:0.4;">Desconocido</span>'}</div>
-                            <span class="cell-subtitle">ID: ${c&&c.numero_identificacion?c.numero_identificacion:(v.cliente_id||'N/A')}</span>
-                        </td>
-                        <td>
-                            <div style="margin-bottom:5px;">${v.tipo_venta==='Encargo'?'<span style="color:#FFB703;font-size:0.68rem;font-weight:700">📦 Encargo</span>':'<span style="color:var(--success-green);font-size:0.68rem;font-weight:700">🛍️ Stock Local</span>'}</div>
-                            <span class="status-badge" style="background:${col};">${fase}</span>
-                        </td>
-                        <td>
-                            <div style="display:flex;gap:18px;align-items:center;">
-                                <div><div class="cell-subtitle">Total</div><div class="cell-price">${formatCOP(total)}</div></div>
-                                <div><div class="cell-subtitle">Abonado</div><div class="cell-price" style="color:var(--success-green);">${formatCOP(abonado)}</div></div>
-                                <div><div class="cell-subtitle">Saldo</div><div class="cell-price" style="color:${saldo>0?'var(--primary-red)':'var(--success-green)'};">${formatCOP(saldo)}</div></div>
-                            </div>
-                        </td>
-                        <td class="td-actions">
-                            <div class="td-actions-group">
-                                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}')" title="Ver Detalle">👁️ Ver</button>
-                                ${auth.canEdit('sales') && saldo>0?`<button class="btn-action" onclick="window.modalAbono('${v.id}',${saldo})">+ Abono</button>`:`${saldo>0?'':'<span style="opacity:0.4;font-size:0.72rem;white-space:nowrap">✔ Pagado</span>'}`}
-                                ${auth.canEdit('sales') && v.estado_orden !== 'Cancelado'
-                                    ? `<button class="btn-action btn-action-cancelar" onclick="window.confirmarCancelarVenta('${v.id}','${(v.nombre_producto||'Producto').replace(/'/g,"\\'")}')" title="Cancelar Venta">✕ Cancelar</button>`
-                                    : v.estado_orden === 'Cancelado' ? '<span style="opacity:0.5;font-size:0.72rem;color:#e53e3e;white-space:nowrap">✕ Cancelada</span>' : ''
-                                }
-                            </div>
-                        </td>
-                    </tr>`;
-                }).join('') : '<tr class="table-empty-row"><td colspan="6">No hay ventas registradas.</td></tr>'}
-                <tr class="table-empty-row" id="sale-empty-search" style="display:none;"><td colspan="6">Sin resultados.</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>`;
-};
+                          </div>`;
+              } },
+            { key: 'cliente_id', label: 'Cliente', width: '180px', sortable: false,
+              render: (v) => {
+                  const c = localClientesCache.find(x => x.id.toString() === v?.toString());
+                  return `<div class="cell-title" style="max-width:170px;">${c?.nombre || '<span style="opacity:0.4;">Desconocido</span>'}</div>
+                          <span class="cell-subtitle">ID: ${c?.numero_identificacion || v || 'N/A'}</span>`;
+              } },
+            { key: '_fase', label: 'Fase Logística', width: '180px', sortable: false,
+              render: (_v, row) => {
+                  const fase = getLogisticaFase(row.id, localLogisticaCache, row.estado_orden||'Procesando');
+                  const col  = getLogisticaColor(fase);
+                  const tipo = row.tipo_venta === 'Encargo'
+                      ? '<span style="color:#FFB703;font-size:0.68rem;font-weight:700">📦 Encargo</span>'
+                      : '<span style="color:var(--success-green);font-size:0.68rem;font-weight:700">🛍️ Stock Local</span>';
+                  return `<div style="margin-bottom:5px;">${tipo}</div><span class="status-badge" style="background:${col};">${fase}</span>`;
+              } },
+            { key: 'valor_total_cop', label: 'Total COP', width: '120px',
+              render: (v) => formatCOP(parseInt(v)||0) },
+            { key: 'abonos_acumulados', label: 'Abonado', width: '120px',
+              render: (v) => `<span style="color:var(--success-green);">${formatCOP(parseInt(v)||0)}</span>` },
+            { key: 'saldo_pendiente', label: 'Saldo', width: '120px',
+              render: (v) => {
+                  const saldo = parseInt(v)||0;
+                  return `<span style="color:${saldo>0?'var(--primary-red)':'var(--success-green)'};">${formatCOP(saldo)}</span>`;
+              } },
+        ],
+        acciones: (row) => {
+            const saldo = parseInt(row.saldo_pendiente)||0;
+            const abono = auth.canEdit('sales') && saldo>0
+                ? `<button class="btn-action" onclick="window.modalAbono('${row.id}',${saldo});event.stopPropagation()">+ Abono</button>`
+                : (saldo>0 ? '' : '<span style="opacity:0.4;font-size:0.72rem;white-space:nowrap">✔ Pagado</span>');
+            const cancelar = auth.canEdit('sales') && row.estado_orden !== 'Cancelado'
+                ? `<button class="btn-action btn-action-cancelar" onclick="window.confirmarCancelarVenta('${row.id}','${(row.nombre_producto||'Producto').replace(/'/g,"\\'")}');event.stopPropagation()" title="Cancelar Venta">✕ Cancelar</button>`
+                : (row.estado_orden === 'Cancelado' ? '<span style="opacity:0.5;font-size:0.72rem;color:#e53e3e;white-space:nowrap">✕ Cancelada</span>' : '');
+            return `
+                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${row.id}');event.stopPropagation()" title="Ver Detalle">👁️ Ver</button>
+                ${abono}
+                ${cancelar}
+            `;
+        },
+        onRowClick: (row) => window.modalDetalleVentaGlobal(row.id),
+        altura: '65vh',
+    });
+    tabla.mount();
+}
 
 // ─── VIEW: Pendientes de Pago ───────────────────────────────────────────────────
 const renderViewPendientes = (ventas) => {
@@ -399,13 +395,20 @@ const renderViewTimeline = (ventas) => {
 function injectSalesView(view) {
     const area = document.getElementById('sales-view-area');
     if (!area) return;
+
+    if (view === 'tabla') {
+        area.innerHTML = `<div id="ventas-tabla-container"></div>`;
+        _montarTablaVentas();
+        attachGroupToggles();
+        return;
+    }
+
     const ventas = localVentasCache;
     let html = '';
     if (view === 'pendientes') html = renderViewPendientes(ventas);
     else if (view === 'tipo')   html = renderViewTipo(ventas);
     else if (view === 'fase')   html = renderViewFase(ventas);
     else if (view === 'timeline') html = renderViewTimeline(ventas);
-    else                        html = renderViewTabla(ventas);
     area.style.opacity = '0';
     setTimeout(() => { area.innerHTML = html; area.style.opacity = '1'; area.style.transition = 'opacity 0.25s'; attachSalesSearch(); attachGroupToggles(); }, 100);
 }
@@ -624,11 +627,6 @@ export const renderSales = async (renderLayout, navigateTo) => {
         { id:'timeline',   icon:'📅', label:'Timeline' },
     ];
 
-    // Pagination State
-    const _page = parseInt(localStorage.getItem('sales_page') || '1');
-    const _rpp  = parseInt(localStorage.getItem('sales_rpp') || '10');
-    const pagedList = _salesActiveView === 'tabla' ? paginate(localVentasFiltered, _page, _rpp) : localVentasFiltered;
-
     const html = `
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:15px;">
         <div>
@@ -663,12 +661,13 @@ export const renderSales = async (renderLayout, navigateTo) => {
     </div>
 
     <div id="sales-view-area">
-        ${_salesActiveView === 'tabla' ? renderViewTabla(pagedList) : injectSalesView(_salesActiveView)}
-    </div>
-    ${_salesActiveView === 'tabla' ? renderPagination(localVentasFiltered.length, _page, _rpp, 'sales') : ''}`;
+        <div id="ventas-tabla-container"></div>
+    </div>`;
 
+    // _salesActiveView siempre es 'tabla' en el render inicial (se resetea arriba)
     renderLayout(html);
-    setTimeout(() => { attachSalesSearch(); attachGroupToggles(); }, 150);
+    _montarTablaVentas();
+    setTimeout(() => { attachGroupToggles(); }, 150);
 };
 
 // ─── Create Sale Modal (unchanged) ────────────────────────────────────────────
