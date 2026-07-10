@@ -201,7 +201,7 @@ async function _loadScrapingLogs() {
 function _kpis() {
   const comp   = _cuentas.filter(c => c.tipo_cuenta === 'competencia');
   const t1     = comp.filter(c => c.tier === 1);
-  const viral  = _posts.filter(p => p.es_viral);
+  const viral  = _recs.filter(r => r.estado === 'pendiente');
   const altos  = _posts.filter(p => p.nivel_amenaza === 'alto');
   return `
     <div class="kpi-strip" style="margin-bottom:24px;">
@@ -364,7 +364,7 @@ function _tabPosts() {
   if (_filterEstado  !== 'todos') lista = lista.filter(p => recMap[p.id]?.estado === _filterEstado);
 
   // Conteo de posts virales sin análisis IA
-  const sinIA = _posts.filter(p => p.es_viral && !p.analisis_ia).length;
+  const sinIA = _posts.filter(p => p.es_viral && !p.analisis_ia && recMap[p.id]?.estado === 'pendiente').length;
   const btnPendientes = sinIA > 0 ? `
     <div style="background:#7C3AED11;border:1px solid #7C3AED44;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
       <div style="flex:1;min-width:200px;">
