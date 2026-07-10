@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { renderError, formatCOP, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { renderError, formatCOP, downloadExcel } from '../utils.js';
+import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let _cliCache = null;
@@ -120,65 +121,53 @@ window.openClientsKPI = (kpiName) => {
     window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
-// ─── VIEW: Tabla ───────────────────────────────────────────────────────────────
-const renderViewTabla = (list, clientStats) => `
-<div class="purchase-view-panel">
-    <div class="table-wrapper">
-        <table class="data-table">
-            <thead><tr>
-                <th style="min-width:200px;">Nombre</th>
-                <th style="min-width:150px;">Identificación</th>
-                <th style="min-width:155px;">WhatsApp</th>
-                <th style="min-width:200px;">Ciudad / Dirección</th>
-                <th style="min-width:130px;">Lead Kommo</th>
-                <th style="min-width:150px;">Portal Cliente</th>
-                <th style="min-width:130px;">Fecha Ingreso</th>
-                <th style="min-width:180px;">LTV (Compras)</th>
-                <th class="text-right" style="min-width:120px;">Acción</th>
-            </tr></thead>
-            <tbody id="list-body">
-            ${list.length > 0 ? [...list].reverse().map(c => {
-                const stats = clientStats[c.id] || { count:0, total_gastado:0, saldo_pendiente:0 };
-                const fecha = normDate(c.fecha_registro)||'-';
-                const sf = `${c.nombre||''} ${c.numero_identificacion||''} ${c.whatsapp||''} ${c.ciudad||''} ${c.direccion||''} ${c.numero_lead_kommo||''}`.replace(/\s+/g,' ').trim();
-                return `
-                <tr class="client-row" data-text="${sf.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">
-                    <td style="font-weight:700;">${c.nombre}</td>
-                    <td style="font-family:monospace;font-size:0.82rem;">${c.numero_identificacion||'—'}</td>
-                    <td><span style="color:var(--success-green);font-weight:600;">${c.whatsapp||'—'}</span></td>
-                    <td>
-                        <div class="cell-title" style="max-width:180px;">${c.ciudad||'—'}</div>
-                        <span class="cell-subtitle" style="white-space:normal;max-width:180px;display:block;">${c.direccion||''}</span>
-                    </td>
-                    <td style="font-size:0.85rem;">${c.numero_lead_kommo||'—'}</td>
-                    <td>
-                      ${c.portal_token
-                        ? `<div style="display:flex;gap:6px;align-items:center;">
-                            <span style="font-family:monospace;font-size:0.78rem;background:var(--bg-secondary);padding:2px 7px;border-radius:6px;color:var(--info-blue);">${c.portal_token.substring(0,8).toUpperCase()}</span>
-                            <button class="btn-action" onclick="window.copiarLinkPortal('${c.id}','${c.portal_token}','${(c.nombre||'').replace(/'/g,"\\'")}')" title="Copiar link">📋</button>
-                            <button class="btn-action" onclick="window.enviarPortalWhatsApp('${c.id}','${c.portal_token}','${(c.nombre||'').replace(/'/g,"\\'")}','${c.whatsapp||''}')" title="Enviar por WhatsApp">💬</button>
-                          </div>`
-                        : `<button class="btn-action" onclick="window.generarPortalCliente('${c.id}')" style="font-size:0.75rem;">+ Generar</button>`
-                      }
-                    </td>
-                    <td style="font-size:0.85rem;opacity:0.8;">${fecha}</td>
-                    <td>
-                        <div class="cell-price" style="color:var(--primary-red);">${formatCOP(stats.total_gastado)}</div>
-                        <span class="cell-subtitle">En ${stats.count} pedido(s)</span>
-                    </td>
-                    <td class="td-actions">
-                        <div class="td-actions-group">
-                            <button class="btn-action" onclick="window.modalDetalleCliente('${c.id}')" title="Ver Detalle">👁️ Ver</button>
-                            ${auth.canEdit('clients') ? `<button class="btn-action" onclick="window.modalCliente('${c.id}')">Editar</button>` : ''}
-                        </div>
-                    </td>
-                </tr>`;
-            }).join('') : ''}
-            <tr class="empty-row table-empty-row" style="display:${list.length===0?'':'none'};"><td colspan="8">No se encontraron clientes.</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>`;
+// ─── VIEW: Tabla (TablaPro) ────────────────────────────────────────────────────
+// Búsqueda global en Supabase, paginación sticky, orden por columna, scroll interno.
+// LTV/cartera se calculan sobre el dataset completo ya cargado (clientStats),
+// no sobre la página actual — por eso se leen por closure, no por columna real.
+function _montarTablaClientes(list, clientStats) {
+    const tabla = new TablaPro({
+        containerId: 'clientes-tabla-container',
+        tabla: 'Clientes',
+        supabase: db.client,
+        searchColumns: ['nombre', 'numero_identificacion', 'whatsapp', 'ciudad', 'direccion', 'numero_lead_kommo'],
+        columnas: [
+            { key: 'nombre', label: 'Nombre', width: '180px',
+              render: (v) => `<strong style="color:var(--text-main);">${v || '—'}</strong>` },
+            { key: 'numero_identificacion', label: 'Identificación', width: '130px',
+              render: (v) => `<span style="font-family:monospace;font-size:0.82rem;">${v || '—'}</span>` },
+            { key: 'whatsapp', label: 'WhatsApp', width: '140px',
+              render: (v) => `<span style="color:var(--success-green);font-weight:600;">${v || '—'}</span>` },
+            { key: 'ciudad', label: 'Ciudad / Dirección', width: '200px',
+              render: (v, row) => `<div>${v || '—'}</div><div style="font-size:0.76rem;color:var(--text-faint);white-space:normal;">${row.direccion || ''}</div>` },
+            { key: 'numero_lead_kommo', label: 'Lead Kommo', width: '130px',
+              render: (v) => v || '—' },
+            { key: 'portal_token', label: 'Portal Cliente', width: '160px',
+              render: (v, row) => v
+                ? `<div style="display:flex;gap:6px;align-items:center;">
+                     <span style="font-family:monospace;font-size:0.78rem;background:var(--surface-2);padding:2px 7px;border-radius:6px;color:var(--info-blue);">${v.substring(0,8).toUpperCase()}</span>
+                     <button class="btn-action" onclick="window.copiarLinkPortal('${row.id}','${v}','${(row.nombre||'').replace(/'/g,"\\'")}');event.stopPropagation()" title="Copiar link">📋</button>
+                     <button class="btn-action" onclick="window.enviarPortalWhatsApp('${row.id}','${v}','${(row.nombre||'').replace(/'/g,"\\'")}','${row.whatsapp||''}');event.stopPropagation()" title="Enviar por WhatsApp">💬</button>
+                   </div>`
+                : `<button class="btn-action" onclick="window.generarPortalCliente('${row.id}');event.stopPropagation()" style="font-size:0.75rem;">+ Generar</button>` },
+            { key: 'fecha_registro', label: 'Fecha Ingreso', width: '110px',
+              render: (v) => normDate(v) || '—' },
+            { key: '_ltv', label: 'LTV (Compras)', width: '160px', sortable: false,
+              render: (_v, row) => {
+                  const stats = clientStats[row.id] || { count: 0, total_gastado: 0 };
+                  return `<div style="color:var(--primary-red);font-weight:700;">${formatCOP(stats.total_gastado)}</div>
+                          <div style="font-size:0.72rem;color:var(--text-faint);">En ${stats.count} pedido(s)</div>`;
+              } },
+        ],
+        acciones: (row) => `
+            <button class="btn-action" onclick="window.modalDetalleCliente('${row.id}');event.stopPropagation()" title="Ver Detalle">👁️ Ver</button>
+            ${auth.canEdit('clients') ? `<button class="btn-action" onclick="window.modalCliente('${row.id}');event.stopPropagation()">Editar</button>` : ''}
+        `,
+        onRowClick: (row) => window.modalDetalleCliente(row.id),
+        altura: '65vh',
+    });
+    tabla.mount();
+}
 
 // ─── VIEW: Top Clientes ────────────────────────────────────────────────────────
 const renderViewTop = (list, clientStats, ventasValidas) => {
@@ -384,37 +373,26 @@ function injectClientView(view) {
     const area = document.getElementById('cli-view-area');
     if (!area || !_cliCache) return;
     const { list, clientStats, ventasValidas } = _cliCache;
+
+    if (view === 'tabla') {
+        area.innerHTML = `<div id="clientes-tabla-container"></div>`;
+        _montarTablaClientes(list, clientStats);
+        return;
+    }
+
     let html = '';
     if      (view==='top')      html = renderViewTop(list, clientStats, ventasValidas);
     else if (view==='ciudad')   html = renderViewCiudad(list, clientStats);
     else if (view==='saldos')   html = renderViewSaldos(list, clientStats, ventasValidas);
     else if (view==='timeline') html = renderViewTimeline(list, clientStats);
-    else                        html = renderViewTabla(list, clientStats);
 
     area.style.opacity='0';
     setTimeout(() => {
         area.innerHTML = html;
         area.style.opacity='1';
         area.style.transition='opacity 0.25s';
-        attachCliSearch();
         attachGroupToggles();
     }, 100);
-}
-
-function attachCliSearch() {
-    const fi = document.getElementById('find-it');
-    if (!fi) return;
-    fi.oninput = (e) => {
-        const k = e.target.value.toLowerCase().trim();
-        let vis = 0;
-        document.querySelectorAll('#list-body .client-row').forEach(r => {
-            const m = (r.getAttribute('data-text')||'').toLowerCase().includes(k);
-            r.style.display = m ? '' : 'none';
-            if (m) vis++;
-        });
-        const em = document.querySelector('#list-body .empty-row');
-        if (em) em.style.display=(vis===0&&k.length>0)?'':'none';
-    };
 }
 
 function attachGroupToggles() {
@@ -608,11 +586,6 @@ export const renderClients = async (renderLayout, navigateTo) => {
         { id:'timeline', icon:'📅', label:'Timeline CRM' },
     ];
 
-    // Pagination State
-    const _page = parseInt(localStorage.getItem('clients_page') || '1');
-    const _rpp  = parseInt(localStorage.getItem('clients_rpp') || '10');
-    const pagedList = _cliActiveView === 'tabla' ? paginate(list, _page, _rpp) : list;
-
     const html = `
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;">
         <div>
@@ -622,7 +595,6 @@ export const renderClients = async (renderLayout, navigateTo) => {
         </div>
         <div style="display:flex;gap:10px;align-items:center;">
             <button class="btn-excel" onclick="window.exportCliExcel()">📥 Excel</button>
-            <input type="text" id="find-it" placeholder="Filtrar cliente..." style="background:var(--input-bg);border:1px solid var(--glass-border);padding:10px 15px;border-radius:12px;color:var(--text-main);width:230px;outline:none;">
             ${auth.canEdit('clients') ? `<button class="btn-primary" onclick="window.modalCliente()">+ Nuevo Cliente</button>` : ''}
         </div>
     </div>
@@ -637,12 +609,13 @@ export const renderClients = async (renderLayout, navigateTo) => {
     </div>
 
     <div id="cli-view-area">
-        ${_cliActiveView === 'tabla' ? renderViewTabla(pagedList, clientStats) : injectClientView(_cliActiveView)}
-    </div>
-    ${_cliActiveView === 'tabla' ? renderPagination(list.length, _page, _rpp, 'clients') : ''}`;
+        <div id="clientes-tabla-container"></div>
+    </div>`;
 
+    // _cliActiveView siempre es 'tabla' en el render inicial (se resetea arriba)
     renderLayout(html);
-    setTimeout(() => { attachCliSearch(); attachGroupToggles(); }, 150);
+    _montarTablaClientes(list, clientStats);
+    setTimeout(() => { attachGroupToggles(); }, 150);
 };
 
 // ── Portal Cliente ─────────────────────────────────────────────────────────────
