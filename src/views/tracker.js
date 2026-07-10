@@ -22,6 +22,7 @@ let _recs          = [];
 let _scrapingLogs  = null; // null = aún no cargados
 let _renderLayout  = null;
 let _selDescartados = new Set(); // post.id seleccionados en vista Descartada
+let _searchDebounceId = null; // debounce del buscador de Competidores
 
 // ─── Styles (injected once) ───────────────────────────────────────────────────
 function _injectStyles() {
@@ -252,7 +253,10 @@ function _debugSinResultados() {
 }
 
 // ─── Tab: Competidores ────────────────────────────────────────────────────────
-function _tabCompetidores() {
+// El input de búsqueda vive fuera de #tr-comp-tabla: los filtros (_trFilter)
+// solo reemplazan el innerHTML de #tr-comp-tabla, así el <input> nunca se
+// destruye/recrea y no pierde el foco mientras se escribe.
+function _tabCompetidoresTabla() {
   let lista;
   if (_filterTipo === 'tienda') lista = _cuentas.filter(c => c.tipo_cuenta === 'tienda');
   else if (_filterTipo === 'todos-comp') lista = _cuentas.filter(c => c.tipo_cuenta === 'competencia' || c.tipo_cuenta === 'tienda');
@@ -298,21 +302,6 @@ function _tabCompetidores() {
   }).join('');
 
   return `
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:center;">
-      <select class="tr-sel" onchange="window._trFilter('tipo',this.value)">
-        <option value="todos-comp" ${_filterTipo==='todos-comp'?'selected':''}>Todos (competencia + tiendas)</option>
-        <option value="competencia" ${_filterTipo==='competencia'?'selected':''}>Solo competencia</option>
-        <option value="tienda" ${_filterTipo==='tienda'?'selected':''}>Solo tiendas</option>
-      </select>
-      <select class="tr-sel" onchange="window._trFilter('tier',this.value)">
-        <option value="todos" ${_filterTier==='todos'?'selected':''}>Todos los tiers</option>
-        <option value="1" ${_filterTier==='1'?'selected':''}>Tier 1</option>
-        <option value="2" ${_filterTier==='2'?'selected':''}>Tier 2</option>
-      </select>
-      <input class="tr-inp" style="flex:1;min-width:200px;" type="text" placeholder="🔍 Buscar @usuario o nombre..."
-        value="${_filterSearch}" oninput="window._trFilter('search',this.value)">
-      <button class="btn-primary" onclick="window._trAddCuenta()">+ Agregar cuenta</button>
-    </div>
     ${!lista.length ? _debugSinResultados() : `
       <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;">
@@ -329,6 +318,29 @@ function _tabCompetidores() {
       </div>
       <div style="margin-top:10px;color:var(--text-faint);font-size:0.8rem;">${lista.length} cuentas</div>
     `}`;
+}
+
+// Filtros fijos (incluye el input de búsqueda) + contenedor de tabla.
+// Este wrapper solo se genera una vez por cambio de pestaña; las actualizaciones
+// de filtro/búsqueda reemplazan únicamente #tr-comp-tabla (ver window._trFilter).
+function _tabCompetidores() {
+  return `
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;align-items:center;">
+      <select class="tr-sel" onchange="window._trFilter('tipo',this.value)">
+        <option value="todos-comp" ${_filterTipo==='todos-comp'?'selected':''}>Todos (competencia + tiendas)</option>
+        <option value="competencia" ${_filterTipo==='competencia'?'selected':''}>Solo competencia</option>
+        <option value="tienda" ${_filterTipo==='tienda'?'selected':''}>Solo tiendas</option>
+      </select>
+      <select class="tr-sel" onchange="window._trFilter('tier',this.value)">
+        <option value="todos" ${_filterTier==='todos'?'selected':''}>Todos los tiers</option>
+        <option value="1" ${_filterTier==='1'?'selected':''}>Tier 1</option>
+        <option value="2" ${_filterTier==='2'?'selected':''}>Tier 2</option>
+      </select>
+      <input id="tr-comp-search" class="tr-inp" style="flex:1;min-width:200px;" type="text" placeholder="🔍 Buscar @usuario o nombre..."
+        value="${_filterSearch}" oninput="window._trFilter('search',this.value)">
+      <button class="btn-primary" onclick="window._trAddCuenta()">+ Agregar cuenta</button>
+    </div>
+    <div id="tr-comp-tabla">${_tabCompetidoresTabla()}</div>`;
 }
 
 // ─── Tab: Posts virales ───────────────────────────────────────────────────────
@@ -959,11 +971,19 @@ function _registerHandlers() {
   };
 
   window._trFilter = (type, val) => {
-    if (type === 'tipo')   { _filterTipo = val; }
-    if (type === 'tier')   _filterTier   = val;
-    if (type === 'search') _filterSearch = val;
-    const el = document.getElementById('tr-tab-content');
-    if (el) el.innerHTML = _tabCompetidores();
+    if (type === 'search') {
+      _filterSearch = val; // el <input> ya refleja el valor tecleado; no se re-renderiza
+      clearTimeout(_searchDebounceId);
+      _searchDebounceId = setTimeout(() => {
+        const tabla = document.getElementById('tr-comp-tabla');
+        if (tabla) tabla.innerHTML = _tabCompetidoresTabla();
+      }, 300);
+      return;
+    }
+    if (type === 'tipo') _filterTipo = val;
+    if (type === 'tier')  _filterTier = val;
+    const tabla = document.getElementById('tr-comp-tabla');
+    if (tabla) tabla.innerHTML = _tabCompetidoresTabla();
   };
 
   window._trFilterPost = (type, val) => {
