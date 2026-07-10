@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase } from '../utils.js';
+import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase } from '../utils.js';
+import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cached data (persists across view switches without re-fetching) ───────────
 let _cache = null;
@@ -173,71 +174,68 @@ window.openPurchasesKPI = (kpiName) => {
     window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
-// ─── View 1: Tabla (mejorada) ───────────────────────────────────────────────────
-const renderViewTabla = (compras, ventas, productos, clientes, logisticaList) => {
-    return `
-    <div class="purchase-view-panel">
-        <div style="display:flex; justify-content:flex-end; margin-bottom:1rem;">
-            <input type="text" id="find-purchase"
-                placeholder="🔍 Buscar proveedor, relación, estado..."
-                style="background:var(--glass-hover); padding:9px 15px; border-radius:10px; color:var(--text-main);
-                       border:1px solid var(--glass-border); width:300px; outline:none; font-size:0.84rem;">
-        </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th style="min-width:90px;">ID</th>
-                        <th style="min-width:120px;">Fecha</th>
-                        <th style="min-width:200px;">Proveedor / Tienda</th>
-                        <th style="min-width:200px;">Producto</th>
-                        <th style="min-width:140px;">Tipo</th>
-                        <th style="min-width:220px;">Fase Logística</th>
-                        <th class="text-right" style="min-width:160px;">Costo USD</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${compras.length > 0 ? compras.map(c => {
-                        const pData = productos.find(p => p.id?.toString() === c.producto_id?.toString()) || {};
-                        const vData = c.venta_id ? ventas.find(v => v.id?.toString() === c.venta_id?.toString()) : null;
-                        const cData = vData?.cliente_id ? clientes.find(cl => cl.id?.toString() === vData.cliente_id?.toString()) : null;
-                        const realStatus = c.venta_id
-                            ? getLogisticaFase(c.venta_id, logisticaList, c.estado_compra || 'En proceso USA')
-                            : (c.estado_compra || 'Stock USA');
-                        const statusColor = c.venta_id
-                            ? getLogisticaColor(realStatus)
-                            : (realStatus.includes('Entregado') ? 'var(--success-green)' : 'var(--info-blue)');
-                        const searchStr = `${c.id.toString().slice(-4)} ${c.fecha_pedido || ''} ${c.proveedor || ''} ${realStatus} ${c.venta_id ? 'Encargo' : 'Stock'} ${pData.nombre_producto || ''}`.toLowerCase();
-                        return `
-                        <tr class="purchase-row" data-text="${searchStr.replace(/"/g, '&quot;')}">
-                            <td><span class="cell-number">#${c.id.toString().slice(-4)}</span></td>
-                            <td style="font-size:0.82rem;">${c.fecha_pedido || 'N/A'}</td>
-                            <td><span class="cell-title" style="max-width:180px;">${c.proveedor || '—'}</span></td>
-                            <td>
-                                <span class="cell-title" style="max-width:180px;">${pData.nombre_producto || '—'}</span>
-                                ${pData.talla ? `<span class="cell-subtitle">Talla ${pData.talla}${pData.genero ? ' · ' + pData.genero : ''}</span>` : ''}
-                            </td>
-                            <td>
-                                ${c.venta_id
-                                    ? `<span style="color:#FFB703; font-weight:700; font-size:0.8rem;">📦 Encargo<br><span style="font-size:0.7rem; opacity:0.7;">${cData?.nombre || '#' + c.venta_id.toString().slice(-4)}</span></span>`
-                                    : `<span style="color:var(--success-green); font-weight:700; font-size:0.8rem;">🛒 Stock</span>`
-                                }
-                            </td>
-                            <td><span class="status-badge" style="background:${statusColor};">${realStatus}</span></td>
-                            <td class="td-actions">
-                                <div class="td-actions-group">
-                                    <span class="cell-price" style="color:var(--primary-red);">${formatUSD(c.costo_usd)}</span>
-                                    <button class="btn-action" onclick="window.modalDetalleCompra('${c.id}')" title="Ver Detalles">👁️</button>
-                                </div>
-                            </td>
-                        </tr>`;
-                    }).join('') : '<tr class="table-empty-row"><td colspan="7">No hay registros de compras.</td></tr>'}
-                    <tr class="table-empty-row" id="purchase-empty-search" style="display:none;"><td colspan="7">No se encontraron compras.</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>`;
-};
+// ─── View 1: Tabla (TablaPro) ───────────────────────────────────────────────────
+// Producto/Cliente/Fase Logística se resuelven por closure contra _cache
+// (join manual ya cargado), no son columnas reales de Compras.
+function _montarTablaCompras() {
+    const tabla = new TablaPro({
+        containerId: 'compras-tabla-container',
+        tabla: 'Compras',
+        supabase: db.client,
+        searchColumns: ['proveedor', 'estado_compra', 'numero_factura'],
+        columnas: [
+            { key: 'id', label: 'ID', width: '90px',
+              render: (v) => `<span class="cell-number">#${v.toString().slice(-4)}</span>` },
+            { key: 'fecha_pedido', label: 'Fecha', width: '110px',
+              render: (v) => `<span style="font-size:0.82rem;">${v || 'N/A'}</span>` },
+            { key: 'proveedor', label: 'Proveedor / Tienda', width: '180px',
+              render: (v) => `<span class="cell-title" style="max-width:170px;">${v || '—'}</span>` },
+            { key: 'producto_id', label: 'Producto', width: '200px', sortable: false,
+              render: (v) => {
+                  const pData = _cache.productos.find(p => p.id?.toString() === v?.toString()) || {};
+                  return `<span class="cell-title" style="max-width:180px;">${pData.nombre_producto || '—'}</span>
+                          ${pData.talla ? `<span class="cell-subtitle">Talla ${pData.talla}${pData.genero ? ' · ' + pData.genero : ''}</span>` : ''}`;
+              } },
+            { key: 'venta_id', label: 'Tipo', width: '150px', sortable: false,
+              render: (v) => {
+                  if (!v) return `<span style="color:var(--success-green);font-weight:700;font-size:0.8rem;">🛒 Stock</span>`;
+                  const vData = _cache.ventas.find(vt => vt.id?.toString() === v.toString());
+                  const cData = vData?.cliente_id ? _cache.clientes.find(cl => cl.id?.toString() === vData.cliente_id?.toString()) : null;
+                  return `<span style="color:#FFB703;font-weight:700;font-size:0.8rem;">📦 Encargo<br><span style="font-size:0.7rem;opacity:0.7;">${cData?.nombre || '#' + v.toString().slice(-4)}</span></span>`;
+              } },
+            { key: 'estado_compra', label: 'Fase Logística', width: '190px', sortable: false,
+              render: (v, row) => {
+                  const realStatus = row.venta_id
+                      ? getLogisticaFase(row.venta_id, _cache.logisticaList, v || 'En proceso USA')
+                      : (v || 'Stock USA');
+                  const statusColor = row.venta_id
+                      ? getLogisticaColor(realStatus)
+                      : (realStatus.includes('Entregado') ? 'var(--success-green)' : 'var(--info-blue)');
+                  return `<span class="status-badge" style="background:${statusColor};">${realStatus}</span>`;
+              } },
+            { key: 'costo_usd', label: 'Costo USD', width: '130px',
+              render: (v) => `<span class="cell-price" style="color:var(--primary-red);">${formatUSD(v)}</span>` },
+        ],
+        acciones: (row) => `<button class="btn-action" onclick="window.modalDetalleCompra('${row.id}');event.stopPropagation()" title="Ver Detalles">👁️</button>`,
+        onRowClick: (row) => window.modalDetalleCompra(row.id),
+        altura: '65vh',
+    });
+    tabla.mount();
+}
+
+// ─── Actualiza el panel activo (usada por switch de vista y filtro de fecha) ───
+function _renderPurchasePanel(tab) {
+    const panel = document.getElementById('purchase-view-container');
+    if (!panel || !_cache) return;
+    if (tab === 'tabla') {
+        panel.innerHTML = `<div id="compras-tabla-container"></div>`;
+        _montarTablaCompras();
+    } else {
+        panel.innerHTML = getPanelHTML(tab, { ..._cache, compras: _purFiltered });
+    }
+    attachSearchListener();
+    attachGroupToggles();
+}
 
 // ─── View 2: Por Tienda / Proveedor ────────────────────────────────────────────
 const renderViewTienda = (compras, productos, logisticaList) => {
@@ -507,13 +505,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         // We will make `window.switchPurchaseView` handle panel updates.
         const kpiCont = document.getElementById('pur-kpi-container');
         if (kpiCont) kpiCont.innerHTML = renderKPIStrip(_purFiltered);
-        
-        const panel = document.getElementById('purchase-view-container');
-        if (panel) {
-            panel.innerHTML = getPanelHTML(_currentView, { ..._cache, compras: _purFiltered });
-            attachSearchListener();
-            attachGroupToggles();
-        }
+
+        _renderPurchasePanel(_currentView);
     };
 
     window.applyPurDateFilter = () => {
@@ -563,12 +556,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         document.querySelectorAll('.pv-tab').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
         });
-        // Render selected view
-        const panel = document.getElementById('purchase-view-container');
-        if (!panel || !_cache) return;
-        panel.innerHTML = getPanelHTML(tab, { ..._cache, compras: _purFiltered });
-        attachSearchListener();
-        attachGroupToggles();
+        _renderPurchasePanel(tab);
     };
 
     window.togglePurchaseGroup = (cardId) => {
@@ -663,11 +651,6 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         { id: 'timeline', icon: '📅', label: 'Línea de Tiempo' },
     ];
 
-    // Pagination State
-    const _page = parseInt(localStorage.getItem('purchases_page') || '1');
-    const _rpp  = parseInt(localStorage.getItem('purchases_rpp') || '10');
-    const pagedList = _currentView === 'tabla' ? paginate(_purFiltered, _page, _rpp) : _purFiltered;
-
     const html = `
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.5rem; flex-wrap:wrap; gap:15px;">
         <div>
@@ -708,12 +691,12 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
       <!-- Active view panel -->
       <div id="purchase-view-container">
-        ${getPanelHTML(_currentView, { ..._cache, compras: pagedList })}
+        ${_currentView === 'tabla' ? `<div id="compras-tabla-container"></div>` : getPanelHTML(_currentView, { ..._cache, compras: _purFiltered })}
       </div>
-      ${_currentView === 'tabla' ? renderPagination(_purFiltered.length, _page, _rpp, 'purchases') : ''}
     `;
 
     renderLayout(html);
+    if (_currentView === 'tabla') _montarTablaCompras();
 
     setTimeout(() => {
         attachSearchListener();
@@ -729,7 +712,7 @@ function getPanelHTML(tab, cache) {
         case 'fase':     return renderViewFase(compras, productos, logisticaList);
         case 'tipo':     return renderViewTipo(compras, productos, ventas, clientes, logisticaList);
         case 'timeline': return renderViewTimeline(compras, productos, logisticaList);
-        default:         return renderViewTabla(compras, ventas, productos, clientes, logisticaList);
+        default:         return renderViewTienda(compras, productos, logisticaList);
     }
 }
 
