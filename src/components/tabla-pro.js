@@ -193,9 +193,13 @@ export class TablaPro {
         .from(this.tabla)
         .select('*', { count: 'exact' })
 
-      // Filtros extra fijos
+      // Filtros extra fijos — valor plano = .eq(); { op, value } = operador explícito (ej. neq, gte, lte)
       Object.entries(this.filtrosExtra).forEach(([k, v]) => {
-        query = query.eq(k, v)
+        if (v && typeof v === 'object' && 'op' in v) {
+          query = query[v.op](k, v.value)
+        } else {
+          query = query.eq(k, v)
+        }
       })
 
       // Búsqueda global — busca en todas las columnas searchColumns

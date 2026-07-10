@@ -1,6 +1,7 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let globalListCache = [];
@@ -177,68 +178,74 @@ const renderViewGrid = (list) => `
     <div id="inv-empty-search" style="display:none;text-align:center;padding:3rem;opacity:0.5;">No se encontraron productos que coincidan.</div>
 </div>`;
 
-// ─── VIEW: Tabla ─────────────────────────────────────────────────────────────────
-const renderViewTabla = (list) => `
-<div class="purchase-view-panel">
-    <div class="table-wrapper">
-        <table class="data-table">
-            <thead><tr>
-                <th style="min-width:200px;">Estado / Fase</th>
-                <th style="min-width:90px;">Marca</th>
-                <th style="min-width:280px;">Modelo / Producto</th>
-                <th class="text-center" style="min-width:90px;">Talla</th>
-                <th class="text-center" style="min-width:90px;">Género</th>
-                <th class="text-center" style="min-width:100px;">Stock MDE</th>
-                <th class="text-center" style="min-width:100px;">Stock USA</th>
-                <th class="text-right" style="min-width:120px;">Costo USD</th>
-                <th class="text-right" style="min-width:145px;">Precio Venta</th>
-                ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
-                <th class="text-right" style="min-width:130px;">Envío Int.</th>
-                ` : ''}
-                <th class="text-right" style="min-width:100px;">Acciones</th>
-            </tr></thead>
-            <tbody>
-            ${list.map(p => {
-                const venta = globalSalesCache.find(v=>v.producto_id&&v.producto_id.toString()===p.id.toString());
-                const {label:statusLabel, color:statusColor} = getProductRealStatus(p, venta);
-                const badgeVenta = venta?`<button onclick="window.modalViewSaleDetail('${venta.id}')" style="background:rgba(6,214,160,0.1);border:1px solid var(--success-green);color:var(--success-green);font-size:0.55rem;padding:3px 8px;border-radius:6px;font-weight:800;cursor:pointer;display:inline-block;margin-top:5px;">🏷️ Orden #${venta.id.toString().slice(-4)}</button>`:'';
-                const sf = `${p.marca||''} ${p.nombre_producto||''} ${p.categoria||''} ${p.talla||''} ${p.genero||''} ${statusLabel}`.replace(/\s+/g,' ').trim();
-                return `
-                <tr class="inv-item-filterable" data-text="${sf.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">
-                    <td><span class="status-badge" style="background:${statusColor};">${statusLabel}</span></td>
-                    <td style="font-weight:800;color:var(--primary-red);letter-spacing:0.3px;">${p.marca}</td>
-                    <td>
-                        <div style="display:flex;align-items:center;gap:12px;">
-                            ${p.url_imagen?`<img src="${p.url_imagen}" style="width:40px;height:40px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--glass-border);">`:`<div style="width:40px;height:40px;background:var(--glass-hover);border-radius:8px;flex-shrink:0;"></div>`}
-                            <div style="min-width:0;">
-                                <div class="cell-title" style="max-width:200px;">${p.nombre_producto}</div>
-                                ${badgeVenta}
-                            </div>
+// ─── VIEW: Tabla (TablaPro) ────────────────────────────────────────────────────
+// Estado/Fase, venta asociada y Envío Int. se resuelven por closure contra
+// globalSalesCache/globalLogisticaCache (no son columnas reales de Productos).
+// El filtro Disponibles/Otros se traduce a filtrosExtra con .eq()/.neq().
+function _montarTablaInventario() {
+    const filtroTab = _invActiveTab === 'disponibles'
+        ? { estado_producto: 'Disponible entrega inmediata' }
+        : { estado_producto: { op: 'neq', value: 'Disponible entrega inmediata' } };
+
+    const showEnvio = window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas';
+
+    const columnas = [
+        { key: '_estado', label: 'Estado / Fase', width: '190px', sortable: false,
+          render: (_v, row) => {
+              const venta = globalSalesCache.find(v => v.producto_id && v.producto_id.toString() === row.id.toString());
+              const { label, color } = getProductRealStatus(row, venta);
+              return `<span class="status-badge" style="background:${color};">${label}</span>`;
+          } },
+        { key: 'marca', label: 'Marca', width: '90px',
+          render: (v) => `<span style="font-weight:800;color:var(--primary-red);letter-spacing:0.3px;">${v||''}</span>` },
+        { key: 'nombre_producto', label: 'Modelo / Producto', width: '260px',
+          render: (v, row) => {
+              const venta = globalSalesCache.find(vt => vt.producto_id && vt.producto_id.toString() === row.id.toString());
+              const badge = venta ? `<button onclick="window.modalViewSaleDetail('${venta.id}');event.stopPropagation()" style="background:rgba(6,214,160,0.1);border:1px solid var(--success-green);color:var(--success-green);font-size:0.55rem;padding:3px 8px;border-radius:6px;font-weight:800;cursor:pointer;display:inline-block;margin-top:5px;">🏷️ Orden #${venta.id.toString().slice(-4)}</button>` : '';
+              return `<div style="display:flex;align-items:center;gap:12px;">
+                        ${row.url_imagen ? `<img src="${row.url_imagen}" style="width:36px;height:36px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border);">` : ''}
+                        <div style="min-width:0;">
+                          <div class="cell-title" style="max-width:190px;">${v||''}</div>
+                          ${badge}
                         </div>
-                    </td>
-                    <td class="text-center" style="font-weight:700;">${p.talla||'<span style="opacity:0.3">—</span>'}</td>
-                    <td class="text-center" style="font-size:0.85rem;">${p.genero||'<span style="opacity:0.3">—</span>'}</td>
-                    <td class="text-center"><span class="cell-number" style="color:${parseInt(p.stock_medellin)>0?'var(--success-green)':'var(--primary-red)'};">${p.stock_medellin??'0'}</span></td>
-                    <td class="text-center" style="opacity:0.65;">${p.stock_miami??'—'}</td>
-                    <td class="text-right" style="font-family:monospace;font-size:0.85rem;opacity:0.75;">${formatUSD(p.precio_usd)}</td>
-                    <td class="text-right cell-price" style="color:var(--success-green);">${formatCOP(p.precio_cop)}</td>
-                    ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
-                    <td class="text-right" style="color:#FFB703;font-weight:700;">${venta && venta.valor_envio_internacional ? formatCOP(venta.valor_envio_internacional) : '$0'}</td>
-                    ` : ''}
-                    <td class="td-actions">
-                        <div class="td-actions-group">
-                            <button class="btn-action" onclick="window.modalViewProduct('${p.id}')" title="Ver">👁️</button>
-                            ${auth.canEdit('inventory') ? `<button class="btn-action" onclick="window.modalProducto('${p.id}')" title="Editar">✏️</button>` : ''}
-                        </div>
-                    </td>
-                </tr>`;
-            }).join('')}
-            <tr class="table-empty-row" id="inv-empty-search" style="display:none;"><td colspan="10">Sin resultados.</td></tr>
-            ${list.length===0?'<tr class="table-empty-row"><td colspan="10">Sin existencias en esta categoría.</td></tr>':''}
-            </tbody>
-        </table>
-    </div>
-</div>`;
+                      </div>`;
+          } },
+        { key: 'talla', label: 'Talla', width: '80px', render: (v) => v || '<span style="opacity:0.3">—</span>' },
+        { key: 'genero', label: 'Género', width: '90px', render: (v) => v || '<span style="opacity:0.3">—</span>' },
+        { key: 'stock_medellin', label: 'Stock MDE', width: '95px',
+          render: (v) => `<span class="cell-number" style="color:${parseInt(v)>0?'var(--success-green)':'var(--primary-red)'};">${v??'0'}</span>` },
+        { key: 'stock_miami', label: 'Stock USA', width: '95px',
+          render: (v) => `<span style="opacity:0.65;">${v??'—'}</span>` },
+        { key: 'precio_usd', label: 'Costo USD', width: '110px',
+          render: (v) => `<span style="font-family:monospace;font-size:0.85rem;opacity:0.75;">${formatUSD(v)}</span>` },
+        { key: 'precio_cop', label: 'Precio Venta', width: '130px',
+          render: (v) => `<span class="cell-price" style="color:var(--success-green);">${formatCOP(v)}</span>` },
+    ];
+
+    if (showEnvio) {
+        columnas.push({ key: '_envio', label: 'Envío Int.', width: '120px', sortable: false,
+          render: (_v, row) => {
+              const venta = globalSalesCache.find(v => v.producto_id && v.producto_id.toString() === row.id.toString());
+              return `<span style="color:#FFB703;font-weight:700;">${venta && venta.valor_envio_internacional ? formatCOP(venta.valor_envio_internacional) : '$0'}</span>`;
+          } });
+    }
+
+    const tabla = new TablaPro({
+        containerId: 'inventario-tabla-container',
+        tabla: 'Productos',
+        supabase: db.client,
+        filtrosExtra: filtroTab,
+        searchColumns: ['nombre_producto', 'marca', 'categoria', 'sku'],
+        columnas,
+        acciones: (row) => `
+            <button class="btn-action" onclick="window.modalViewProduct('${row.id}');event.stopPropagation()" title="Ver">👁️</button>
+            ${auth.canEdit('inventory') ? `<button class="btn-action" onclick="window.modalProducto('${row.id}');event.stopPropagation()" title="Editar">✏️</button>` : ''}
+        `,
+        onRowClick: (row) => window.modalViewProduct(row.id),
+        altura: '65vh',
+    });
+    tabla.mount();
+}
 
 // ─── VIEW: Por Marca ───────────────────────────────────────────────────────────
 const renderViewMarca = (list) => {
@@ -391,10 +398,17 @@ const renderViewPrecios = (list) => {
 function injectInventoryView(view) {
     const area = document.getElementById('inv-view-area');
     if (!area) return;
+
+    if (view === 'tabla') {
+        area.innerHTML = `<div id="inventario-tabla-container"></div>`;
+        _montarTablaInventario();
+        attachGroupToggles();
+        return;
+    }
+
     const list = filterByTab(globalListCache, _invActiveTab);
     let html = '';
-    if      (view==='tabla')     html = renderViewTabla(list);
-    else if (view==='marca')     html = renderViewMarca(list);
+    if      (view==='marca')     html = renderViewMarca(list);
     else if (view==='categoria') html = renderViewCategoria(list);
     else if (view==='precios')   html = renderViewPrecios(list);
     else                         html = renderViewGrid(list);
@@ -494,7 +508,7 @@ export const renderInventory = async (renderLayout, navigateTo) => {
     const _page = parseInt(localStorage.getItem('inventory_page') || '1');
     const _rpp  = parseInt(localStorage.getItem('inventory_rpp') || '10');
     const filteredList = filterByTab(list, _invActiveTab);
-    const pagedList = (_invActiveView === 'grid' || _invActiveView === 'tabla') ? paginate(filteredList, _page, _rpp) : filteredList;
+    const pagedList = _invActiveView === 'grid' ? paginate(filteredList, _page, _rpp) : filteredList;
 
     const html = `
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.8rem;">
@@ -527,13 +541,14 @@ export const renderInventory = async (renderLayout, navigateTo) => {
     </div>
 
     <div id="inv-view-area">
-        ${_invActiveView === 'grid' ? renderViewGrid(pagedList) : 
-          _invActiveView === 'tabla' ? renderViewTabla(pagedList) : 
-          injectInventoryView(_invActiveView)}
+        ${_invActiveView === 'tabla' ? `<div id="inventario-tabla-container"></div>` : renderViewGrid(pagedList)}
     </div>
-    ${(_invActiveView === 'grid' || _invActiveView === 'tabla') ? renderPagination(filteredList.length, _page, _rpp, 'inventory') : ''}`;
+    ${_invActiveView === 'grid' ? renderPagination(filteredList.length, _page, _rpp, 'inventory') : ''}`;
 
+    // _invActiveView siempre es 'grid' en el render inicial (se resetea arriba);
+    // la rama 'tabla' queda lista por si esa reinicialización cambia en el futuro.
     renderLayout(html);
+    if (_invActiveView === 'tabla') _montarTablaInventario();
     setTimeout(()=>{ attachInvSearch(); attachGroupToggles(); }, 150);
 };
 
