@@ -126,37 +126,32 @@ window.openSalesKPI = (kpiName) => {
 };
 
 // ─── VIEW: Tabla (TablaPro) ────────────────────────────────────────────────────
-// Cliente/Producto/Fase Logística se resuelven contra las cachés ya cargadas
-// (localClientesCache/localProductosCache/localLogisticaCache) por closure,
-// ya que no son columnas reales de la tabla Ventas.
+// Usa la vista ventas_con_cliente (join Ventas+Clientes+Productos en Supabase)
+// para que la búsqueda global alcance nombre de cliente/producto, no solo
+// columnas propias de Ventas. Fase Logística sigue por closure contra
+// localLogisticaCache: no es una columna real ni de Ventas ni de la vista.
 function _montarTablaVentas() {
     const tabla = new TablaPro({
         containerId: 'ventas-tabla-container',
-        tabla: 'Ventas',
+        tabla: 'ventas_con_cliente',
         supabase: db.client,
-        searchColumns: ['estado_orden', 'tipo_venta'],
+        searchColumns: [
+            'cliente_nombre', 'producto_nombre', 'cliente_whatsapp',
+            'estado_orden', 'tipo_venta', 'id_seguimiento',
+            'direccion_envio', 'producto_marca', 'producto_categoria',
+        ],
         columnas: [
             { key: 'fecha', label: 'Orden / Fecha', width: '120px',
               render: (v, row) => `<div class="cell-number">#${row.id.toString().slice(-4)}</div><span class="cell-subtitle">${normDate(v)||'N/A'}</span>` },
-            { key: 'producto_id', label: 'Producto', width: '240px', sortable: false,
-              render: (v) => {
-                  const prod = localProductosCache.find(p => p.id.toString() === v?.toString());
-                  if (!prod) return '<span style="opacity:0.4;">Sin producto</span>';
-                  return `<div style="display:flex;align-items:center;gap:12px;">
-                            ${prod.url_imagen ? `<img src="${prod.url_imagen}" style="width:36px;height:36px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border);">` : ''}
-                            <div style="min-width:0;">
-                              <div style="font-weight:800;font-size:0.72rem;color:var(--primary-red);">${prod.marca||''}</div>
-                              <div class="cell-title" style="max-width:180px;">${prod.nombre_producto||''}</div>
-                            </div>
-                          </div>`;
-              } },
-            { key: 'cliente_id', label: 'Cliente', width: '180px', sortable: false,
-              render: (v) => {
-                  const c = localClientesCache.find(x => x.id.toString() === v?.toString());
-                  return `<div class="cell-title" style="max-width:170px;">${c?.nombre || '<span style="opacity:0.4;">Desconocido</span>'}</div>
-                          <span class="cell-subtitle">ID: ${c?.numero_identificacion || v || 'N/A'}</span>`;
-              } },
-            { key: '_fase', label: 'Fase Logística', width: '180px', sortable: false,
+            { key: 'producto_nombre', label: 'Producto', width: '210px',
+              render: (v, row) => `<div style="font-weight:800;font-size:0.72rem;color:var(--primary-red);">${row.producto_marca||''}</div>
+                                    <div class="cell-title" style="max-width:180px;">${v || '<span style="opacity:0.4;">Sin producto</span>'}</div>` },
+            { key: 'cliente_nombre', label: 'Cliente', width: '170px',
+              render: (v, row) => `<div class="cell-title" style="max-width:160px;">${v || '<span style="opacity:0.4;">Desconocido</span>'}</div>
+                                    <span class="cell-subtitle">${row.cliente_whatsapp || 'N/A'}</span>` },
+            { key: 'id_seguimiento', label: 'Seguimiento', width: '110px',
+              render: (v) => v ? `<span style="font-size:0.76rem;font-family:monospace;color:var(--info-blue);">${v}</span>` : '—' },
+            { key: '_fase', label: 'Fase Logística', width: '170px', sortable: false,
               render: (_v, row) => {
                   const fase = getLogisticaFase(row.id, localLogisticaCache, row.estado_orden||'Procesando');
                   const col  = getLogisticaColor(fase);
@@ -181,7 +176,7 @@ function _montarTablaVentas() {
                 ? `<button class="btn-action" onclick="window.modalAbono('${row.id}',${saldo});event.stopPropagation()">+ Abono</button>`
                 : (saldo>0 ? '' : '<span style="opacity:0.4;font-size:0.72rem;white-space:nowrap">✔ Pagado</span>');
             const cancelar = auth.canEdit('sales') && row.estado_orden !== 'Cancelado'
-                ? `<button class="btn-action btn-action-cancelar" onclick="window.confirmarCancelarVenta('${row.id}','${(row.nombre_producto||'Producto').replace(/'/g,"\\'")}');event.stopPropagation()" title="Cancelar Venta">✕ Cancelar</button>`
+                ? `<button class="btn-action btn-action-cancelar" onclick="window.confirmarCancelarVenta('${row.id}','${(row.producto_nombre||'Producto').replace(/'/g,"\\'")}');event.stopPropagation()" title="Cancelar Venta">✕ Cancelar</button>`
                 : (row.estado_orden === 'Cancelado' ? '<span style="opacity:0.5;font-size:0.72rem;color:#e53e3e;white-space:nowrap">✕ Cancelada</span>' : '');
             return `
                 <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${row.id}');event.stopPropagation()" title="Ver Detalle">👁️ Ver</button>
