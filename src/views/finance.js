@@ -1,5 +1,6 @@
 import { db } from '../db.js';
-import { formatCOP, formatUSD, renderError, showToast, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { formatCOP, formatUSD, renderError, showToast, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase, downloadExcel } from '../utils.js';
+import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cached data ───────────────────────────────────────────────────────────────
 let _finCache = null;
@@ -30,6 +31,42 @@ const labelDate = (s) => {
         if (isNaN(d)) return s;
         return d.toLocaleDateString('es-CO', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
     } catch { return s; }
+};
+// ─── TablaPro: helpers de filtro (rango de fechas → whitelist de id, ya que
+// Ventas.fecha no siempre está en un formato parseable por SQL .gte()/.lte()) ──
+const _dateInSharedRange = (fechaRaw) => {
+    if (!_finStartDate && !_finEndDate) return true;
+    const vd = new Date(normDate(fechaRaw) + 'T12:00:00');
+    if (isNaN(vd)) return true;
+    const s = _finStartDate ? new Date(_finStartDate + 'T00:00:00') : null;
+    const e = _finEndDate ? new Date(_finEndDate + 'T23:59:59') : null;
+    if (s && vd < s) return false;
+    if (e && vd > e) return false;
+    return true;
+};
+const _finVentasIdFiltro = () => {
+    if (!_finStartDate && !_finEndDate) return null;
+    return (_finCache?.ventas || []).filter(v => _dateInSharedRange(v.fecha)).map(v => v.id?.toString());
+};
+const _finEgresosIdFiltro = () => {
+    if (!_finStartDate && !_finEndDate) return null;
+    const gastoIds  = (_finCache?.gastos || []).filter(g => _dateInSharedRange(g.fecha)).map(g => g.id?.toString());
+    const compraIds = (_finCache?.compras || [])
+        .filter(c => parseFloat(c.costo_cop || 0) > 0 && _dateInSharedRange(c.fecha_pedido || c.fecha_registro))
+        .map(c => c.id?.toString());
+    return [...gastoIds, ...compraIds];
+};
+const _idFiltroExtra = (ids) => (ids ? { id: { op: 'in', value: ids.length ? ids : ['__none__'] } } : {});
+
+// ganancia real estimada a partir de una fila de ventas_finanzas_view (ya trae compra_costo_cop)
+const _calcGananciaReal = (row) => {
+    const valVenta   = parseFloat(row.valor_total_cop || 0);
+    const gastoComp  = parseFloat(row.compra_costo_cop || 0);
+    const envioInt   = parseFloat(row.valor_envio_internacional || 0);
+    const envioCol   = parseFloat(row.envio_colombia || 0);
+    const extraItems = (() => { try { return JSON.parse(row.items_rentabilidad || '[]'); } catch { return []; } })();
+    const extras     = extraItems.reduce((a, x) => a + (parseFloat(x.valor) || 0), 0);
+    return valVenta - gastoComp - envioInt - envioCol - extras;
 };
 
 // ─── KPI Strip ─────────────────────────────────────────────────────────────────
@@ -138,62 +175,53 @@ window.openFinanceKPI = (kpiName) => {
     window.openKPIDetailModal(title, subtitle, itemsHtml);
 };
 
-// ─── INGRESOS: Vista Tabla ─────────────────────────────────────────────────────
-const renderIngTabla = (ventas, logistica) => {
-    const sorted = [...ventas].reverse();
-    return `
+// ─── INGRESOS: Vista Tabla (TablaPro sobre ventas_con_cliente) ────────────────
+const renderIngTabla = () => `
     <div class="purchase-view-panel">
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead><tr>
-                    <th style="min-width:120px;">Fecha</th>
-                    <th style="min-width:190px;">Referencia / Tipo</th>
-                    <th style="min-width:220px;">Fase Logística</th>
-                    <th style="min-width:170px;">Abonos Recibidos</th>
-                    <th style="min-width:165px;">Valor Total</th>
-                    <th class="text-right" style="min-width:160px;">Saldo Pendiente</th>
-                    <th class="text-center" style="min-width:110px;">Comprobante</th>
-                </tr></thead>
-                <tbody>
-                ${sorted.length > 0 ? sorted.map(v => {
-                    const totalCop = parseFloat(v.valor_total_cop||0);
-                    const abonos   = parseFloat(v.abonos_acumulados||0);
-                    const saldo    = totalCop - abonos;
-                    const isPaid   = totalCop > 0 && abonos >= totalCop;
-                    const fase     = getLogisticaFase(v.id, logistica, v.estado_orden||'Sin registro');
-                    const faseCol  = getLogisticaColor(fase);
-                    const sf = `${v.id.toString().slice(-4)} ${v.tipo_venta||''} ${fase}`;
-                    const compUrl  = v.comprobante_ultimo_abono || v.comprobante_url || '';
-                    return `
-                    <tr class="fin-income-row" data-text="${sf.replace(/"/g,'&quot;')}">
-                        <td style="font-weight:700;">${normDate(v.fecha)||'N/A'}</td>
-                        <td>
-                            <div class="cell-title">Orden #${v.id.toString().slice(-4)}</div>
-                            <span class="cell-subtitle">${v.tipo_venta||'Venta'}</span>
-                        </td>
-                        <td><span class="status-badge" style="background:${faseCol};">${fase}</span></td>
-                        <td><span class="cell-price" style="color:var(--success-green);">${formatCOP(abonos)}</span></td>
-                        <td><span class="cell-price">${formatCOP(totalCop)}</span></td>
-                        <td class="text-right">
-                            <span style="font-size:0.75rem; padding:5px 14px; border-radius:15px; font-weight:800;
-                                color:${isPaid?'var(--success-green)':'var(--primary-red)'};
-                                border:1px solid ${isPaid?'rgba(6,214,160,0.3)':'rgba(217,16,16,0.3)'};
-                                background:${isPaid?'rgba(6,214,160,0.05)':'rgba(217,16,16,0.07)'};
-                                display:inline-block; white-space:nowrap;">
-                                ${isPaid ? '✔ Pagado' : formatCOP(saldo)}
-                            </span>
-                        </td>
-                        <td class="text-center">
-                            ${compUrl ? `<button class="comp-thumb-btn" onclick="window.openComprobanteViewer('${compUrl}')">🧾 Ver</button>` : `<span style="opacity:0.25;font-size:0.75rem;">—</span>`}
-                        </td>
-                    </tr>`;
-                }).join('') : '<tr class="table-empty-row"><td colspan="7">No hay ingresos registrados.</td></tr>'}
-                <tr class="table-empty-row" id="fin-income-empty" style="display:none;"><td colspan="7">Sin resultados.</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <div id="fin-ingresos-tabla-container"></div>
     </div>`;
-};
+
+function _montarTablaIngresos() {
+    new TablaPro({
+        containerId: 'fin-ingresos-tabla-container',
+        tabla: 'ventas_con_cliente',
+        supabase: db.client,
+        filtrosExtra: _idFiltroExtra(_finVentasIdFiltro()),
+        searchColumns: ['cliente_nombre', 'producto_nombre', 'estado_orden', 'tipo_venta'],
+        columnas: [
+            { key: 'fecha', label: 'Fecha', width: '120px', render: (v) => normDate(v) || 'N/A' },
+            { key: 'tipo_venta', label: 'Referencia / Tipo', width: '190px',
+              render: (v, row) => `<div class="cell-title">Orden #${row.id.toString().slice(-4)}</div><span class="cell-subtitle">${v||'Venta'}</span>` },
+            { key: '_fase', label: 'Fase Logística', width: '200px', sortable: false,
+              render: (_v, row) => {
+                  const fase = getLogisticaFase(row.id, _finCache.logistica, row.estado_orden||'Sin registro');
+                  return `<span class="status-badge" style="background:${getLogisticaColor(fase)};">${fase}</span>`;
+              } },
+            { key: 'abonos_acumulados', label: 'Abonos Recibidos', width: '170px',
+              render: (v) => `<span class="cell-price" style="color:var(--success-green);">${formatCOP(parseFloat(v||0))}</span>` },
+            { key: 'valor_total_cop', label: 'Valor Total', width: '165px',
+              render: (v) => `<span class="cell-price">${formatCOP(parseFloat(v||0))}</span>` },
+            { key: 'saldo_pendiente', label: 'Saldo Pendiente', width: '160px',
+              render: (v, row) => {
+                  const totalCop = parseFloat(row.valor_total_cop||0);
+                  const saldo    = parseFloat(v||0);
+                  const isPaid   = totalCop > 0 && saldo <= 0;
+                  return `<span style="font-size:0.75rem;padding:5px 14px;border-radius:15px;font-weight:800;
+                        color:${isPaid?'var(--success-green)':'var(--primary-red)'};
+                        border:1px solid ${isPaid?'rgba(6,214,160,0.3)':'rgba(217,16,16,0.3)'};
+                        background:${isPaid?'rgba(6,214,160,0.05)':'rgba(217,16,16,0.07)'};
+                        display:inline-block;white-space:nowrap;">${isPaid ? '✔ Pagado' : formatCOP(saldo)}</span>`;
+              } },
+            { key: 'comprobante_url', label: 'Comprobante', width: '110px', sortable: false,
+              render: (_v, row) => {
+                  const compUrl = row.comprobante_ultimo_abono || row.comprobante_url || '';
+                  return compUrl ? `<button class="comp-thumb-btn" onclick="window.openComprobanteViewer('${compUrl}');event.stopPropagation();">🧾 Ver</button>` : '<span style="opacity:0.25;font-size:0.75rem;">—</span>';
+              } },
+        ],
+        onRowClick: (row) => window.modalDetalleVentaGlobal(row.id),
+        altura: '60vh',
+    }).mount();
+}
 
 // ─── INGRESOS: Vista Saldos Pendientes ────────────────────────────────────────
 const renderIngSaldos = (ventas) => {
@@ -270,68 +298,44 @@ const renderIngTimeline = (ventas, logistica) => {
     </div>`;
 };
 
-// ─── EGRESOS: Vista Tabla ──────────────────────────────────────────────────────
-const renderEgrTabla = (gastos, compras) => {
-    const combined = [
-        ...gastos.map(g => ({...g, es_compra:false, _ts: new Date(normDate(g.fecha)||0)})),
-        ...compras.filter(c => parseFloat(c.costo_cop||0) > 0)
-                  .map(c => ({...c, es_compra:true, _ts: new Date(normDate(c.fecha_pedido)||0)})),
-    ].sort((a,b) => b._ts - a._ts);
-
-    return `
+// ─── EGRESOS: Vista Tabla (TablaPro sobre egresos_view) ───────────────────────
+const renderEgrTabla = () => `
     <div class="purchase-view-panel">
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead><tr>
-                    <th style="min-width:110px;">Fecha Factura</th>
-                    <th style="min-width:120px;">Nº Factura</th>
-                    <th style="min-width:230px;">Concepto / Tipo</th>
-                    <th class="text-center" style="min-width:90px;">Moneda</th>
-                    <th style="min-width:150px;">Valor Origen</th>
-                    <th style="min-width:100px;">TRM</th>
-                    <th class="text-right" style="min-width:160px;">Total COP</th>
-                    <th class="text-center" style="min-width:130px;">Acciones</th>
-                </tr></thead>
-                <tbody>
-                ${combined.length > 0 ? combined.map(g => {
-                    const totalCop   = parseFloat(g.valor_cop||g.costo_cop||0);
-                    const valorOr    = parseFloat(g.valor_origen||g.costo_usd||0);
-                    const isUSD      = g.moneda === 'USD' || g.es_compra;
-                    const tipoStr    = g.es_compra ? 'Compra USA Proveedor' : (g.tipo_gasto||'Gasto Operativo');
-                    const descStr    = g.es_compra ? `Tienda: ${g.proveedor||''}` : (g.concepto||'Sin descripción');
-                    const sf = `${g.fecha||g.fecha_pedido||''} ${tipoStr} ${descStr}`;
-                    const compUrl    = (!g.es_compra && g.comprobante_url) ? g.comprobante_url : '';
-                    return `
-                    <tr class="fin-expense-row" data-text="${sf.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}">
-                        <td style="font-weight:700;">${normDate(g.fecha_real_factura || g.fecha || g.fecha_pedido) || 'N/A'}</td>
-                        <td><span style="font-family:monospace;font-size:0.8rem;opacity:0.75;">${g.numero_factura || '—'}</span></td>
-                        <td>
-                            <div class="cell-title" style="color:${g.es_compra?'var(--info-blue)':'inherit'}; max-width:200px;">${tipoStr}</div>
-                            <span class="cell-subtitle">${descStr}</span>
-                        </td>
-                        <td class="text-center">
-                            <span style="font-size:0.7rem; padding:4px 10px; border-radius:15px; font-weight:700;
-                                background:var(--glass-bg);
-                                color:${isUSD?'var(--success-green)':'var(--info-blue)'};
-                                border:1px solid ${isUSD?'rgba(6,214,160,0.3)':'rgba(0,180,216,0.3)'}; display:inline-block;">
-                                ${g.es_compra ? 'USD' : (g.moneda||'COP')}
-                            </span>
-                        </td>
-                        <td style="font-family:monospace; font-size:0.85rem;">${isUSD ? formatUSD(valorOr) : formatCOP(valorOr)}</td>
-                        <td>${isUSD && g.trm ? `<span style="opacity:0.6; font-size:0.85rem;">$${g.trm}</span>` : '<span style="opacity:0.3">—</span>'}</td>
-                        <td class="text-right"><span class="cell-price" style="color:var(--primary-red);">${formatCOP(totalCop)}</span></td>
-                        <td class="text-center" style="display:flex;gap:6px;justify-content:center;align-items:center;">
-                            ${compUrl ? `<button class="comp-thumb-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="window.openComprobanteViewer('${compUrl}')">🧾</button>` : ''}
-                            ${g.es_compra && g.venta_id ? `<button class="btn-action" style="font-size:0.7rem;padding:4px 8px;" onclick="window.modalDetalleVentaGlobal('${g.venta_id}')">👁️ Ver</button>` : (!compUrl ? `<span style="opacity:0.25;font-size:0.75rem;">—</span>`:'')}
-                        </td>
-                    </tr>`;
-                }).join('') : '<tr class="table-empty-row"><td colspan="7">Sin egresos registrados.</td></tr>'}
-                <tr class="table-empty-row" id="fin-expense-empty" style="display:none;"><td colspan="7">Sin resultados.</td></tr>
-                </tbody>
-            </table>
-        </div>
+        <div id="fin-egresos-tabla-container"></div>
     </div>`;
-};
+
+function _montarTablaEgresos() {
+    new TablaPro({
+        containerId: 'fin-egresos-tabla-container',
+        tabla: 'egresos_view',
+        supabase: db.client,
+        filtrosExtra: _idFiltroExtra(_finEgresosIdFiltro()),
+        searchColumns: ['descripcion', 'tipo', 'numero_factura'],
+        columnas: [
+            { key: 'fecha', label: 'Fecha Factura', width: '110px', render: (v) => normDate(v) || 'N/A' },
+            { key: 'numero_factura', label: 'Nº Factura', width: '120px',
+              render: (v) => v ? `<span style="font-family:monospace;font-size:0.8rem;opacity:0.75;">${v}</span>` : '—' },
+            { key: 'tipo', label: 'Concepto / Tipo', width: '230px',
+              render: (v, row) => `<div class="cell-title" style="color:${row.es_compra?'var(--info-blue)':'inherit'};max-width:200px;">${v}</div><span class="cell-subtitle">${row.es_compra ? `Tienda: ${row.descripcion||''}` : (row.descripcion||'Sin descripción')}</span>` },
+            { key: 'moneda', label: 'Moneda', width: '90px',
+              render: (v, row) => `<span style="font-size:0.7rem;padding:4px 10px;border-radius:15px;font-weight:700;background:var(--glass-bg);
+                    color:${v==='USD'?'var(--success-green)':'var(--info-blue)'};
+                    border:1px solid ${v==='USD'?'rgba(6,214,160,0.3)':'rgba(0,180,216,0.3)'};display:inline-block;">${v||'COP'}</span>` },
+            { key: 'valor_origen', label: 'Valor Origen', width: '150px',
+              render: (v, row) => `<span style="font-family:monospace;font-size:0.85rem;">${row.moneda==='USD' ? formatUSD(parseFloat(v||0)) : formatCOP(parseFloat(v||0))}</span>` },
+            { key: 'trm', label: 'TRM', width: '100px',
+              render: (v) => v ? `<span style="opacity:0.6;font-size:0.85rem;">$${v}</span>` : '<span style="opacity:0.3">—</span>' },
+            { key: 'total_cop', label: 'Total COP', width: '160px',
+              render: (v) => `<span class="cell-price" style="color:var(--primary-red);">${formatCOP(parseFloat(v||0))}</span>` },
+        ],
+        acciones: (row) => {
+            const compBtn = row.comprobante_url ? `<button class="comp-thumb-btn" style="padding:4px 8px;font-size:0.75rem;" onclick="window.openComprobanteViewer('${row.comprobante_url}');event.stopPropagation();">🧾</button>` : '';
+            const verBtn  = row.es_compra && row.venta_id ? `<button class="btn-action" style="font-size:0.7rem;padding:4px 8px;" onclick="window.modalDetalleVentaGlobal('${row.venta_id}');event.stopPropagation();">👁️ Ver</button>` : '';
+            return (compBtn + verBtn) || '<span style="opacity:0.25;font-size:0.75rem;">—</span>';
+        },
+        altura: '60vh',
+    }).mount();
+}
 
 // ─── EGRESOS: Por Tipo de Gasto ────────────────────────────────────────────────
 const renderEgrPorTipo = (gastos, compras) => {
@@ -429,20 +433,18 @@ const renderEgrTimeline = (gastos, compras) => {
 };
 
 // ─── Get panel HTML ────────────────────────────────────────────────────────────
+// Nota: subView 'tabla' (Ingresos/Egresos) se maneja aparte vía TablaPro antes
+// de llegar aquí — esta función solo cubre las demás sub-vistas (no paginadas).
 function getFinPanelHTML(main, subView, cache) {
     const { ventas, gastos, compras, logistica } = cache;
     if (main === 'ingresos') {
-        switch (subView) {
-            case 'saldos':   return renderIngSaldos(ventas);
-            case 'timeline': return renderIngTimeline(ventas, logistica);
-            default:         return renderIngTabla(ventas, logistica);
-        }
+        if (subView === 'saldos')   return renderIngSaldos(ventas);
+        if (subView === 'timeline') return renderIngTimeline(ventas, logistica);
+        return '';
     } else {
-        switch (subView) {
-            case 'tipo':     return renderEgrPorTipo(gastos, compras);
-            case 'timeline': return renderEgrTimeline(gastos, compras);
-            default:         return renderEgrTabla(gastos, compras);
-        }
+        if (subView === 'tipo')     return renderEgrPorTipo(gastos, compras);
+        if (subView === 'timeline') return renderEgrTimeline(gastos, compras);
+        return '';
     }
 }
 
@@ -471,13 +473,15 @@ export const renderFinance = async (renderLayout, navigateTo) => {
 
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Finanzas...</div>`);
 
-    const [gastosList, ventasList, comprasList, logisticaList, configList, metodosPagoList] = await Promise.all([
+    const [gastosList, ventasList, comprasList, logisticaList, configList, metodosPagoList, clientesList, productosList] = await Promise.all([
         db.fetchData('Gastos'),
         db.fetchData('Ventas'),
         db.fetchData('Compras'),
         db.fetchData('Logistica'),
         db.fetchData('Configuracion'),
         db.fetchData('MetodosPago'),
+        db.fetchData('Clientes'),
+        db.fetchData('Productos'),
     ]);
     const configData = configList?.error ? [] : (configList || []);
     _finMetodosPagoCache = metodosPagoList?.error ? [] : (metodosPagoList || []);
@@ -486,8 +490,10 @@ export const renderFinance = async (renderLayout, navigateTo) => {
     const ventas   = ventasList.error  ? [] : ventasList;
     const compras  = comprasList.error ? [] : comprasList;
     const logistica= logisticaList.error ? [] : logisticaList;
+    const clientes = clientesList?.error ? [] : (clientesList || []);
+    const productos= productosList?.error ? [] : (productosList || []);
 
-    _finCache = { gastos, ventas, compras, logistica, config: configData };
+    _finCache = { gastos, ventas, compras, logistica, config: configData, clientes, productos };
 
     const applyFinFilter = () => {
         const _s = _finStartDate ? new Date(_finStartDate + 'T00:00:00') : null;
@@ -537,7 +543,7 @@ export const renderFinance = async (renderLayout, navigateTo) => {
             });
             if(exportData.length===0) return showToast('No hay ingresos para exportar','error');
             downloadExcel(exportData, `Reporte_Ingresos_${new Date().toISOString().split('T')[0]}`);
-        } else {
+        } else if (_finActiveMain === 'egresos') {
             const expGastos = localGastosFiltered.map(g => ({
                 'Fecha': normDate(g.fecha),
                 'Tipo': 'Gasto Operativo',
@@ -555,6 +561,33 @@ export const renderFinance = async (renderLayout, navigateTo) => {
             exportData = [...expGastos, ...expCompras];
             if(exportData.length===0) return showToast('No hay egresos para exportar','error');
             downloadExcel(exportData, `Reporte_Egresos_${new Date().toISOString().split('T')[0]}`);
+        } else if (_finActiveMain === 'rentabilidad') {
+            exportData = localVentasFiltered.map(v => {
+                const valVenta  = parseFloat(v.valor_total_cop || 0);
+                const ganCalc   = parseFloat(v.ganancia_calculada || 0);
+                const envioInt  = parseFloat(v.valor_envio_internacional || 0);
+                const envioCol  = parseFloat(v.envio_colombia || 0);
+                const gastoComp = (() => {
+                    const comp = (_finCache.compras||[]).find(c => c.id?.toString() === v.compra_id?.toString() || c.venta_id?.toString() === v.id?.toString());
+                    return parseFloat(comp?.costo_cop || 0);
+                })();
+                const extraItems = (() => { try { return JSON.parse(v.items_rentabilidad || '[]'); } catch { return []; } })();
+                const extras    = extraItems.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
+                const ganReal   = valVenta - gastoComp - envioInt - envioCol - extras;
+                const margen    = valVenta > 0 ? ((ganReal / valVenta) * 100).toFixed(1) : 0;
+                const fase      = getLogisticaFase(v.id, _finCache.logistica, v.estado_orden || 'Sin registro');
+                return {
+                    'Fecha': normDate(v.fecha),
+                    'Orden': `#${v.id.toString().slice(-4)} (${v.tipo_venta||'Venta'})`,
+                    'Fase Logística': fase,
+                    'Valor Venta (COP)': valVenta,
+                    'G. Calculada (COP)': ganCalc,
+                    'G. Real (COP)': ganReal,
+                    'Margen (%)': parseFloat(margen)
+                };
+            });
+            if(exportData.length===0) return showToast('No hay ventas para exportar','error');
+            downloadExcel(exportData, `Reporte_Rentabilidad_${new Date().toISOString().split('T')[0]}`);
         }
     };
     
@@ -648,22 +681,6 @@ export const renderFinance = async (renderLayout, navigateTo) => {
         { id:'timeline', icon:'📅', label:'Timeline' },
     ];
 
-    // Pagination State
-    const _page = parseInt(localStorage.getItem('finance_page') || '1');
-    const _rpp  = parseInt(localStorage.getItem('finance_rpp') || '10');
-
-    // Filter current list based on active tab
-    const currentList = _finActiveMain === 'ingresos' 
-        ? localVentasFiltered 
-        : [
-            ...localGastosFiltered.map(g => ({...g, es_compra:false})),
-            ...localComprasFiltered.filter(c => parseFloat(c.costo_cop||0) > 0).map(c => ({...c, es_compra:true}))
-          ];
-
-    const pagedList = (_finActiveMain === 'ingresos' ? _finActiveIngView === 'tabla' : _finActiveEgrView === 'tabla')
-        ? paginate(currentList, _page, _rpp)
-        : currentList;
-
     const html = `
     <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.5rem; flex-wrap:wrap; gap:15px;">
         <div>
@@ -680,7 +697,6 @@ export const renderFinance = async (renderLayout, navigateTo) => {
                 <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyFinDateFilter()">Filtrar</button>
             </div>
             <button class="btn-excel" onclick="window.exportFinExcel()">📥 Excel</button>
-            <input type="text" id="find-finance" placeholder="Filtrar por orden, tipo o detalle..." style="background:var(--input-bg); color:var(--text-main); padding:10px 15px; border-radius:12px; border:1px solid var(--glass-border); width:230px; outline:none;">
             <button class="btn-primary" onclick="window.modalGasto()">+ Registrar Egreso</button>
         </div>
     </div>
@@ -695,7 +711,6 @@ export const renderFinance = async (renderLayout, navigateTo) => {
             <button class="pv-tab fin-main-tab${_finActiveMain==='ingresos'?' active':''}" data-main="ingresos" onclick="window.switchFinMain('ingresos')">🟢 Ingresos</button>
             <button class="pv-tab fin-main-tab${_finActiveMain==='egresos'?' active':''}" data-main="egresos" onclick="window.switchFinMain('egresos')">🔴 Egresos</button>
             <button class="pv-tab fin-main-tab${_finActiveMain==='rentabilidad'?' active':''}" data-main="rentabilidad" onclick="window.switchFinMain('rentabilidad')">📈 Rentabilidad</button>
-            <button class="pv-tab fin-main-tab${_finActiveMain==='ganancias'?' active':''}" data-main="ganancias" onclick="window.switchFinMain('ganancias')">👩‍💼 Ganancias Analista</button>
         </div>
         ${(_finActiveMain==='ingresos'||_finActiveMain==='egresos') ? `<div class="purchase-view-switcher" id="fin-sub-tabs">
             ${(_finActiveMain === 'ingresos' ? ingSubTabs : egrSubTabs).map(t => `
@@ -706,19 +721,24 @@ export const renderFinance = async (renderLayout, navigateTo) => {
     </div>
 
     <div id="fin-panel">
-        ${_finActiveMain === 'rentabilidad' ? renderRentabilidad(localVentasFiltered, _finCache.compras, _finCache.logistica) :
-          _finActiveMain === 'ganancias' ? renderGananciasAnalista(localVentasFiltered, _finCache.config, _finCache.compras) :
+        ${_finActiveMain === 'rentabilidad' ? renderRentabilidad() :
+          (_finActiveMain === 'ingresos' && _finActiveIngView === 'tabla') ? renderIngTabla() :
+          (_finActiveMain === 'egresos' && _finActiveEgrView === 'tabla') ? renderEgrTabla() :
           getFinPanelHTML(_finActiveMain, (_finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView), {
-            ventas: _finActiveMain === 'ingresos' ? pagedList : localVentasFiltered,
-            gastos: _finActiveMain === 'egresos' ? pagedList.filter(x => !x.es_compra) : localGastosFiltered,
-            compras: _finActiveMain === 'egresos' ? pagedList.filter(x => x.es_compra) : localComprasFiltered,
+            ventas: localVentasFiltered,
+            gastos: localGastosFiltered,
+            compras: localComprasFiltered,
             logistica: _finCache.logistica
           })}
-    </div>
-    ${(_finActiveMain === 'ingresos' ? _finActiveIngView === 'tabla' : _finActiveEgrView === 'tabla') ? renderPagination(currentList.length, _page, _rpp, 'finance') : ''}`;
+    </div>`;
 
     renderLayout(html);
-    setTimeout(() => { attachFinSearch(); attachGroupToggles(); }, 150);
+    setTimeout(() => {
+        if (_finActiveMain === 'rentabilidad') _montarTablaRentabilidad();
+        else if (_finActiveMain === 'ingresos' && _finActiveIngView === 'tabla') _montarTablaIngresos();
+        else if (_finActiveMain === 'egresos' && _finActiveEgrView === 'tabla') _montarTablaEgresos();
+        attachGroupToggles();
+    }, 150);
 };
 
 // ─── Sub-tabs reload ───────────────────────────────────────────────────────────
@@ -751,13 +771,18 @@ function _reloadFinPanel() {
     const panel = document.getElementById('fin-panel');
     if (!panel || !_finCache) return;
     if (_finActiveMain === 'rentabilidad') {
-        panel.innerHTML = renderRentabilidad(localVentasFiltered, _finCache.compras, _finCache.logistica);
-        setTimeout(() => attachRentabilidadButtons(), 100);
+        panel.innerHTML = renderRentabilidad();
+        _montarTablaRentabilidad();
         return;
     }
-    if (_finActiveMain === 'ganancias') {
-        panel.innerHTML = renderGananciasAnalista(localVentasFiltered, _finCache.config, _finCache.compras);
-        setTimeout(() => attachGananciasButtons(), 100);
+    if (_finActiveMain === 'ingresos' && _finActiveIngView === 'tabla') {
+        panel.innerHTML = renderIngTabla();
+        _montarTablaIngresos();
+        return;
+    }
+    if (_finActiveMain === 'egresos' && _finActiveEgrView === 'tabla') {
+        panel.innerHTML = renderEgrTabla();
+        _montarTablaEgresos();
         return;
     }
     const sub = _finActiveMain === 'ingresos' ? _finActiveIngView : _finActiveEgrView;
@@ -767,84 +792,18 @@ function _reloadFinPanel() {
         compras: localComprasFiltered,
         logistica: _finCache.logistica
     });
-    attachFinSearch();
     attachGroupToggles();
 }
 
-function attachFinSearch() {
-    const fp = document.getElementById('find-finance');
-    if (!fp) return;
-    fp.oninput = (e) => {
-        const k = e.target.value.toLowerCase().trim();
-
-        if (_finActiveMain === 'rentabilidad' || _finActiveMain === 'ganancias') {
-            // Generic search: target rows with fin-table-row class
-            let vis = 0;
-            document.querySelectorAll('.fin-table-row').forEach(r => {
-                const m = !k || (r.getAttribute('data-text')||'').toLowerCase().includes(k);
-                r.style.display = m ? '' : 'none';
-                if (m) vis++;
-            });
-            return;
-        }
-
-        // Ingresos / Egresos
-        const sel     = _finActiveMain === 'ingresos' ? '.fin-income-row' : '.fin-expense-row';
-        const emptyId = _finActiveMain === 'ingresos' ? 'fin-income-empty' : 'fin-expense-empty';
-        let vis = 0;
-        document.querySelectorAll(sel).forEach(r => {
-            const m = !k || (r.getAttribute('data-text')||'').toLowerCase().includes(k);
-            r.style.display = m ? '' : 'none';
-            if (m) vis++;
-        });
-        const em = document.getElementById(emptyId);
-        if (em) em.style.display = vis===0 && k.length>0 ? '' : 'none';
-    };
-}
 function attachGroupToggles() {
     document.querySelectorAll('.purchase-group-card').forEach(el => {
         if (!el.classList.contains('open')) el.classList.add('open');
     });
 }
 
-// ─── Rentabilidad: per-sale profitability table ────────────────────────────────
-const renderRentabilidad = (ventas, compras, logistica) => {
-    const sorted = [...ventas].reverse();
-    if (sorted.length === 0) {
-        return `<div class="purchase-view-panel"><div style="text-align:center;padding:4rem;opacity:0.5;">Sin ventas registradas en el período.</div></div>`;
-    }
-    const rows = sorted.map(v => {
-        const valVenta   = parseFloat(v.valor_total_cop || 0);
-        const ganCalc    = parseFloat(v.ganancia_calculada || 0);
-        const envioInt   = parseFloat(v.valor_envio_internacional || 0);
-        const envioCol   = parseFloat(v.envio_colombia || 0);
-        const gastoComp  = (() => {
-            const comp = compras.find(c => c.id?.toString() === v.compra_id?.toString() || c.venta_id?.toString() === v.id?.toString());
-            return parseFloat(comp?.costo_cop || 0);
-        })();
-        const extraItems = (() => { try { return JSON.parse(v.items_rentabilidad || '[]'); } catch { return []; } })();
-        const extras     = extraItems.reduce((a, x) => a + (parseFloat(x.valor) || 0), 0);
-        const totalCostos= gastoComp + envioInt + envioCol + extras;
-        const ganReal    = valVenta - totalCostos;
-        const margen     = valVenta > 0 ? ((ganReal / valVenta) * 100).toFixed(1) : 0;
-        const fase       = getLogisticaFase(v.id, logistica, v.estado_orden || 'Sin registro');
-        const sf = `${v.id.toString().slice(-4)} ${normDate(v.fecha)||''} ${v.tipo_venta||''} ${fase}`;
-        return `
-        <tr class="fin-table-row" data-text="${sf.replace(/"/g,'&quot;')}">
-            <td style="font-weight:700;">${normDate(v.fecha) || 'N/A'}</td>
-            <td><div class="cell-title">Orden #${v.id.toString().slice(-4)}</div><span class="cell-subtitle">${v.tipo_venta||'Venta'}</span></td>
-            <td><span class="status-badge" style="background:${getLogisticaColor(fase)};font-size:0.65rem;">${fase}</span></td>
-            <td class="text-right"><span class="cell-price">${formatCOP(valVenta)}</span></td>
-            <td class="text-right" style="color:var(--info-blue);">${formatCOP(ganCalc)}</td>
-            <td class="text-right" style="color:${ganReal>=0?'var(--success-green)':'var(--primary-red)'}; font-weight:700;">${formatCOP(ganReal)}</td>
-            <td class="text-center" style="color:${margen>=0?'var(--success-green)':'var(--primary-red)'};">${margen}%</td>
-            <td class="text-center">
-                <button class="btn-action" style="font-size:0.72rem;padding:5px 10px;" onclick="window.openRentabilidadModal('${v.id}')">🔍 Detalle</button>
-            </td>
-        </tr>`;
-    }).join('');
-
-
+// ─── Rentabilidad: per-sale profitability table (TablaPro sobre ventas_finanzas_view) ──
+const renderRentabilidad = () => {
+    const sorted = localVentasFiltered;
     const totVenta = sorted.reduce((a,v)=>a+parseFloat(v.valor_total_cop||0),0);
     const totCalc  = sorted.reduce((a,v)=>a+parseFloat(v.ganancia_calculada||0),0);
     return `
@@ -863,25 +822,45 @@ const renderRentabilidad = (ventas, compras, logistica) => {
                 <div style="font-size:1.3rem;font-weight:900;color:var(--text-main);">${sorted.length}</div>
             </div>
         </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead><tr>
-                    <th style="min-width:110px;">Fecha</th>
-                    <th style="min-width:160px;">Referencia</th>
-                    <th style="min-width:160px;">Fase</th>
-                    <th class="text-right" style="min-width:150px;">Valor Venta</th>
-                    <th class="text-right" style="min-width:150px;">G. Calculada</th>
-                    <th class="text-right" style="min-width:150px;">G. Real (est.)</th>
-                    <th class="text-center" style="min-width:80px;">Margen</th>
-                    <th class="text-center" style="min-width:100px;">Análisis</th>
-                </tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        </div>
+        <div id="fin-rentabilidad-tabla-container"></div>
     </div>`;
 };
 
-function attachRentabilidadButtons() { /* buttons rendered inline */ }
+function _montarTablaRentabilidad() {
+    new TablaPro({
+        containerId: 'fin-rentabilidad-tabla-container',
+        tabla: 'ventas_finanzas_view',
+        supabase: db.client,
+        filtrosExtra: _idFiltroExtra(_finVentasIdFiltro()),
+        searchColumns: ['cliente_nombre', 'producto_nombre', 'producto_categoria', 'estado_orden'],
+        columnas: [
+            { key: 'fecha', label: 'Fecha', width: '110px', render: (v) => normDate(v) || 'N/A' },
+            { key: 'cliente_nombre', label: 'Referencia', width: '190px',
+              render: (v, row) => `<div class="cell-title">Orden #${row.id.toString().slice(-4)}</div><span class="cell-subtitle">${row.producto_nombre||'Sin producto'} · ${v||'Sin cliente'}</span>` },
+            { key: '_fase', label: 'Fase', width: '160px', sortable: false,
+              render: (_v, row) => {
+                  const fase = getLogisticaFase(row.id, _finCache.logistica, row.estado_orden||'Sin registro');
+                  return `<span class="status-badge" style="background:${getLogisticaColor(fase)};font-size:0.65rem;">${fase}</span>`;
+              } },
+            { key: 'valor_total_cop', label: 'Valor Venta', width: '150px', render: (v) => `<span class="cell-price">${formatCOP(parseFloat(v||0))}</span>` },
+            { key: 'ganancia_calculada', label: 'G. Calculada', width: '150px', render: (v) => `<span style="color:var(--info-blue);">${formatCOP(parseFloat(v||0))}</span>` },
+            { key: '_real', label: 'G. Real (est.)', width: '150px', sortable: false,
+              render: (_v, row) => {
+                  const ganReal = _calcGananciaReal(row);
+                  return `<span style="color:${ganReal>=0?'var(--success-green)':'var(--primary-red)'};font-weight:700;">${formatCOP(ganReal)}</span>`;
+              } },
+            { key: '_margen', label: 'Margen', width: '80px', sortable: false,
+              render: (_v, row) => {
+                  const valVenta = parseFloat(row.valor_total_cop||0);
+                  const ganReal  = _calcGananciaReal(row);
+                  const margen   = valVenta > 0 ? ((ganReal/valVenta)*100).toFixed(1) : 0;
+                  return `<span style="color:${margen>=0?'var(--success-green)':'var(--primary-red)'};">${margen}%</span>`;
+              } },
+        ],
+        acciones: (row) => `<button class="btn-action" style="font-size:0.72rem;padding:5px 10px;" onclick="window.openRentabilidadModal('${row.id}');event.stopPropagation();">🔍 Detalle</button>`,
+        altura: '60vh',
+    }).mount();
+}
 
 window.openRentabilidadModal = async (ventaId) => {
     const container = document.getElementById('modal-container');
@@ -996,143 +975,6 @@ window.openRentabilidadModal = async (ventaId) => {
             renderFinance(_finRenderLayout, _finNavigateTo);
         } catch(e) { showToast(e.message,'error'); btn.disabled=false; btn.innerText='Reintentar'; }
     };
-};
-
-// ─── Ganancias Analista de Ventas ──────────────────────────────────────────────
-const renderGananciasAnalista = (ventas, configList, compras = []) => {
-    const cfg       = Array.isArray(configList) ? configList : [];
-    const pctParam  = cfg.find(p => p.clave === 'PctGananciaAnalista');
-    const pct       = pctParam ? (parseFloat(pctParam.valor) || 0) : 0;
-
-    // Stored toggle overrides (localStorage fallback for missing DB column)
-    const _toggKey  = 'gan_aplica_analista';
-    let   _toggMap  = {};
-    try { _toggMap = JSON.parse(localStorage.getItem(_toggKey) || '{}'); } catch { _toggMap = {}; }
-
-    const rows = [...ventas].reverse().map(v => {
-        const valVenta  = parseFloat(v.valor_total_cop || 0);
-        const ganCalc   = parseFloat(v.ganancia_calculada || 0);
-        const envioInt  = parseFloat(v.valor_envio_internacional || 0);
-        const envioCol  = parseFloat(v.envio_colombia || 0);
-        const gastoComp = (() => {
-            const comp = (compras||[]).find(c => c.id?.toString() === v.compra_id?.toString() || c.venta_id?.toString() === v.id?.toString());
-            return parseFloat(comp?.costo_cop || 0);
-        })();
-        const extraItems= (() => { try { return JSON.parse(v.items_rentabilidad||'[]'); } catch { return []; } })();
-        const extras    = extraItems.reduce((a,x)=>a+(parseFloat(x.valor)||0),0);
-        const ganReal   = valVenta - gastoComp - envioInt - envioCol - extras;
-        const pctDec    = pct / 100;
-        const ganCalcAnalista = ganCalc * pctDec;
-        const ganRealAnalista = ganReal * pctDec;
-        const vid = v.id?.toString();
-        const aplica = vid in _toggMap ? _toggMap[vid]
-                     : (v.ganancia_aplica_analista !== false && v.ganancia_aplica_analista !== 'false');
-        return { v, valVenta, ganCalc, ganReal, ganCalcAnalista, ganRealAnalista, aplica };
-    });
-
-    const totalCalcAnalista = rows.filter(r=>r.aplica).reduce((a,r)=>a+r.ganCalcAnalista,0);
-    const totalRealAnalista = rows.filter(r=>r.aplica).reduce((a,r)=>a+r.ganRealAnalista,0);
-    const totalAplican      = rows.filter(r=>r.aplica).length;
-
-    const tableRows = rows.map(({ v, valVenta, ganCalc, ganReal, ganCalcAnalista, ganRealAnalista, aplica }) => {
-        const sf = `${v.id.toString().slice(-4)} ${normDate(v.fecha)||''} ${v.tipo_venta||''} orden analista`;
-        return `
-        <tr class="fin-table-row ${aplica?'':'gan-row-muted'}" data-text="${sf.replace(/"/g,'&quot;')}">
-            <td style="font-weight:700;">${normDate(v.fecha)||'N/A'}</td>
-            <td><div class="cell-title">Orden #${v.id.toString().slice(-4)}</div><span class="cell-subtitle">${v.tipo_venta||'Venta'}</span></td>
-            <td class="text-right"><span class="cell-price">${formatCOP(valVenta)}</span></td>
-            <td class="text-right" style="color:var(--info-blue);">${formatCOP(ganCalc)}</td>
-            <td class="text-right" style="color:${ganReal>=0?'var(--success-green)':'var(--primary-red)'};">${formatCOP(ganReal)}</td>
-            <td class="text-center" style="color:var(--warning-orange);font-weight:700;">${pct}%</td>
-            <td class="text-right" style="color:var(--info-blue);">${aplica?formatCOP(ganCalcAnalista):'—'}</td>
-            <td class="text-right" style="color:${ganRealAnalista>=0?'var(--success-green)':'var(--primary-red)'};">${aplica?formatCOP(ganRealAnalista):'—'}</td>
-            <td class="text-center">
-                <label class="toggle-switch" style="margin:0;" title="${aplica?'Desactivar':'Activar'} para suma de analista">
-                    <input type="checkbox" ${aplica?'checked':''} onchange="window.toggleGananciaAnalista('${v.id}', this.checked)">
-                    <span class="toggle-slider"></span>
-                </label>
-            </td>
-        </tr>`;
-    }).join('');
-
-    return `
-    <div class="purchase-view-panel">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:1.5rem;">
-            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--success-green);">
-                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">✅ Total Ganancias Analista (Calculada)</div>
-                <div style="font-size:1.4rem;font-weight:900;color:var(--success-green);">${formatCOP(totalCalcAnalista)}</div>
-                <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Basado en ganancia calculada × ${pct}%</div>
-            </div>
-            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--info-blue);">
-                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">💰 Total Ganancias Analista (Real)</div>
-                <div style="font-size:1.4rem;font-weight:900;color:var(--info-blue);">${formatCOP(totalRealAnalista)}</div>
-                <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Basado en ganancia real × ${pct}%</div>
-            </div>
-            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--warning-orange);">
-                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📋 Ventas que Aplican</div>
-                <div style="font-size:1.4rem;font-weight:900;color:var(--warning-orange);">${totalAplican} / ${rows.length}</div>
-                <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">% Comisión configurado: <strong>${pct}%</strong></div>
-            </div>
-        </div>
-        ${pct === 0 ? `<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:1rem;margin-bottom:1rem;font-size:0.85rem;"><strong>⚠️ Atención:</strong> El porcentaje de ganancia del analista está en 0%. Configúralo en <strong>Parámetros → % Ganancia Analista</strong>.</div>` : ''}
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead><tr>
-                    <th style="min-width:110px;">Fecha</th>
-                    <th style="min-width:160px;">Venta</th>
-                    <th class="text-right" style="min-width:140px;">Valor Venta</th>
-                    <th class="text-right" style="min-width:140px;">G. Calculada</th>
-                    <th class="text-right" style="min-width:140px;">G. Real</th>
-                    <th class="text-center" style="min-width:80px;">% Analista</th>
-                    <th class="text-right" style="min-width:140px;">G. Calc. Analista</th>
-                    <th class="text-right" style="min-width:140px;">G. Real Analista</th>
-                    <th class="text-center" style="min-width:110px;">Aplica Analista</th>
-                </tr></thead>
-                <tbody>${tableRows}</tbody>
-            </table>
-        </div>
-    </div>
-    <style>
-        .gan-row-muted td { opacity: 0.45; }
-        .toggle-switch { position:relative; display:inline-block; width:42px; height:22px; }
-        .toggle-switch input { opacity:0; width:0; height:0; }
-        .toggle-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:var(--glass-border); border-radius:22px; transition:.3s; }
-        .toggle-slider:before { position:absolute; content:""; height:16px; width:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
-        .toggle-switch input:checked + .toggle-slider { background:var(--success-green); }
-        .toggle-switch input:checked + .toggle-slider:before { transform:translateX(20px); }
-    </style>`;
-};
-
-function attachGananciasButtons() { /* toggles rendered inline */ }
-
-window.toggleGananciaAnalista = async (ventaId, checked) => {
-    if (!_finCache) return;
-    const v = _finCache.ventas.find(x => x.id?.toString() === ventaId?.toString());
-    if (!v) return;
-
-    // Always update local cache immediately
-    v.ganancia_aplica_analista = checked;
-
-    // Persist in localStorage as primary fallback
-    const _toggKey = 'gan_aplica_analista';
-    let map = {};
-    try { map = JSON.parse(localStorage.getItem(_toggKey) || '{}'); } catch { map = {}; }
-    map[ventaId.toString()] = checked;
-    localStorage.setItem(_toggKey, JSON.stringify(map));
-
-    // Try to persist in DB (column may not exist yet)
-    try {
-        await db.postData('Ventas', v, 'UPDATE');
-    } catch(e) {
-        // Column probably missing — localStorage fallback is active
-        if (e.message?.includes('ganancia_aplica_analista')) {
-            showToast('⚠️ Cambio guardado localmente. Agrega la columna "ganancia_aplica_analista" (boolean) a la tabla Ventas en Supabase para persistencia completa.', 'info');
-        } else {
-            showToast(e.message, 'error');
-        }
-    }
-    showToast(checked ? '✅ Venta incluida para analista' : '❌ Venta excluida de analista');
-    _reloadFinPanel();
 };
 
 // ─── Create Finance Modal ──────────────────────────────────────────────────────

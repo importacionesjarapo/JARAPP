@@ -20,6 +20,7 @@ import { renderViaje } from './views/viaje.js';
 import { renderCotizador } from './views/cotizador.js';
 import { renderDocumentacion } from './views/documentacion.js';
 import { renderTracker } from './views/tracker.js';
+import { renderVendedores } from './views/vendedores.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
 import { AlertasService } from './services/alertas.js';
@@ -64,6 +65,7 @@ const NAV_GROUPS = [
     items: [
       { view: 'clients',     icon: 'users',             label: 'Clientes',     module: 'clients'     },
       { view: 'finance',     icon: 'activity',          label: 'Finanzas',     module: 'finance'     },
+      { view: 'vendedores',  icon: 'user-circle',       label: 'Vendedores',   module: 'vendedores'  },
       { view: 'calculadora', icon: 'calculator',        label: 'Calculadora',  module: 'calculadora' },
     ]
   },
@@ -397,7 +399,7 @@ export const renderLayout = (contentHTML) => {
 const TITULOS = {
   dashboard: 'Dashboard', inventory: 'Inventario', sales: 'Ventas',
   clients: 'Clientes', purchases: 'Compras', logistics: 'Logística',
-  finance: 'Finanzas', params: 'Parámetros', calculadora: 'Calculadora',
+  finance: 'Finanzas', vendedores: 'Vendedores', params: 'Parámetros', calculadora: 'Calculadora',
   admin: 'Administración', settings: 'Configuración', viaje: 'Viaje EEUU', documentacion: 'Documentación',
   cotizador: 'Cotizador', tracker: 'Competitor Tracker',
 };
@@ -425,6 +427,7 @@ export const navigateTo = (view) => {
   const moduleMap = {
     clients: 'clients', inventory: 'inventory', sales: 'sales',
     purchases: 'purchases', logistics: 'logistics', finance: 'finance',
+    vendedores: 'vendedores',
     params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver'
   };
   
@@ -451,6 +454,7 @@ export const navigateTo = (view) => {
     case 'sales':        renderSales(renderLayout, navigateTo); break;
     case 'purchases':    renderPurchases(renderLayout, navigateTo); break;
     case 'finance':      renderFinance(renderLayout, navigateTo); break;
+    case 'vendedores':   renderVendedores(renderLayout, navigateTo); break;
     case 'logistics':    renderLogistics(renderLayout, navigateTo); break;
     case 'params':       renderParams(renderLayout, navigateTo); break;
     case 'calculadora':  renderCalculadora(renderLayout, navigateTo); break;
@@ -712,8 +716,9 @@ async function startApp() {
 // Arrancar App
 bootApp();
 
-// Registro del Service Worker (PWA)
-if ('serviceWorker' in navigator) {
+// Registro del Service Worker (PWA) — solo en build de producción.
+// En `vite dev` un SW cache-first sirve JS desactualizado y rompe HMR.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .catch(err => console.warn('[SW] Registro fallido:', err));

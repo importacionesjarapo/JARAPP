@@ -1241,8 +1241,9 @@ export const createSaleModal = async (navigateTo) => {
                 peso_producto: peso,
                 trm_cotizada: trm,
                 valor_envio_internacional: valorEnvioInt,
-                estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local', 
-                id_seguimiento:'SG-'+Math.floor(Math.random()*1000000) 
+                estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
+                id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
+                analista_id: auth.getProfile()?.id || null
             };
             showToast('Generando Venta...','info');
             await db.postData('Ventas',pv,'INSERT');

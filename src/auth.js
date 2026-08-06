@@ -8,37 +8,37 @@ import { createClient } from '@supabase/supabase-js';
 export const ROLE_TEMPLATES = {
   admin: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
-    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'edit', documentacion: 'edit',
+    purchases: 'edit', logistics: 'edit', finance: 'edit', vendedores: 'edit', params: 'edit', documentacion: 'edit',
     calculadora: 'edit', admin: true, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
   },
   gerente: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
-    purchases: 'edit', logistics: 'edit', finance: 'edit', params: 'view', documentacion: 'edit',
+    purchases: 'edit', logistics: 'edit', finance: 'edit', vendedores: 'edit', params: 'view', documentacion: 'edit',
     calculadora: 'edit', admin: false, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
   },
   ventas: {
     dashboard: true, clients: 'edit', inventory: 'view', sales: 'edit',
-    purchases: false, logistics: 'view', finance: false, params: false, documentacion: 'view',
+    purchases: false, logistics: 'view', finance: false, vendedores: 'view', params: false, documentacion: 'view',
     calculadora: 'edit', admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: true, cotizador_desglose: false, cotizador_pdf_cliente: true, cotizador_pdf_interno: false,
   },
   logistica: {
     dashboard: true, clients: 'view', inventory: 'edit', sales: 'view',
-    purchases: 'edit', logistics: 'edit', finance: false, params: false, documentacion: 'view',
+    purchases: 'edit', logistics: 'edit', finance: false, vendedores: false, params: false, documentacion: 'view',
     calculadora: 'view', admin: false, feat_money: false, feat_usa: true, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
   },
   finanzas: {
     dashboard: true, clients: 'view', inventory: 'view', sales: 'view',
-    purchases: 'view', logistics: 'view', finance: 'edit', params: false, documentacion: 'view',
+    purchases: 'view', logistics: 'view', finance: 'edit', vendedores: 'edit', params: false, documentacion: 'view',
     calculadora: 'view', admin: false, feat_money: true, feat_usa: false, feat_calc_desglose: true,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
   },
   viewer: {
     dashboard: true, clients: false, inventory: false, sales: false,
-    purchases: false, logistics: false, finance: false, params: false, documentacion: false,
+    purchases: false, logistics: false, finance: false, vendedores: false, params: false, documentacion: false,
     calculadora: false, admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
   }
@@ -51,7 +51,7 @@ export const MODULE_LABELS = {
   cotizador_desglose: 'Cotizador — Ver desglose interno',
   cotizador_pdf_cliente: 'Cotizador — PDF Cliente',
   cotizador_pdf_interno: 'Cotizador — PDF Interno',
-  logistics: 'Seguimientos', finance: 'Gastos y Finanzas', params: 'Parametrización',
+  logistics: 'Seguimientos', finance: 'Gastos y Finanzas', vendedores: 'Vendedores', params: 'Parametrización',
   calculadora: 'Calculadora de Precios', admin: 'Administración',
   feat_money: 'Ver Tarjetas de Dinero', feat_usa: 'Ver Submódulo EEUU',
   feat_calc_desglose: 'Ver Desglose en Calculadora'
