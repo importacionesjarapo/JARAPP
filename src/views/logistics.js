@@ -55,7 +55,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                           const v = ventas.find(vt => vt.id.toString() === item.venta_id?.toString());
                           sumaInd += v?.valor_envio_internacional || 0;
                       });
-                      return `<span style="font-weight:700;color:#FFB703;">${formatCOP(sumaInd)}</span><br><span style="font-size:0.7rem;opacity:0.6;">Cobrado a clientes</span>`;
+                      return `<span style="font-weight:700;color:var(--violet);">${formatCOP(sumaInd)}</span><br><span style="font-size:0.7rem;opacity:0.6;">Cobrado a clientes</span>`;
                   } },
                 { key: '_difFlete', label: 'Dif. Flete', width: '150px', sortable: false,
                   render: (_v, row) => {
@@ -157,6 +157,40 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
       </div>
     `;
 
+    // ── KPIs: Envíos EEUU a Colombia (totales sobre todas las guías, no solo
+    // la página visible de TablaPro) — misma fórmula que las columnas
+    // _sumaCobrado/_difFlete de _montarTablaEnviosEEUU, sumada por guía.
+    const enviosEeuuKpiHtml = (() => {
+        let totalValorGuias = 0;
+        let totalSumaCobrada = 0;
+        guiasInt.forEach(g => {
+            totalValorGuias += parseFloat(g.valor_cop || 0);
+            const items = list.filter(l => l.guia_internacional_id?.toString() === g.id.toString());
+            items.forEach(item => {
+                const v = ventas.find(vt => vt.id.toString() === item.venta_id?.toString());
+                totalSumaCobrada += parseFloat(v?.valor_envio_internacional || 0);
+            });
+        });
+        const totalDifFlete = totalSumaCobrada - totalValorGuias;
+        const difColor = totalDifFlete >= 0 ? 'var(--success-green)' : 'var(--primary-red)';
+        const difIcon  = totalDifFlete >= 0 ? '💹' : '⚠️';
+        return `
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:1.5rem;">
+            <div class="glass-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid var(--info-blue);">
+                <div style="font-size:1.5rem; font-weight:900; color:var(--info-blue);">${formatCOP(totalValorGuias)}</div>
+                <div style="font-size:0.72rem; opacity:0.6; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Valor Total en Guías</div>
+            </div>
+            <div class="glass-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid var(--violet);">
+                <div style="font-size:1.5rem; font-weight:900; color:var(--violet);">${formatCOP(totalSumaCobrada)}</div>
+                <div style="font-size:0.72rem; opacity:0.6; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Suma Cobrada (Productos)</div>
+            </div>
+            <div class="glass-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid ${difColor};">
+                <div style="font-size:1.5rem; font-weight:900; color:${difColor};">${difIcon} ${formatCOP(Math.abs(totalDifFlete))}</div>
+                <div style="font-size:0.72rem; opacity:0.6; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">${totalDifFlete >= 0 ? 'Ganancia en Flete' : 'Diferencia de Flete'}</div>
+            </div>
+        </div>`;
+    })();
+
     window.exportLogExcel = () => {
         if (reversedList.length === 0) return showToast('No hay datos para exportar', 'error');
         const dataToExport = reversedList.map(c => {
@@ -198,7 +232,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
           ${auth.canAccess('feat_usa') ? `<button class="tab-btn ${_logActiveTab === 'eeuu' ? 'active' : ''}" onclick="window.switchLogTab('eeuu')" style="background:none; border:none; color:${_logActiveTab === 'eeuu' ? 'var(--primary-red)' : 'var(--text-main)'}; font-weight:700; cursor:pointer; padding:5px 15px; border-bottom: 2px solid ${_logActiveTab === 'eeuu' ? 'var(--primary-red)' : 'transparent'}; transition:all 0.3s;">Envíos EEUU a Colombia</button>` : ''}
       </div>
       
-      ${_logActiveTab === 'eeuu' && auth.canAccess('feat_usa') ? `<div id="envios-eeuu-tabla-container"></div>` : `
+      ${_logActiveTab === 'eeuu' && auth.canAccess('feat_usa') ? `${enviosEeuuKpiHtml}<div id="envios-eeuu-tabla-container"></div>` : `
       ${summaryHtml}
 
       <div id="list-body">
@@ -322,10 +356,11 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                                 <td style="padding:15px 20px;">${td3}</td>
                                 <td style="padding:15px 20px;">${td4}</td>
                                 ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
-                                <td style="padding:15px 20px; color:#FFB703; font-weight:700;">${ventaAsoc && ventaAsoc.valor_envio_internacional ? formatCOP(ventaAsoc.valor_envio_internacional) : '$0'}</td>
+                                <td style="padding:15px 20px; color:var(--violet); font-weight:700;">${ventaAsoc && ventaAsoc.valor_envio_internacional ? formatCOP(ventaAsoc.valor_envio_internacional) : '$0'}</td>
                                 ` : ''}
                                 <td style="padding:15px 20px; text-align:right;">
                                     <div style="display:flex; gap:8px; justify-content:flex-end;">
+                                        ${i === 3 && c.guia_internacional_id && auth.canEdit('logistics') ? `<button class="btn-action" style="background:var(--success-green); color:#000; font-weight:700; white-space:nowrap;" onclick="window.modalAvanzarGuia('${c.guia_internacional_id}')" title="Ver y recibir en bloque todos los productos de esta guía en Bodega Colombia">📦 Recibir Guía</button>` : ''}
                                         <button class="btn-action" onclick="window.modalDetalleLogistica('${c.id}')">👁️</button>
                                         ${auth.canEdit('logistics') ? `<button class="btn-action" onclick="window.modalLogistica('${c.id}')">✏️</button>` : ''}
                                     </div>
@@ -387,9 +422,9 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                       <strong style="color:var(--info-blue); font-family:monospace; font-size:1rem;">${compraRef?.numero_orden || 'S/N'}</strong>
                   </div>
                   ${(ventaAsoc && (window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas')) ? `
-                  <div style="background:rgba(255,183,3,0.1); padding:10px; border-radius:8px; border:1px solid rgba(255,183,3,0.2);">
-                      <span style="color:#FFB703; font-weight:bold;"><i style="font-style:normal; margin-right:5px;">✈️</i>Envío Internacional</span><br>
-                      <strong style="color:#FFB703;">${formatCOP(ventaAsoc.valor_envio_internacional || 0)}</strong>
+                  <div style="background:var(--violet-dim); padding:10px; border-radius:8px; border:1px solid rgba(124,58,237,0.25);">
+                      <span style="color:var(--violet); font-weight:bold;"><i style="font-style:normal; margin-right:5px;">✈️</i>Envío Internacional</span><br>
+                      <strong style="color:var(--violet);">${formatCOP(ventaAsoc.valor_envio_internacional || 0)}</strong>
                   </div>
                   ` : ''}
                </div>
@@ -847,7 +882,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
                    </div>
                    ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') ? `
                    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--glass-border); font-size:0.75rem;">
-                        <span style="opacity:0.6;">✈️ Costo Envío Internacional:</span> <strong style="color:#FFB703;">${formatCOP(vData.valor_envio_internacional || 0)}</strong>
+                        <span style="opacity:0.6;">✈️ Costo Envío Internacional:</span> <strong style="color:var(--violet);">${formatCOP(vData.valor_envio_internacional || 0)}</strong>
                         <span style="opacity:0.4; font-size:0.65rem; margin-left:5px;">(${vData.peso_producto || 0} Lbs × USD Rate × ${formatCOP(vData.trm_cotizada || 0)})</span>
                    </div>
                    ` : ''}
@@ -1183,7 +1218,7 @@ window.modalDetalleGuia = async (guiaId) => {
                     <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>
                 </div>
                 <div style="text-align:right; margin-right:15px; width: 100px;">
-                    <div style="font-weight:700; color:#FFB703;">${formatCOP(valorInt)}</div>
+                    <div style="font-weight:700; color:var(--violet);">${formatCOP(valorInt)}</div>
                 </div>
                 ${validOtherGuias.length > 0 ? `
                 <div style="display:flex; gap:10px; align-items:center;">
@@ -1218,7 +1253,7 @@ window.modalDetalleGuia = async (guiaId) => {
                     </div>
                     <div class="glass-card" style="padding:15px; text-align:center; border:1px solid var(--glass-border);">
                         <span style="font-size:0.75rem; opacity:0.6; text-transform:uppercase;">Suma Individuales</span>
-                        <div style="font-size:1.3rem; font-weight:bold; color:#FFB703; margin:5px 0;">${formatCOP(sumaIndividuales)}</div>
+                        <div style="font-size:1.3rem; font-weight:bold; color:var(--violet); margin:5px 0;">${formatCOP(sumaIndividuales)}</div>
                         <div style="font-size:0.85rem; opacity:0.5;">Cobrado a clientes</div>
                     </div>
                 </div>
@@ -1232,7 +1267,7 @@ window.modalDetalleGuia = async (guiaId) => {
 
                 <h3 style="margin-bottom:12px; font-size:1.1rem;">Productos en esta Guía (${items.length})</h3>
                 <p style="font-size:0.8rem; opacity:0.7; margin-top:-5px; margin-bottom:10px;">Puedes mover un producto a otra guía si fue empaquetado de manera diferente.</p>
-                <div style="max-height:300px; overflow-y:auto; background:rgba(0,0,0,0.2); border-radius:12px; border:1px solid var(--glass-border); margin-bottom:1rem;">
+                <div style="max-height:300px; overflow-y:auto; background:var(--glass-hover); border-radius:12px; border:1px solid var(--glass-border); margin-bottom:1rem;">
                     ${itemsHtml || '<div style="padding:20px; text-align:center; opacity:0.5;">No hay productos vinculados.</div>'}
                 </div>
             </div>
@@ -1297,6 +1332,176 @@ window.moverArticuloGuia = async (logisticaId, newGuiaId, currentGuiaId) => {
         window.showToast('Error moviendo artículo: ' + err.message, 'error');
         const btn = document.querySelector(`#item-row-${logisticaId} button`);
         if(btn) { btn.disabled = false; btn.innerText = 'Mover'; }
+    }
+};
+
+// ─── Recepción masiva de guía: Aduana (fase 4) → Bodega Colombia (fase 5) ─────
+// Permite recibir de una vez todos los productos empacados en una guía, en lugar
+// de moverlos uno a uno. Los que tengan novedad (no llegó, defectuoso, retenido
+// por aduana, etc.) se desmarcan con un comentario obligatorio y se quedan en
+// Aduana con esa nota registrada en su historial; el resto avanza junto a fase 5.
+window.modalAvanzarGuia = async (guiaId) => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `<div style="text-align:center; padding:2rem;"><div class="loader"></div> Cargando productos de la guía...</div>`;
+    container.style.display = 'flex';
+
+    const [guias, logistica, ventas, productos] = await Promise.all([
+        db.fetchData('GuiasInternacionales'),
+        db.fetchData('Logistica'),
+        db.fetchData('Ventas'),
+        db.fetchData('Productos')
+    ]);
+
+    const guiasList = Array.isArray(guias) ? guias : [];
+    const guia = guiasList.find(g => g.id.toString() === guiaId.toString());
+    if (!guia) {
+        showToast('Guía no encontrada', 'error');
+        window.closeModal();
+        return;
+    }
+
+    const items = logistica.filter(l =>
+        l.guia_internacional_id?.toString() === guiaId.toString() &&
+        (l.fase || '').trim().startsWith('4.')
+    );
+
+    if (items.length === 0) {
+        content.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title">Recibir Guía: ${guia.numero_guia}</h2>
+                    <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+                </div>
+                <div class="modal-body" style="text-align:center; padding:2rem; opacity:0.6;">
+                    No hay productos de esta guía pendientes en Aduana (fase 4).
+                </div>
+            </div>`;
+        return;
+    }
+
+    const itemsHtml = items.map(l => {
+        const v = ventas.find(vt => vt.id.toString() === l.venta_id?.toString());
+        const p = v ? productos.find(pr => pr.id.toString() === v.producto_id?.toString()) : null;
+        return `
+            <div class="avanzar-guia-item" data-id="${l.id}" style="padding:12px; border-bottom:1px solid var(--glass-border);">
+                <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+                    <input type="checkbox" class="avanzar-check" data-id="${l.id}" checked
+                        onchange="window._toggleAvanzarNota('${l.id}', this.checked)"
+                        style="width:20px; height:20px; cursor:pointer; flex-shrink:0;">
+                    <div style="flex:1;">
+                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
+                        <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>
+                    </div>
+                </label>
+                <div id="nota-wrap-${l.id}" style="display:none; margin-top:8px; margin-left:32px;">
+                    <textarea id="nota-${l.id}" rows="2" placeholder="¿Qué pasó? Ej: no llegó, llegó defectuoso, retenido por aduana..."
+                        style="width:100%; font-size:0.82rem; padding:8px 10px; border-radius:8px; border:1px solid var(--primary-red); background:var(--input-bg); color:var(--text-main); resize:vertical;"></textarea>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color:var(--info-blue);">📦 Recibir Guía Completa: ${guia.numero_guia}</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:0.85rem; opacity:0.75; margin-bottom:1rem;">
+                    Marca los productos que llegaron bien a <strong>Bodega Colombia</strong> — avanzarán juntos al paso 5.
+                    Desmarca los que tengan alguna novedad (no llegó, defectuoso, retenido por aduana, etc.) y describe
+                    qué pasó; esos se quedarán en Aduana con el comentario registrado.
+                </p>
+                <div class="form-group" style="margin-bottom:1.2rem; background:var(--brand-magenta-dim); padding:1rem 1.2rem; border-radius:12px;">
+                    <label class="form-label" style="color:var(--brand-magenta); font-weight:800;">Fecha de Arribo a Bodega Colombia</label>
+                    <input type="date" id="fecha-arribo-col" value="${new Date().toISOString().split('T')[0]}" style="border-color:var(--brand-magenta); font-weight:700;">
+                </div>
+                <div id="avanzar-guia-items" style="max-height:400px; overflow-y:auto; background:var(--glass-hover); border-radius:12px; border:1px solid var(--glass-border);">
+                    ${itemsHtml}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+                <button class="btn-primary" id="btn-confirmar-avance-guia" onclick="window.confirmarAvanceGuia('${guiaId}')">✅ Confirmar Recepción</button>
+            </div>
+        </div>
+    `;
+};
+
+window._toggleAvanzarNota = (itemId, checked) => {
+    const wrap = document.getElementById(`nota-wrap-${itemId}`);
+    if (wrap) wrap.style.display = checked ? 'none' : 'block';
+};
+
+window.confirmarAvanceGuia = async (guiaId) => {
+    const checks = Array.from(document.querySelectorAll('#avanzar-guia-items .avanzar-check'));
+    if (checks.length === 0) return;
+
+    const fechaArribo = document.getElementById('fecha-arribo-col')?.value || '';
+    if (!fechaArribo) {
+        showToast('Ingresa la fecha de arribo a Bodega Colombia', 'error');
+        return;
+    }
+
+    const avanzan = [];
+    const conNovedad = [];
+    for (const chk of checks) {
+        const itemId = chk.dataset.id;
+        if (chk.checked) {
+            avanzan.push(itemId);
+        } else {
+            const nota = document.getElementById(`nota-${itemId}`)?.value.trim() || '';
+            if (!nota) {
+                showToast('Agrega un comentario para cada producto con novedad antes de confirmar', 'error');
+                return;
+            }
+            conNovedad.push({ itemId, nota });
+        }
+    }
+
+    const btn = document.getElementById('btn-confirmar-avance-guia');
+    if (btn) { btn.disabled = true; btn.innerText = 'Procesando...'; }
+
+    try {
+        const logistica = await db.fetchData('Logistica');
+        const fechaAhora = new Date().toLocaleString('es-CO');
+
+        for (const itemId of avanzan) {
+            const item = logistica.find(l => l.id.toString() === itemId.toString());
+            if (!item) continue;
+            let hist = [];
+            try { hist = JSON.parse(item.historial || '[]'); } catch(e) {}
+            hist.push({ fase: '5. En Bodega Colombia', fecha: fechaAhora, notas: 'Recibido en Bodega Colombia (recepción masiva de guía)' });
+            await db.postData('Logistica', {
+                ...item,
+                fase: '5. En Bodega Colombia',
+                col_bodega_fecha: fechaArribo,
+                historial: JSON.stringify(hist),
+                fecha_actualizacion: new Date().toISOString()
+            }, 'UPDATE');
+        }
+
+        for (const { itemId, nota } of conNovedad) {
+            const item = logistica.find(l => l.id.toString() === itemId.toString());
+            if (!item) continue;
+            let hist = [];
+            try { hist = JSON.parse(item.historial || '[]'); } catch(e) {}
+            hist.push({ fase: item.fase, fecha: fechaAhora, notas: `NOVEDAD: ${nota}` });
+            await db.postData('Logistica', {
+                ...item,
+                historial: JSON.stringify(hist),
+                fecha_actualizacion: new Date().toISOString()
+            }, 'UPDATE');
+        }
+
+        window.closeModal();
+        showToast(`✅ ${avanzan.length} producto(s) recibido(s) en Bodega Colombia` + (conNovedad.length ? ` · ⚠️ ${conNovedad.length} con novedad, quedaron en Aduana` : ''), 'success');
+        if (window._navigateTo) window._navigateTo('logistics');
+    } catch(err) {
+        showToast('Error procesando la recepción: ' + err.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerText = '✅ Confirmar Recepción'; }
     }
 };
 
