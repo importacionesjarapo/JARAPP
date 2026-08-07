@@ -174,14 +174,14 @@ export const renderLayout = (contentHTML) => {
   const _logoUrl = window.JARAPP_LOGO || sessionStorage.getItem('JARAPP_LOGO') || null;
   const _logoZoneHtml = _logoUrl
     ? `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:contain;" alt="Logo Jarapo">
+         <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Logo Jarapo">
        </div>
        <div class="sidebar-brand">
          <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
          <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
        </div>`
     : `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <span style="color:white;font-size:36px;font-weight:700;line-height:1;">J</span>
+         <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">J</span>
        </div>
        <div class="sidebar-brand">
          <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
@@ -765,21 +765,22 @@ function mostrarBannerInstalacioniOS() {
   banner.innerHTML = `
     <div style="
       position:fixed;bottom:0;left:0;right:0;z-index:99998;
-      background:white;border-top:1px solid #e0e0e0;
+      background:var(--surface-0);border-top:1px solid var(--glass-border);
+      backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);
       padding:12px 16px;
       padding-bottom:calc(12px + env(safe-area-inset-bottom));
       display:flex;align-items:center;gap:12px;
-      box-shadow:0 -4px 20px rgba(0,0,0,0.1);
+      box-shadow:0 -4px 20px rgba(0,0,0,0.2);
     ">
       <img src="/icon-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0;">
       <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;color:#111;">Instalar JARAPP</div>
-        <div style="font-size:12px;color:#666;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-main);">Instalar JARAPP</div>
+        <div style="font-size:12px;color:var(--text-muted);">
           Toca <strong>⬆️ Compartir</strong> → <strong>"Añadir a inicio"</strong>
         </div>
       </div>
       <button onclick="sessionStorage.setItem('pwa-banner-visto','1');document.getElementById('ios-install-banner').remove();"
-        style="background:none;border:none;font-size:20px;cursor:pointer;padding:4px;color:#888;">✕</button>
+        style="background:none;border:none;font-size:20px;cursor:pointer;padding:4px;color:var(--text-faint);">✕</button>
     </div>`;
   document.body.appendChild(banner);
 }

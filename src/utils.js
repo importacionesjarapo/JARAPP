@@ -23,7 +23,7 @@ export const getLogisticaColor = (fase) => {
     if (!fase) return 'var(--info-blue)';
     if (fase.includes('Entregado')) return 'var(--success-green)';
     if (fase.includes('Colombia') || fase.includes('Bodega Col')) return 'var(--warning-orange)';
-    if (fase.includes('Aduana') || fase.includes('Internacional')) return '#9b5de5';
+    if (fase.includes('Aduana') || fase.includes('Internacional')) return '#64748B';
     if (fase.includes('USA') || fase.includes('Bodega USA') || fase.includes('Estados Unidos')) return 'var(--info-blue)';
     if (fase.includes('Tránsito') || fase.includes('Tienda')) return '#00b4d8';
     if (fase.includes('Comprado')) return 'var(--primary-red)';

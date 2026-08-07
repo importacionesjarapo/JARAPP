@@ -19,7 +19,7 @@ export const CC = {
     alerta:     '#f97316',
     neutro:     '#64748b',
     palette: [
-        '#4CC9F0', '#06D6A0', '#FFB703', '#A78BFA', '#E63946',
+        '#4CC9F0', '#06D6A0', '#FFD166', '#A78BFA', '#E63946',
         '#F472B6', '#2DD4BF', '#FB923C', '#34D399', '#818CF8',
     ],
 };

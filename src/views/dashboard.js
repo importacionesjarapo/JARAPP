@@ -63,7 +63,7 @@ const CC = {
   proyeccion: '#94a3b8',
   alerta:     '#f97316',
   neutro:     '#64748b',
-  palette:    ['#4CC9F0','#06D6A0','#FFB703','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8'],
+  palette:    ['#4CC9F0','#06D6A0','#FFD166','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8'],
 };
 
 // ─── Reportes del explorador ──────────────────────────────────────────────────
@@ -459,7 +459,7 @@ const _renderResumen = () => {
         <span style="font-size:1.5rem;">${icon}</span>
         <div style="display:flex;gap:4px;align-items:center;">${varBadge}${cumplBadge}</div>
       </div>
-      <div style="font-size:${canSeeMoney ? '1.15rem' : '1rem'};font-weight:900;color:${color};letter-spacing:-0.5px;line-height:1.1;margin-bottom:3px;">
+      <div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:${canSeeMoney ? '1.15rem' : '1rem'};font-weight:900;color:${color};letter-spacing:-0.5px;line-height:1.1;margin-bottom:3px;">
         ${canSeeMoney ? valor : '••••••'}
       </div>
       <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;opacity:0.7;margin-bottom:2px;">${label}</div>
@@ -762,7 +762,7 @@ const _renderResumen = () => {
             ? `<div class="dash360-empty">Sin ventas en el período</div>`
             : [...ventas].sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).slice(0,8).map(v => {
                 const estado = v.estado_orden || '';
-                const stColors = { 'Entregado':'#06D6A0', 'Completado Local':'#06D6A0', 'En Tránsito':'#4CC9F0', 'Validando Compra EEUU':'#FFB703' };
+                const stColors = { 'Entregado':'#06D6A0', 'Completado Local':'#06D6A0', 'En Tránsito':'#4CC9F0', 'Validando Compra EEUU':'#8B7CF6' };
                 const stColor  = Object.entries(stColors).find(([k]) => estado.includes(k))?.[1] || '#888';
                 return `
                 <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--bg-main);border:1px solid var(--border-base);border-radius:8px;">
@@ -970,7 +970,7 @@ const _renderReportPanel = async (rptId) => {
       ${(rKpis || []).map(k => `
       <div class="dash360-report-kpi-card" style="border-left:3px solid ${k.color || CC.utilidad};">
         <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;opacity:0.55;margin-bottom:4px;">${k.label}</div>
-        <div style="font-size:1.1rem;font-weight:900;color:${k.color || CC.utilidad};letter-spacing:-0.3px;">${k.valor}</div>
+        <div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.1rem;font-weight:900;color:${k.color || CC.utilidad};letter-spacing:-0.3px;">${k.valor}</div>
         ${k.sub ? `<div style="font-size:0.62rem;opacity:0.45;margin-top:2px;">${k.sub}</div>` : ''}
       </div>`).join('')}
     </div>
@@ -1090,9 +1090,10 @@ const _drawReportChart = async (rptId, reportData, chartB) => {
   // Para gráficos circulares, construir dataset de donut con colores por segmento
   let datasets;
   let chartLabelsUsed = chartLabels;
+  const palette_ = ['#4CC9F0','#06D6A0','#FFD166','#A78BFA','#E63946','#F472B6'];
   if (isCircular) {
     // Agrupamos todos los datasets en uno solo para el donut/pie
-    const palette = ['#4CC9F0','#06D6A0','#FFB703','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8'];
+    const palette = ['#4CC9F0','#06D6A0','#FFD166','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8'];
     const totalSum = chartDatasets.reduce((s, ds) => s + (ds.data || []).reduce((a, b) => a + (Number(b)||0), 0), 0);
     if (chartDatasets.length === 1) {
       // Un dataset con múltiples puntos → segmento por label
@@ -1153,8 +1154,6 @@ const _drawReportChart = async (rptId, reportData, chartB) => {
       borderRadius: ds.borderRadius ?? (isArea || _vizEx==='linea' ? 0 : 5),
     }));
   }
-
-  const palette_ = ['#4CC9F0','#06D6A0','#FFB703','#A78BFA','#E63946','#F472B6'];
 
   // Opciones específicas por tipo
   const scalesForType = (isCircular || type === 'doughnut' || type === 'radar') ? {} :
@@ -1562,7 +1561,7 @@ const _calcReportData = async (rptId, filtered, raw, u, metas) => {
       const totalRev  = vFilt.reduce((s, v) => s + v.revenueTotalCOP, 0);
       const totalGan  = vFilt.reduce((s, v) => s + v.gananciaTotalCOP, 0);
       const metaMrgMin = getMeta('meta_margen_neto_pct', 15);
-      const PALETTE_VA = ['#4CC9F0','#06D6A0','#FFB703','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8','#60A5FA','#FBBF24'];
+      const PALETTE_VA = ['#4CC9F0','#06D6A0','#FFD166','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8','#60A5FA','#FBBF24'];
 
       if (vFilt.length === 0) {
         return {
@@ -1739,7 +1738,7 @@ const _calcReportData = async (rptId, filtered, raw, u, metas) => {
         const generos = vau.dimensionToArray(agrup, 'genero').sort((a, b) => b.revenueCOP - a.revenueCOP);
         const dominante = generos[0] || {};
         const topMrg   = [...generos].sort((a, b) => b.margenPct - a.margenPct)[0] || {};
-        const GENERO_COLORS = { 'Hombre':'#4CC9F0','Mujer':'#F472B6','Niño':'#06D6A0','Unisex':'#FFB703','Sin especificar':CC.neutro };
+        const GENERO_COLORS = { 'Hombre':'#4CC9F0','Mujer':'#F472B6','Niño':'#06D6A0','Unisex':'#FFD166','Sin especificar':CC.neutro };
         const gColor = (g) => GENERO_COLORS[g] || CC.palette[0];
 
         return {

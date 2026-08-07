@@ -176,16 +176,16 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         const difIcon  = totalDifFlete >= 0 ? '💹' : '⚠️';
         return `
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:1.5rem;">
-            <div class="glass-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid var(--info-blue);">
-                <div style="font-size:1.5rem; font-weight:900; color:var(--info-blue);">${formatCOP(totalValorGuias)}</div>
+            <div class="glass-card stamp-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid var(--info-blue);">
+                <div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.5rem; font-weight:900; color:var(--info-blue);">${formatCOP(totalValorGuias)}</div>
                 <div style="font-size:0.72rem; opacity:0.6; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Valor Total en Guías</div>
             </div>
-            <div class="glass-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid var(--violet);">
-                <div style="font-size:1.5rem; font-weight:900; color:var(--violet);">${formatCOP(totalSumaCobrada)}</div>
+            <div class="glass-card stamp-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid var(--violet);">
+                <div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.5rem; font-weight:900; color:var(--violet);">${formatCOP(totalSumaCobrada)}</div>
                 <div style="font-size:0.72rem; opacity:0.6; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">Suma Cobrada (Productos)</div>
             </div>
-            <div class="glass-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid ${difColor};">
-                <div style="font-size:1.5rem; font-weight:900; color:${difColor};">${difIcon} ${formatCOP(Math.abs(totalDifFlete))}</div>
+            <div class="glass-card stamp-card" style="text-align:center; padding:1.2rem; border-bottom:3px solid ${difColor};">
+                <div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.5rem; font-weight:900; color:${difColor};">${difIcon} ${formatCOP(Math.abs(totalDifFlete))}</div>
                 <div style="font-size:0.72rem; opacity:0.6; margin-top:6px; text-transform:uppercase; letter-spacing:0.5px;">${totalDifFlete >= 0 ? 'Ganancia en Flete' : 'Diferencia de Flete'}</div>
             </div>
         </div>`;

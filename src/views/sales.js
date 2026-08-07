@@ -156,7 +156,7 @@ function _montarTablaVentas() {
                   const fase = getLogisticaFase(row.id, localLogisticaCache, row.estado_orden||'Procesando');
                   const col  = getLogisticaColor(fase);
                   const tipo = row.tipo_venta === 'Encargo'
-                      ? '<span style="color:#FFB703;font-size:0.68rem;font-weight:700">📦 Encargo</span>'
+                      ? '<span style="color:var(--violet);font-size:0.68rem;font-weight:700">📦 Encargo</span>'
                       : '<span style="color:var(--success-green);font-size:0.68rem;font-weight:700">🛍️ Stock Local</span>';
                   return `<div style="margin-bottom:5px;">${tipo}</div><span class="status-badge" style="background:${col};">${fase}</span>`;
               } },
@@ -177,7 +177,7 @@ function _montarTablaVentas() {
                 : (saldo>0 ? '' : '<span style="opacity:0.4;font-size:0.72rem;white-space:nowrap">✔ Pagado</span>');
             const cancelar = auth.canEdit('sales') && row.estado_orden !== 'Cancelado'
                 ? `<button class="btn-action btn-action-cancelar" onclick="window.confirmarCancelarVenta('${row.id}','${(row.producto_nombre||'Producto').replace(/'/g,"\\'")}');event.stopPropagation()" title="Cancelar Venta">✕ Cancelar</button>`
-                : (row.estado_orden === 'Cancelado' ? '<span style="opacity:0.5;font-size:0.72rem;color:#e53e3e;white-space:nowrap">✕ Cancelada</span>' : '');
+                : (row.estado_orden === 'Cancelado' ? '<span style="opacity:0.5;font-size:0.72rem;color:var(--danger);white-space:nowrap">✕ Cancelada</span>' : '');
             return `
                 <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${row.id}');event.stopPropagation()" title="Ver Detalle">👁️ Ver</button>
                 ${abono}
@@ -1349,7 +1349,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                 <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
                     📅 ${fechaCorta}
                 </span>
-                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:${v.tipo_venta==='Encargo'?'rgba(255,183,3,0.12)':'rgba(6,214,160,0.1)'}; border-radius:22px; border:1px solid ${v.tipo_venta==='Encargo'?'rgba(255,183,3,0.3)':'rgba(6,214,160,0.3)'}; font-weight:700; color:${v.tipo_venta==='Encargo'?'#FFB703':'var(--success-green)'}; white-space:nowrap;">
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:${v.tipo_venta==='Encargo'?'var(--violet-dim)':'rgba(6,214,160,0.1)'}; border-radius:22px; border:1px solid ${v.tipo_venta==='Encargo'?'rgba(139,124,246,0.3)':'rgba(6,214,160,0.3)'}; font-weight:700; color:${v.tipo_venta==='Encargo'?'var(--violet)':'var(--success-green)'}; white-space:nowrap;">
                     ${v.tipo_venta==='Encargo'?'📦 Encargo':'🛒 Stock'}
                 </span>
                 <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
@@ -1367,7 +1367,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                     📊 ${formatCOP(v.ganancia_calculada)}
                 </span>` : ''}
                 ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') && v.valor_envio_internacional ? `
-                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:rgba(255,183,3,0.12); border-radius:22px; border:1px solid rgba(255,183,3,0.3); font-weight:700; color:#FFB703; white-space:nowrap;">
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--violet-dim); border-radius:22px; border:1px solid rgba(139,124,246,0.3); font-weight:700; color:var(--violet); white-space:nowrap;">
                     ✈️ ${formatCOP(v.valor_envio_internacional)} envío
                 </span>` : ''}
             </div>
@@ -1438,7 +1438,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                         <p style="margin:0 0 8px; font-size:1.2rem; font-weight:800; color:var(--text-main);">${cliente.nombre}</p>
                         <p style="margin:0; opacity:0.7; font-size:0.9rem;">Documento: ${cliente.numero_identificacion||'N/A'}</p>
                         <p style="margin:6px 0 0; opacity:0.7; font-size:0.9rem;">WhatsApp: ${cliente.whatsapp||'N/A'}</p>
-                        ${v.direccion_envio?`<p style="margin:15px 0 0; color:#FFB703; font-size:0.9rem; font-weight:800; background:rgba(255,183,3,0.08); padding:10px; border-radius:8px; border-left:4px solid #FFB703;">📍 Envío a: ${v.direccion_envio}</p>`:''}
+                        ${v.direccion_envio?`<p style="margin:15px 0 0; color:var(--violet); font-size:0.9rem; font-weight:800; background:var(--violet-dim); padding:10px; border-radius:8px; border-left:4px solid var(--violet);">📍 Envío a: ${v.direccion_envio}</p>`:''}
                     `:'<span style="opacity:0.4;">Cliente no vinculado.</span>'}
                 </div>
                 <div style="text-align:right; border-left:1px solid var(--border-base); padding-left:2rem;">
@@ -1460,25 +1460,25 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
 window.confirmarCancelarVenta = async function(ventaId, nombreProducto) {
   const overlay = document.createElement('div')
   overlay.id = 'modal-cancelar-venta'
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px'
+  overlay.style.cssText = 'position:fixed;inset:0;background:var(--modal-overlay);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px'
   overlay.innerHTML = `
-    <div style="background:white;border-radius:16px;padding:28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="background:var(--surface-0);border:1px solid var(--glass-border);border-radius:20px;padding:28px;max-width:420px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,0.5);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);color:var(--text-main);">
       <div style="font-size:32px;text-align:center;margin-bottom:12px">⚠️</div>
-      <h3 style="font-size:17px;font-weight:800;text-align:center;margin-bottom:8px">¿Cancelar esta venta?</h3>
-      <p style="font-size:13px;color:#6b7280;text-align:center;margin-bottom:20px">${nombreProducto}</p>
+      <h3 style="font-size:17px;font-weight:800;text-align:center;margin-bottom:8px;color:var(--text-main);">¿Cancelar esta venta?</h3>
+      <p style="font-size:13px;color:var(--text-muted);text-align:center;margin-bottom:20px">${nombreProducto}</p>
       <div style="margin-bottom:16px">
-        <label style="font-size:13px;font-weight:600;color:#374151;display:block;margin-bottom:6px">Motivo de cancelación <span style="color:#e53e3e">*</span></label>
+        <label style="font-size:13px;font-weight:600;color:var(--text-main);display:block;margin-bottom:6px">Motivo de cancelación <span style="color:var(--danger)">*</span></label>
         <textarea id="motivo-cancelacion" placeholder="Ingresa el motivo de la cancelación..." rows="3"
-          style="width:100%;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:14px;resize:none;outline:none;font-family:inherit"
-          oninput="this.style.borderColor=this.value.trim()?'#10b981':'#e5e7eb'"></textarea>
+          style="width:100%;border:1.5px solid var(--border-base);border-radius:10px;padding:10px 12px;font-size:14px;resize:none;outline:none;font-family:inherit;background:var(--surface-1);color:var(--text-main);"
+          oninput="this.style.borderColor=this.value.trim()?'var(--success-green)':'var(--border-base)'"></textarea>
       </div>
       <div style="display:flex;gap:10px">
         <button onclick="document.getElementById('modal-cancelar-venta').remove()"
-          style="flex:1;padding:12px;border:1.5px solid #e5e7eb;border-radius:10px;background:white;font-size:14px;font-weight:600;cursor:pointer;color:#374151">
+          style="flex:1;padding:12px;border:1.5px solid var(--border-base);border-radius:10px;background:var(--surface-2);font-size:14px;font-weight:600;cursor:pointer;color:var(--text-main)">
           Volver
         </button>
         <button onclick="window.ejecutarCancelarVenta('${ventaId}')"
-          style="flex:1;padding:12px;border:none;border-radius:10px;background:#e53e3e;color:white;font-size:14px;font-weight:700;cursor:pointer">
+          style="flex:1;padding:12px;border:none;border-radius:10px;background:var(--danger);color:#fff;font-size:14px;font-weight:700;cursor:pointer">
           Sí, cancelar
         </button>
       </div>
@@ -1490,7 +1490,7 @@ window.confirmarCancelarVenta = async function(ventaId, nombreProducto) {
 window.ejecutarCancelarVenta = async function(ventaId) {
   const motivo = document.getElementById('motivo-cancelacion')?.value.trim()
   if (!motivo) {
-    document.getElementById('motivo-cancelacion').style.borderColor = '#e53e3e'
+    document.getElementById('motivo-cancelacion').style.borderColor = 'var(--danger)'
     document.getElementById('motivo-cancelacion').focus()
     return
   }
@@ -1525,8 +1525,8 @@ window.ejecutarCancelarVenta = async function(ventaId) {
 
 const cancelStyles = document.createElement('style')
 cancelStyles.textContent = `
-  .btn-action-cancelar { color: #e53e3e !important; border-color: #fecaca !important; }
-  .btn-action-cancelar:hover { background: #fff5f5 !important; }
+  .btn-action-cancelar { color: var(--danger) !important; border-color: var(--danger) !important; opacity: 0.75; }
+  .btn-action-cancelar:hover { background: rgba(255,107,107,0.1) !important; opacity: 1; }
 `
 if (!document.getElementById('cancel-styles')) {
   cancelStyles.id = 'cancel-styles'

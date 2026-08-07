@@ -201,7 +201,7 @@ function _montarTablaCompras() {
                   if (!v) return `<span style="color:var(--success-green);font-weight:700;font-size:0.8rem;">🛒 Stock</span>`;
                   const vData = _cache.ventas.find(vt => vt.id?.toString() === v.toString());
                   const cData = vData?.cliente_id ? _cache.clientes.find(cl => cl.id?.toString() === vData.cliente_id?.toString()) : null;
-                  return `<span style="color:#FFB703;font-weight:700;font-size:0.8rem;">📦 Encargo<br><span style="font-size:0.7rem;opacity:0.7;">${cData?.nombre || '#' + v.toString().slice(-4)}</span></span>`;
+                  return `<span style="color:var(--violet);font-weight:700;font-size:0.8rem;">📦 Encargo<br><span style="font-size:0.7rem;opacity:0.7;">${cData?.nombre || '#' + v.toString().slice(-4)}</span></span>`;
               } },
             { key: 'estado_compra', label: 'Fase Logística', width: '190px', sortable: false,
               render: (v, row) => {
@@ -382,7 +382,7 @@ const renderViewTipo = (compras, productos, ventas, clientes, logisticaList) => 
             <!-- Encargos -->
             <div class="purchase-tipo-col">
                 <div class="purchase-tipo-col-header">
-                    <h3>📦 Encargos <span style="font-size:0.75rem; font-weight:600; padding:2px 8px; background:rgba(255,183,3,0.12); color:#FFB703; border-radius:6px; margin-left:4px;">${encargos.length}</span></h3>
+                    <h3>📦 Encargos <span style="font-size:0.75rem; font-weight:600; padding:2px 8px; background:var(--violet-dim); color:var(--violet); border-radius:6px; margin-left:4px;">${encargos.length}</span></h3>
                     <div class="purchase-tipo-mini-kpis">
                         <div class="purchase-tipo-mini-kpi">Total: <strong>${formatUSD(totalEnc)}</strong></div>
                         <div class="purchase-tipo-mini-kpi">Promedio: <strong>${formatUSD(avgEnc)}</strong></div>
@@ -610,7 +610,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
                     <div class="form-grid-2" style="background:var(--glass-hover); padding:1.5rem; border-radius:12px; border:1px solid var(--glass-border);">
                         <div>
                             <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">📦 Relación Comercial</p>
-                            <strong style="font-size:1.1rem; color:${c.venta_id ? '#FFB703' : 'var(--success-green)'};">${c.venta_id ? `Encargo #${c.venta_id.toString().slice(-4)}` : 'Stock Importación'}</strong>
+                            <strong style="font-size:1.1rem; color:${c.venta_id ? 'var(--violet)' : 'var(--success-green)'};">${c.venta_id ? `Encargo #${c.venta_id.toString().slice(-4)}` : 'Stock Importación'}</strong>
                         </div>
                         <div>
                             <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">👤 Destinatario Original</p>
@@ -626,8 +626,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
                         </div>
                         ${(vData && (auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas')) ? `
                         <div>
-                            <p style="margin:0 0 5px 0; font-size:0.75rem; color:#FFB703; opacity:0.8;">✈️ Envío Int. (Calculado)</p>
-                            <strong style="font-size:1.3rem; color:#FFB703;">${formatCOP(vData.valor_envio_internacional || 0)}</strong>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; color:var(--violet); opacity:0.8;">✈️ Envío Int. (Calculado)</p>
+                            <strong style="font-size:1.3rem; color:var(--violet);">${formatCOP(vData.valor_envio_internacional || 0)}</strong>
                         </div>
                         ` : ''}
                         ${pData.link_producto ? `<div style="grid-column: span 2; margin-top:5px;"><a href="${pData.link_producto}" target="_blank" style="display:inline-block; font-size:0.8rem; padding:8px 16px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.2); text-decoration:none;">🔗 Validar Enlace Original del Producto</a></div>` : ''}

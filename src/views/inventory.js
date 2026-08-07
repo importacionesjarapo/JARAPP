@@ -160,7 +160,7 @@ const renderViewGrid = (list) => `
                     <div style="text-align:right;">
                         <span style="font-weight:700;display:block;">${formatCOP(p.precio_cop)}</span>
                         ${(venta && (window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas')) ? `
-                        <span style="font-size:0.65rem;color:#FFB703;font-weight:700;">Envío: ${formatCOP(venta.valor_envio_internacional || 0)}</span>
+                        <span style="font-size:0.65rem;color:var(--violet);font-weight:700;">Envío: ${formatCOP(venta.valor_envio_internacional || 0)}</span>
                         ` : ''}
                     </div>
                 </div>
@@ -226,7 +226,7 @@ function _montarTablaInventario() {
         columnas.push({ key: '_envio', label: 'Envío Int.', width: '120px', sortable: false,
           render: (_v, row) => {
               const venta = globalSalesCache.find(v => v.producto_id && v.producto_id.toString() === row.id.toString());
-              return `<span style="color:#FFB703;font-weight:700;">${venta && venta.valor_envio_internacional ? formatCOP(venta.valor_envio_internacional) : '$0'}</span>`;
+              return `<span style="color:var(--violet);font-weight:700;">${venta && venta.valor_envio_internacional ? formatCOP(venta.valor_envio_internacional) : '$0'}</span>`;
           } });
     }
 
@@ -624,9 +624,9 @@ window.modalViewSaleDetail = (ventaId) => {
             </div>
 
             ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') ? `
-            <div style="margin-top:1.5rem; background:rgba(255,183,3,0.05); padding:1rem; border-radius:12px; border:1px solid rgba(255,183,3,0.2); display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:0.75rem; color:#FFB703; font-weight:700;">COSTO ENVÍO INTERNACIONAL</span>
-                <strong style="font-size:1.1rem; color:#FFB703;">${formatCOP(v.valor_envio_internacional || 0)}</strong>
+            <div style="margin-top:1.5rem; background:var(--violet-dim); padding:1rem; border-radius:12px; border:1px solid rgba(139,124,246,0.2); display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:0.75rem; color:var(--violet); font-weight:700;">COSTO ENVÍO INTERNACIONAL</span>
+                <strong style="font-size:1.1rem; color:var(--violet);">${formatCOP(v.valor_envio_internacional || 0)}</strong>
             </div>
             ` : ''}
         </div>
@@ -662,7 +662,7 @@ window.modalViewProduct = (id) => {
                     ${p.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.2;">FOTO</span>'}
                 </div>
                 <div style="flex:1;">
-                    <span style="background:${p.estado_producto?.includes('Disponible') ? 'var(--success-green)' : p.estado_producto?.includes('Pendiente') || p.estado_producto?.includes('compra') ? 'var(--primary-red)' : p.estado_producto?.includes('Tránsito') || p.estado_producto?.includes('Comprado') ? '#FFB703' : p.estado_producto?.includes('Entregado') ? 'var(--info-blue)' : 'var(--text-faint)'}; font-size:0.7rem; padding:4px 10px; border-radius:15px; font-weight:700; text-transform:uppercase; color:#fff;">${p.estado_producto || 'Disponible'}</span>
+                    <span style="background:${p.estado_producto?.includes('Disponible') ? 'var(--success-green)' : p.estado_producto?.includes('Pendiente') || p.estado_producto?.includes('compra') ? 'var(--primary-red)' : p.estado_producto?.includes('Tránsito') || p.estado_producto?.includes('Comprado') ? 'var(--warning)' : p.estado_producto?.includes('Entregado') ? 'var(--info-blue)' : 'var(--text-faint)'}; font-size:0.7rem; padding:4px 10px; border-radius:15px; font-weight:700; text-transform:uppercase; color:#fff;">${p.estado_producto || 'Disponible'}</span>
                     <h3 style="margin:8px 0; font-size:1.4rem;">${p.nombre_producto}</h3>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
                         <span style="font-size:0.8rem; padding:5px 10px; background:var(--glass-bg); border-radius:6px;">T: <strong>${p.talla || 'N/A'}</strong></span>
@@ -680,7 +680,7 @@ window.modalViewProduct = (id) => {
                 </div>
                 <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; flex-direction:column;">
                     <span style="font-size:0.75rem; opacity:0.6; margin-bottom:4px;">✈️ Stock USA</span>
-                    <strong style="font-size:1.1rem; color:#FFB703;">${p.stock_miami || '0'} Ud(s)</strong>
+                    <strong style="font-size:1.1rem; color:var(--violet);">${p.stock_miami || '0'} Ud(s)</strong>
                 </div>
                 <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; flex-direction:column;">
                     <span style="font-size:0.75rem; opacity:0.6; margin-bottom:4px;">🏭 Tienda Origen</span>
@@ -703,14 +703,14 @@ window.modalViewProduct = (id) => {
                 const v = globalSalesCache.find(sale => sale.producto_id?.toString() === p.id.toString());
                 if (v && (window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas')) {
                     return `
-                    <div class="form-grid" style="margin-top:1.5rem; background:rgba(255,183,3,0.05); padding:1.2rem; border-radius:12px; border:1px solid rgba(255,183,3,0.2);">
+                    <div class="form-grid" style="margin-top:1.5rem; background:var(--violet-dim); padding:1.2rem; border-radius:12px; border:1px solid rgba(139,124,246,0.2);">
                         <div style="display:flex; flex-direction:column;">
-                            <span style="font-size:0.75rem; color:#FFB703; margin-bottom:4px;">✈️ Envío Int. (Calculado)</span>
-                            <strong style="font-size:1.2rem; color:#FFB703;">${formatCOP(v.valor_envio_internacional || 0)}</strong>
+                            <span style="font-size:0.75rem; color:var(--violet); margin-bottom:4px;">✈️ Envío Int. (Calculado)</span>
+                            <strong style="font-size:1.2rem; color:var(--violet);">${formatCOP(v.valor_envio_internacional || 0)}</strong>
                         </div>
                         <div style="display:flex; flex-direction:column;">
-                            <span style="font-size:0.75rem; color:#FFB703; margin-bottom:4px;">📈 TRM Cotizada</span>
-                            <strong style="font-size:1.2rem; color:#FFB703;">${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}</strong>
+                            <span style="font-size:0.75rem; color:var(--violet); margin-bottom:4px;">📈 TRM Cotizada</span>
+                            <strong style="font-size:1.2rem; color:var(--violet);">${v.trm_cotizada ? formatCOP(v.trm_cotizada) : 'N/A'}</strong>
                         </div>
                     </div>`;
                 }

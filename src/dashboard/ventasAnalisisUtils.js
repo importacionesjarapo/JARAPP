@@ -7,7 +7,7 @@ const BRAND_COLORS = {
   'Nike':       '#E63946',
   'Adidas':     '#4CC9F0',
   'New Balance':'#06D6A0',
-  'Jordan':     '#FFB703',
+  'Jordan':     '#FFD166',
   'Puma':       '#A78BFA',
   'Vans':       '#F472B6',
   'Converse':   '#2DD4BF',
@@ -15,7 +15,7 @@ const BRAND_COLORS = {
   'Reebok':     '#34D399',
   'Asics':      '#818CF8',
 };
-const PALETTE = ['#4CC9F0','#06D6A0','#FFB703','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8','#60A5FA','#FBBF24','#A3E635','#E879F9'];
+const PALETTE = ['#4CC9F0','#06D6A0','#FFD166','#A78BFA','#E63946','#F472B6','#2DD4BF','#FB923C','#34D399','#818CF8','#60A5FA','#FBBF24','#A3E635','#E879F9'];
 
 export const getBrandColor = (marca, idx = 0) => BRAND_COLORS[marca] || PALETTE[idx % PALETTE.length];
 

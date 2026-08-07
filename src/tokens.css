@@ -1,64 +1,70 @@
 /* ============================================================
    JARAPP — Tokens de Diseño
+   "Manifiesto de Vidrio" — cielo de carga nocturno + vidrio esmerilado
    Fuente única de verdad para colores, tipografía y espaciado
    ============================================================ */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
 :root {
-  /* ── Brand Jarapo ── */
-  --primary:       #E63946;
-  --primary-dark:  #C1121F;
-  --primary-light: #FCEBEB;
-  --secondary:     #1D3557;
+  /* ── Brand Jarapo — etiqueta de carga ── */
+  --primary:       #FF8A3D;
+  --primary-dark:  #E8650F;
+  --primary-light: rgba(255,138,61,0.14);
+  --primary-ink:   #1A0F04;
+  --secondary:     #4E7FE0;
 
   /* ── Semánticos ── */
-  --success:  #06D6A0;
-  --warning:  #F4A261;
-  --danger:   #E63946;
-  --info:     #457B9D;
+  --success:  #2FE6C1;
+  --warning:  #FFD166;
+  --danger:   #FF6B6B;
+  --info:     #4E7FE0;
 
   /* ── Derivados semánticos ── */
-  --success-glow: rgba(6, 214, 160, 0.28);
-  --success-dim:  rgba(6, 214, 160, 0.10);
-  --warning-dim:  rgba(244, 162, 97, 0.12);
-  --danger-glow:  rgba(230, 57, 70, 0.28);
-  --danger-dim:   rgba(230, 57, 70, 0.10);
-  --info-dim:     rgba(69, 123, 157, 0.10);
+  --success-glow: rgba(47, 230, 193, 0.28);
+  --success-dim:  rgba(47, 230, 193, 0.10);
+  --warning-dim:  rgba(255, 209, 102, 0.12);
+  --danger-glow:  rgba(255, 107, 107, 0.28);
+  --danger-dim:   rgba(255, 107, 107, 0.10);
+  --info-dim:     rgba(78, 127, 224, 0.12);
 
-  /* ── Superficies FLAT — dark mode (default) ── */
-  --bg:           #0F172A;
-  --body-bg:      #0F172A;
-  --bg-main:      #0F172A;
-  --bg-secondary: #1E293B;
-  --surface-0:    #0A0F1E;
-  --surface-1:    #1E293B;
-  --surface-2:    #293548;
-  --surface-3:    #334155;
+  /* ── Superficies — dark mode (default): cielo nocturno de carga ── */
+  --bg:            #10162A;
+  --body-bg:       #10162A;
+  --bg-main:       #10162A;
+  --bg-gradient-1:   #10162A;
+  --bg-gradient-mid: #141A32;
+  --bg-gradient-2:   #1B2340;
+  --bg-secondary:  #1B2340;
+  --surface-0:     #0C1120;
+  --surface-1:     #1A2138;
+  --surface-2:     #232C48;
+  --surface-3:     #2C3654;
 
-  --border:        rgba(255,255,255,0.08);
-  --border-base:   rgba(255,255,255,0.08);
-  --border-strong: rgba(255,255,255,0.16);
-  --border-glaze:  rgba(255,255,255,0.08);
-  --border-accent: rgba(230, 57, 70, 0.18);
+  --border:        rgba(255,255,255,0.10);
+  --border-base:   rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.18);
+  --border-glaze:  rgba(255,255,255,0.10);
+  --border-accent: rgba(255, 138, 61, 0.22);
 
-  --text-main:  #F1F5F9;
-  --text-muted: #94A3B8;
-  --text-faint: #64748B;
+  --text-main:  #EAF0FF;
+  --text-muted: #9AA6C4;
+  --text-faint: #6B7699;
 
-  --input-bg:      #1E293B;
-  --modal-bg:      #0A0F1E;
-  --modal-overlay: rgba(0,0,0,0.65);
+  --input-bg:      #1A2138;
+  --modal-bg:      #131A30;
+  --modal-overlay: rgba(6,9,20,0.68);
 
   /* ── Tipografía ── */
-  --font: 'DM Sans', system-ui, sans-serif;
+  --font:      'DM Sans', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* ── Sombras FLAT ── */
-  --shadow-card:   0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
-  --shadow-module: 0 1px 3px rgba(0,0,0,0.08);
-  --soft-shadow:   0 1px 3px rgba(0,0,0,0.12);
-  --shadow-glow-red:  0 2px 8px rgba(230, 57, 70, 0.20);
-  --shadow-glow-teal: 0 2px 8px rgba(29, 53, 87, 0.20);
-  --shadow-glow-pink: 0 2px 8px rgba(230, 57, 70, 0.16);
+  /* ── Sombras ── */
+  --shadow-card:      0 16px 40px rgba(0,0,0,0.30);
+  --shadow-module:    0 10px 26px rgba(0,0,0,0.22);
+  --soft-shadow:      0 1px 3px rgba(0,0,0,0.12);
+  --shadow-glow-red:  0 2px 8px rgba(255,138,61,0.25);
+  --shadow-glow-teal: 0 2px 8px rgba(47,230,193,0.22);
+  --shadow-glow-pink: 0 2px 8px rgba(255,138,61,0.20);
 
   /* ── Radios ── */
   --radius-sm: 6px;
@@ -80,83 +86,119 @@
 
   /* ── Legacy aliases — compatibilidad con style.css existente ── */
   --brand-magenta:      var(--primary);
-  --brand-magenta-glow: rgba(230, 57, 70, 0.32);
-  --brand-magenta-dim:  rgba(230, 57, 70, 0.12);
+  --brand-magenta-glow: rgba(255, 138, 61, 0.32);
+  --brand-magenta-dim:  rgba(255, 138, 61, 0.14);
   --brand-green:        var(--secondary);
-  --brand-green-glow:   rgba(29, 53, 87, 0.28);
-  --brand-green-dim:    rgba(29, 53, 87, 0.10);
-  --brand-red:          var(--primary);
-  --brand-red-glow:     rgba(230, 57, 70, 0.32);
-  --brand-red-dim:      rgba(230, 57, 70, 0.12);
+  --brand-green-glow:   rgba(139, 124, 246, 0.28);
+  --brand-green-dim:    rgba(139, 124, 246, 0.12);
+  --brand-red:          var(--danger);
+  --brand-red-glow:     rgba(255, 107, 107, 0.30);
+  --brand-red-dim:      rgba(255, 107, 107, 0.12);
   --primary-red:        var(--primary);
-  --teal:               var(--secondary);
-  --teal-glow:          rgba(29, 53, 87, 0.28);
-  --teal-dim:           rgba(29, 53, 87, 0.10);
+  --teal:               var(--success);
+  --teal-glow:          rgba(47, 230, 193, 0.28);
+  --teal-dim:           rgba(47, 230, 193, 0.10);
   --pink:               var(--primary);
-  --pink-glow:          rgba(230, 57, 70, 0.32);
-  --pink-dim:           rgba(230, 57, 70, 0.12);
-  --violet:             #7C3AED;
-  --violet-dim:         rgba(124, 58, 237, 0.10);
+  --pink-glow:          rgba(255, 138, 61, 0.30);
+  --pink-dim:           rgba(255, 138, 61, 0.12);
+  --violet:             #4E7FE0;
+  --violet-dim:         rgba(78, 127, 224, 0.12);
   --success-green:      var(--success);
   --warning-orange:     var(--warning);
   --info-blue:          var(--info);
 
-  /* ── Glass aliases → superficies flat (elimina glassmorphism) ── */
-  --glass-bg:     var(--surface-1);
-  --glass-border: var(--border);
-  --glass-hover:  var(--surface-2);
+  /* ── Vidrio — superficies esmeriladas reales ── */
+  --glass-bg:      rgba(255,255,255,0.10);
+  --glass-border:  rgba(255,255,255,0.15);
+  --glass-hover:   rgba(255,255,255,0.15);
+  --glass-blur:    blur(12px);
+  --glass-blur-sm: blur(7px);
+
+  /* ── Fondo ambiental (orbes de aurora) ── */
+  --orb-1:  rgba(255,138,61,0.22);
+  --orb-2:  rgba(47,230,193,0.19);
+  --orb-3:  rgba(139,124,246,0.19);
+  --stripe: rgba(255,138,61,0.05);
+
+  /* ── Sidebar: sólido, con detalle sutil de borde ── */
+  --sidebar-edge-glow: rgba(255,138,61,0.10);
 }
 
 /* ── LIGHT MODE ── */
 [data-theme="light"] {
-  --bg:           #F8F8F6;
-  --body-bg:      #F8F8F6;
-  --bg-main:      #F8F8F6;
-  --bg-secondary: #FFFFFF;
-  --surface-0:    #FFFFFF;
-  --surface-1:    #FFFFFF;
-  --surface-2:    #F4F3EF;
-  --surface-3:    #ECEAE4;
+  --bg:            #F2F3F6;
+  --body-bg:       #F2F3F6;
+  --bg-main:       #F2F3F6;
+  --bg-gradient-1:   #F8F9FB;
+  --bg-gradient-mid: #F1F2F6;
+  --bg-gradient-2:   #F5F4F9;
+  --bg-secondary:  #FFFFFF;
+  --surface-0:     #FFFFFF;
+  --surface-1:     #FFFFFF;
+  --surface-2:     #ECEDF2;
+  --surface-3:     #E2E4EB;
 
-  --border:        rgba(0,0,0,0.08);
-  --border-base:   rgba(0,0,0,0.08);
-  --border-strong: rgba(0,0,0,0.16);
-  --border-glaze:  rgba(0,0,0,0.08);
-  --border-accent: rgba(193, 18, 31, 0.22);
+  --border:        rgba(22,27,46,0.10);
+  --border-base:   rgba(22,27,46,0.10);
+  --border-strong: rgba(22,27,46,0.18);
+  --border-glaze:  rgba(22,27,46,0.10);
+  --border-accent: rgba(217, 96, 14, 0.22);
 
-  --text-main:  #1F2937;
-  --text-muted: #6B7280;
-  --text-faint: #9CA3AF;
+  --text-main:  #161B2E;
+  --text-muted: #5B6478;
+  --text-faint: #8891A6;
 
   --input-bg:      #FFFFFF;
-  --modal-bg:      rgba(255,255,255,0.99);
-  --modal-overlay: rgba(15,23,42,0.55);
+  --modal-bg:      rgba(255,255,255,0.97);
+  --modal-overlay: rgba(22,27,46,0.55);
 
-  --shadow-card:   0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-module: 0 1px 3px rgba(0,0,0,0.06);
-  --soft-shadow:   0 1px 3px rgba(0,0,0,0.08);
-  --shadow-glow-red:  0 2px 6px rgba(193, 18, 31, 0.18);
-  --shadow-glow-teal: 0 2px 6px rgba(5, 150, 105, 0.12);
-  --shadow-glow-pink: 0 2px 6px rgba(193, 18, 31, 0.14);
+  --shadow-card:      0 16px 36px rgba(30,40,70,0.09);
+  --shadow-module:    0 10px 24px rgba(30,40,70,0.07);
+  --soft-shadow:      0 1px 3px rgba(0,0,0,0.08);
+  --shadow-glow-red:  0 2px 6px rgba(217, 96, 14, 0.18);
+  --shadow-glow-teal: 0 2px 6px rgba(14, 156, 143, 0.14);
+  --shadow-glow-pink: 0 2px 6px rgba(217, 96, 14, 0.14);
 
-  /* Overrides de brand en light ── */
-  --primary:            #C1121F;
-  --primary-dark:       #9B0014;
-  --primary-light:      #FDECEA;
-  --brand-magenta:      #C1121F;
-  --brand-magenta-glow: rgba(193, 18, 31, 0.22);
-  --brand-magenta-dim:  rgba(193, 18, 31, 0.09);
-  --primary-red:        #C1121F;
-  --brand-red:          #C1121F;
-  --brand-red-glow:     rgba(193, 18, 31, 0.22);
+  /* Overrides de brand en light */
+  --primary:            #D9600E;
+  --primary-dark:       #B34D0B;
+  --primary-light:      #FDECD9;
+  --primary-ink:        #FFF7F0;
+  --secondary:          #1F3E85;
+  --brand-magenta:      #D9600E;
+  --brand-magenta-glow: rgba(217, 96, 14, 0.22);
+  --brand-magenta-dim:  rgba(217, 96, 14, 0.10);
+  --primary-red:        #D9600E;
+  --brand-red:          #C43D33;
+  --brand-red-glow:     rgba(196, 61, 51, 0.22);
 
-  --success:      #059669;
-  --success-glow: rgba(5,150,105,0.15);
-  --success-dim:  rgba(5,150,105,0.07);
-  --warning:      #B45309;
-  --warning-dim:  rgba(180,83,9,0.08);
-  --danger:       #DC2626;
-  --danger-dim:   rgba(220,38,38,0.10);
-  --info:         #1D4ED8;
-  --info-dim:     rgba(29,78,216,0.08);
+  --success:      #0E9C8F;
+  --success-glow: rgba(14,156,143,0.15);
+  --success-dim:  rgba(14,156,143,0.08);
+  --warning:      #A16207;
+  --warning-dim:  rgba(161,98,7,0.09);
+  --danger:       #C43D33;
+  --danger-dim:   rgba(196,61,51,0.10);
+  --info:         #1F3E85;
+  --info-dim:     rgba(31,62,133,0.08);
+
+  --brand-green:      #1F3E85;
+  --brand-green-glow: rgba(31,62,133,0.18);
+  --brand-green-dim:  rgba(31,62,133,0.08);
+  --teal:             #0E9C8F;
+  --teal-glow:        rgba(14,156,143,0.18);
+  --teal-dim:         rgba(14,156,143,0.08);
+  --violet:           #1F3E85;
+  --violet-dim:       rgba(31,62,133,0.08);
+
+  --glass-bg:     rgba(255,255,255,0.65);
+  --glass-border: rgba(22,27,46,0.10);
+  --glass-hover:  rgba(255,255,255,0.82);
+
+  --orb-1:  rgba(217,96,14,0.05);
+  --orb-2:  rgba(14,156,143,0.04);
+  --orb-3:  rgba(100,73,214,0.02);
+  --stripe: rgba(217,96,14,0.025);
+
+  --sidebar-edge-glow: rgba(217,96,14,0.06);
 }

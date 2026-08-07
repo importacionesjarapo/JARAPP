@@ -183,14 +183,14 @@ function _renderVenPanelInner() {
             <div style="margin-left:auto;font-size:0.82rem;font-weight:700;opacity:0.75;">👤 ${tabLabel}</div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:1.5rem;">
-            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--success-green);">
+            <div class="glass-card stamp-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--success-green);">
                 <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">✅ Ganancia Analista (Calculada)</div>
-                <div style="font-size:1.4rem;font-weight:900;color:var(--success-green);">${formatCOP(totalCalc)}</div>
+                <div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.4rem;font-weight:900;color:var(--success-green);">${formatCOP(totalCalc)}</div>
                 <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Basado en ganancia calculada × ${pct}%</div>
             </div>
-            <div class="glass-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--warning-orange);">
+            <div class="glass-card stamp-card" style="padding:1.2rem;text-align:center;border-left:4px solid var(--warning-orange);">
                 <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📋 Ventas que Aplican</div>
-                <div style="font-size:1.4rem;font-weight:900;color:var(--warning-orange);">${aplicanScoped.length} / ${scoped.length}</div>
+                <div style="font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:1.4rem;font-weight:900;color:var(--warning-orange);">${aplicanScoped.length} / ${scoped.length}</div>
                 <div style="font-size:0.7rem;opacity:0.5;margin-top:4px;">% Comisión configurado: <strong>${pct}%</strong></div>
             </div>
         </div>
