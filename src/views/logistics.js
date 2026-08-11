@@ -6,6 +6,12 @@ import { TablaPro } from '../components/tabla-pro.js';
 let _logStartDate = '';
 let _logEndDate = '';
 let _logActiveTab = 'general';
+let _logFase6Filter = 'todos';
+let _logFase5Filter = 'todos';
+let _logSearchTerm = '';
+let _logPageByFase = {};
+let _logRppByFase = {};
+const LOG_RPP_DEFAULT = 15;
 
 export const renderLogistics = async (renderLayout, navigateTo) => {
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Módulo de Logística...</div>`);
@@ -81,13 +87,50 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
     const applyLogFilter = () => {
         _logStartDate = document.getElementById('log-date-start').value;
         _logEndDate = document.getElementById('log-date-end').value;
+        _logPageByFase = {};
         renderLogistics(renderLayout, navigateTo);
     };
     window.applyLogDateFilter = applyLogFilter;
 
     window.switchLogTab = (tab) => {
         _logActiveTab = tab;
-        renderLogistics(renderLayout, navigateTo);
+        const scrollY = window.scrollY;
+        renderLogistics(renderLayout, navigateTo).then(() => setTimeout(() => window.scrollTo(0, scrollY), 160));
+    };
+
+    window.setLogFase6Filter = (val) => {
+        _logFase6Filter = val;
+        _logPageByFase[5] = 1;
+        const scrollY = window.scrollY;
+        renderLogistics(renderLayout, navigateTo).then(() => setTimeout(() => window.scrollTo(0, scrollY), 160));
+    };
+
+    window.setLogFase5Filter = (val) => {
+        _logFase5Filter = val;
+        _logPageByFase[4] = 1;
+        const scrollY = window.scrollY;
+        renderLogistics(renderLayout, navigateTo).then(() => setTimeout(() => window.scrollTo(0, scrollY), 160));
+    };
+
+    window.setLogPage = (faseIdx, page) => {
+        _logPageByFase[faseIdx] = page;
+        renderLogistics(renderLayout, navigateTo).then(() => setTimeout(() => {
+            document.getElementById(`fase-block-${faseIdx}`)?.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }, 160));
+    };
+
+    window.setLogRpp = (faseIdx, rpp) => {
+        _logRppByFase[faseIdx] = parseInt(rpp);
+        _logPageByFase[faseIdx] = 1;
+        const scrollY = window.scrollY;
+        renderLogistics(renderLayout, navigateTo).then(() => setTimeout(() => window.scrollTo(0, scrollY), 160));
+    };
+
+    window.setLogSearch = (term) => {
+        _logSearchTerm = term.trim();
+        _logPageByFase = {};
+        const scrollY = window.scrollY;
+        renderLogistics(renderLayout, navigateTo).then(() => setTimeout(() => window.scrollTo(0, scrollY), 160));
     };
 
     let filteredList = [...list];
@@ -112,6 +155,20 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         return idB - idA;
     });
     const reversedList = sortedList;
+
+    // Búsqueda ligera sobre campos crudos (guía/tracking, cliente, fase) — se aplica
+    // antes de paginar cada fase para que la paginación y la búsqueda sean consistentes.
+    const logSearchMatch = (c, faseNombre) => {
+        if (!_logSearchTerm) return true;
+        const ventaAsoc = !ventas.error ? ventas.find(v => v.id.toString() === c.venta_id?.toString()) : null;
+        const cliInfo = ventaAsoc && !clientes.error ? clientes.find(cl => cl.id.toString() === ventaAsoc.cliente_id?.toString()) : null;
+        const compraAsoc = !compras.error ? compras.find(cmp => cmp.id.toString() === c.compra_id?.toString() || (c.venta_id && cmp.venta_id?.toString() === c.venta_id?.toString())) : null;
+        const texto = [
+            c.cli_guia, c.usa_guia, c.int_guia, c.id_seguimiento_internacional,
+            c.venta_id, compraAsoc?.numero_orden, cliInfo?.nombre, faseNombre
+        ].filter(Boolean).join(' ').toLowerCase();
+        return texto.includes(_logSearchTerm.toLowerCase());
+    };
 
     const FASES = [
         "1. Comprado (Esperando Tracking Local USA)",
@@ -222,7 +279,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                 <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyLogDateFilter()">Filtrar</button>
             </div>
             <button class="btn-excel" onclick="window.exportLogExcel()">📥 Excel</button>
-            <input type="text" id="find-it" placeholder="Filtrar por guía, cliente o fase..." style="background:var(--input-bg); color:var(--text-main); padding:10px 15px; border-radius:12px; border:1px solid var(--glass-border); width:260px; outline:none;">
+            <input type="text" id="find-it" value="${_logSearchTerm.replace(/"/g,'&quot;')}" placeholder="Filtrar por guía, cliente o fase..." style="background:var(--input-bg); color:var(--text-main); padding:10px 15px; border-radius:12px; border:1px solid var(--glass-border); width:260px; outline:none;">
             ${auth.canEdit('logistics') ? `<button class="btn-primary" onclick="window.modalLogistica()">+ Agregar Seguimiento</button>` : ''}
         </div>
       </div>
@@ -237,8 +294,62 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
 
       <div id="list-body">
       ${FASES.map((f, i) => {
-          const items = reversedList.filter(c => mapFase(c.fase) === f);
-          
+          let items = reversedList.filter(c => mapFase(c.fase) === f && logSearchMatch(c, f));
+          let fase6Filtros = '';
+          let fase5Filtros = '';
+          if (i === 4) {
+              const totalFase5 = items.length;
+              const notificados = items.filter(c => c.cliente_notificado === 'Sí');
+              const noNotificados = items.filter(c => c.cliente_notificado !== 'Sí');
+              if (_logFase5Filter === 'notificado') items = notificados;
+              else if (_logFase5Filter === 'no_notificado') items = noNotificados;
+              const fbtn5 = (val, label, count) => `<button class="btn-action" onclick="window.setLogFase5Filter('${val}')" style="background:${_logFase5Filter === val ? 'var(--success-green)' : 'transparent'}; color:${_logFase5Filter === val ? '#000' : 'var(--text-main)'}; border:1px solid var(--glass-border); font-weight:700;">${label} (${count})</button>`;
+              fase5Filtros = `
+              <div style="display:flex; gap:8px; padding:1rem 1.5rem; border-bottom:1px solid var(--glass-border); background:rgba(0,0,0,0.08); flex-wrap:wrap;">
+                  ${fbtn5('todos', 'Todos', totalFase5)}
+                  ${fbtn5('notificado', '✅ Notificados', notificados.length)}
+                  ${fbtn5('no_notificado', '⚠️ No Notificados', noNotificados.length)}
+              </div>`;
+          }
+          if (i === 5) {
+              const totalFase6 = items.length;
+              const enTransito = items.filter(c => c.cli_estado_entrega !== 'Recibido');
+              const entregados = items.filter(c => c.cli_estado_entrega === 'Recibido');
+              if (_logFase6Filter === 'transito') items = enTransito;
+              else if (_logFase6Filter === 'entregado') items = entregados;
+              const fbtn = (val, label, count) => `<button class="btn-action" onclick="window.setLogFase6Filter('${val}')" style="background:${_logFase6Filter === val ? 'var(--success-green)' : 'transparent'}; color:${_logFase6Filter === val ? '#000' : 'var(--text-main)'}; border:1px solid var(--glass-border); font-weight:700;">${label} (${count})</button>`;
+              fase6Filtros = `
+              <div style="display:flex; gap:8px; padding:1rem 1.5rem; border-bottom:1px solid var(--glass-border); background:rgba(0,0,0,0.08); flex-wrap:wrap;">
+                  ${fbtn('todos', 'Todos', totalFase6)}
+                  ${fbtn('transito', '🚚 En Tránsito Local', enTransito.length)}
+                  ${fbtn('entregado', '✅ Entregados', entregados.length)}
+              </div>`;
+          }
+
+          // Paginación por fase — datos ya cargados en memoria, no hay round-trip a Supabase.
+          const totalFaseItems = items.length;
+          const rppFase = _logRppByFase[i] || LOG_RPP_DEFAULT;
+          const totalPaginasFase = Math.max(1, Math.ceil(totalFaseItems / rppFase));
+          let paginaFase = _logPageByFase[i] || 1;
+          if (paginaFase > totalPaginasFase) paginaFase = totalPaginasFase;
+          const pagedItems = items.slice((paginaFase - 1) * rppFase, paginaFase * rppFase);
+          const desdeFase = totalFaseItems === 0 ? 0 : ((paginaFase - 1) * rppFase) + 1;
+          const hastaFase = Math.min(paginaFase * rppFase, totalFaseItems);
+          const paginacionFaseHtml = `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:0.8rem 1.5rem; border-bottom:1px solid var(--glass-border); background:rgba(0,0,0,0.05);">
+              <div style="display:flex; align-items:center; gap:10px; font-size:0.78rem; opacity:0.7;">
+                  <span>${totalFaseItems > 0 ? `${desdeFase}–${hastaFase} de ${totalFaseItems}` : 'Sin registros'}</span>
+                  <select onchange="window.setLogRpp(${i}, this.value)" style="background:var(--input-bg); color:var(--text-main); border:1px solid var(--glass-border); padding:3px 6px; border-radius:6px; font-size:0.78rem; outline:none;">
+                      ${[10, 15, 25, 50].map(n => `<option value="${n}" ${rppFase == n ? 'selected' : ''}>${n} por página</option>`).join('')}
+                  </select>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                  <button class="btn-action" ${paginaFase <= 1 ? 'disabled style="opacity:0.3;"' : `onclick="window.setLogPage(${i}, ${paginaFase - 1})"`}>← Anterior</button>
+                  <span style="font-size:0.82rem; font-weight:600;"><span style="color:var(--primary-red);">${paginaFase}</span> <span style="opacity:0.4;">de</span> ${totalPaginasFase}</span>
+                  <button class="btn-action" ${paginaFase >= totalPaginasFase ? 'disabled style="opacity:0.3;"' : `onclick="window.setLogPage(${i}, ${paginaFase + 1})"`}>Siguiente →</button>
+              </div>
+          </div>`;
+
           let headerColor = 'rgba(255,255,255,0.05)';
           let textColor = 'var(--text-main)';
           
@@ -280,6 +391,9 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                  <h3 style="margin:0; font-size:1.1rem; color:${textColor}; text-shadow: ${textColor === '#fff' ? '0 1px 2px rgba(0,0,0,0.2)' : 'none'};">${f}</h3>
                  <span style="background:rgba(0,0,0,0.3); color:#fff; padding:4px 12px; border-radius:20px; font-weight:bold; font-size:0.8rem;">${items.length} Envío(s)</span>
               </div>
+              ${fase5Filtros}
+              ${fase6Filtros}
+              ${paginacionFaseHtml}
               <div style="overflow-x:auto;">
                   <table style="width:100%; text-align:left; border-collapse:collapse; white-space: nowrap; min-width:850px;">
                   <thead style="opacity: 0.5; font-size: 0.7rem; background:rgba(0,0,0,0.2);">
@@ -288,18 +402,19 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                         <th style="padding:15px 20px;">CLIENTE / VENTA</th>
                         <th style="padding:15px 20px;">${th3}</th>
                         <th style="padding:15px 20px;">${th4}</th>
+                        ${i === 4 ? `<th style="padding:15px 20px;">DÍAS DESDE NOTIFICACIÓN</th>` : ''}
                         ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `<th style="padding:15px 20px;">ENVÍO INT.</th>` : ''}
                         <th style="padding:15px 20px; text-align:right;">ACCIÓN</th>
                       </tr>
                   </thead>
                   <tbody>
-                      ${items.length > 0 ? items.map(c => {
+                      ${pagedItems.length > 0 ? pagedItems.map(c => {
                           const ventaAsoc = !ventas.error ? ventas.find(v => v.id.toString() === c.venta_id?.toString()) : null;
                           const cliInfo = ventaAsoc && !clientes.error ? clientes.find(cl => cl.id.toString() === ventaAsoc.cliente_id?.toString()) : null;
                           const nombreCli = cliInfo ? cliInfo.nombre : (c.venta_id ? 'Venta Vacia' : '-');
                           const compraAsoc = !compras.error ? compras.find(cmp => cmp.id.toString() === c.compra_id?.toString() || (c.venta_id && cmp.venta_id?.toString() === c.venta_id?.toString())) : null;
                           const prodAsoc = ventaAsoc && productos && !productos.error ? productos.find(p => p.id.toString() === ventaAsoc.producto_id?.toString()) : null;
-                          let td1 = '-'; let td3 = '-'; let td4 = '-';
+                          let td1 = '-'; let td3 = '-'; let td4 = '-'; let td5 = '-';
                           if (i === 0) {
                               td1 = `<strong style="font-family:monospace; font-size:1.0rem; color:var(--info-blue); display:inline-block; margin-bottom:4px;">Orden: ${compraAsoc ? compraAsoc.numero_orden || 'S/N' : '-'}</strong><br><span style="font-size:0.75rem; opacity:0.6;">Ult. Act: ${c.fecha_actualizacion ? c.fecha_actualizacion.split('T')[0] : '-'}</span>`;
                               td3 = `<strong>${compraAsoc ? compraAsoc.proveedor || '-' : '-'}</strong><br><div style="margin-top:4px;">${compraAsoc?.url_orden ? `<a href="${compraAsoc.url_orden}" target="_blank" style="font-size:0.7rem; color:var(--success-green); text-decoration:none;">[🔗 Ver Tienda]</a>` : ''}</div>`;
@@ -329,11 +444,24 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                               }
                               td1 = `<strong style="font-size:1rem; display:inline-block; color:var(--info-blue);">${c.col_bodega_fecha || 'Pendiente Ingreso'}</strong>`;
                               td3 = badgeHtml + contactHtml;
+                              if (notificado && c.col_fecha_notificacion) {
+                                  const fechaNotif = new Date(c.col_fecha_notificacion + 'T00:00:00');
+                                  const hoy = new Date(); hoy.setHours(0,0,0,0);
+                                  const dias = Math.max(0, Math.floor((hoy - fechaNotif) / 86400000));
+                                  let diasColor = 'var(--success-green)';
+                                  if (dias >= 7) diasColor = 'var(--primary-red)';
+                                  else if (dias >= 3) diasColor = 'var(--warning-orange)';
+                                  td5 = `<strong style="color:${diasColor}; font-size:1rem;">${dias} día${dias === 1 ? '' : 's'}</strong><br><span style="font-size:0.7rem; opacity:0.6;">Notificado: ${c.col_fecha_notificacion}</span>`;
+                              } else if (notificado) {
+                                  td5 = `<span style="font-size:0.8rem; opacity:0.5;">Sin fecha registrada</span>`;
+                              } else {
+                                  td5 = `<span style="font-size:0.8rem; opacity:0.4;">—</span>`;
+                              }
                               td4 = prodAsoc ? `<strong style="font-size:0.9rem;">${prodAsoc.nombre_producto}</strong>` : 'Sin producto';
                           } else if (i === 5) {
-                              td1 = `<strong style="color:var(--success-green); font-family:monospace; font-size:1.1rem; display:inline-block; margin-bottom:4px;">${c.cli_guia || 'Pendiente'}</strong><br><div style="margin-top:4px;"><span style="font-size:0.75rem; opacity:0.8;">Envío: <strong>${c.cli_fecha_envio || '?'}</strong></span></div>`;
+                              td1 = `<strong style="color:var(--success-green); font-family:monospace; font-size:1.1rem; display:inline-block; margin-bottom:4px;">${c.cli_guia || 'Pendiente'}</strong><br><div style="margin-top:4px;"><span style="font-size:0.75rem; opacity:0.8;">Envío: <strong>${c.cli_fecha_envio || '?'}</strong></span></div>${c.cli_url ? `<div style="margin-top:4px;"><a href="${c.cli_url}" target="_blank" style="font-size:0.7rem; color:var(--success-green); text-decoration:none;">[🔗 Ver Guía]</a></div>` : ''}`;
                               let estadoBadge = c.cli_estado_entrega === 'Recibido' ? `<span style="background:rgba(6,214,160,0.1); color:var(--success-green); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(6,214,160,0.2);">✅ Recibido</span>` : `<span style="background:rgba(255,190,11,0.1); color:var(--warning-orange); padding:4px 8px; border-radius:12px; font-weight:bold; font-size:0.75rem; border:1px solid rgba(255,190,11,0.2);">🚚 En Tránsito Local</span>`;
-                              td3 = `${estadoBadge}<br><div style="margin-top:10px; font-size:0.8rem;"><strong>${c.cli_empresa || 'S/N'}</strong></div>`;
+                              td3 = `${estadoBadge}${c.cli_fecha_recibido ? `<div style="margin-top:6px; font-size:0.75rem; opacity:0.8;">Entregado: <strong>${c.cli_fecha_recibido}</strong></div>` : ''}<br><div style="margin-top:10px; font-size:0.8rem;"><strong>${c.cli_empresa || 'S/N'}</strong></div>`;
                               td4 = `<strong style="color:var(--info-blue); font-size:0.9rem;">${nombreCli}</strong>`;
                           }
                           let ultimaNota = '';
@@ -355,6 +483,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                                 </td>
                                 <td style="padding:15px 20px;">${td3}</td>
                                 <td style="padding:15px 20px;">${td4}</td>
+                                ${i === 4 ? `<td style="padding:15px 20px;">${td5}</td>` : ''}
                                 ${(window.auth?.isAdmin() || window.auth?.getUserRole() === 'gerente' || window.auth?.getUserRole() === 'finanzas') ? `
                                 <td style="padding:15px 20px; color:var(--violet); font-weight:700;">${ventaAsoc && ventaAsoc.valor_envio_internacional ? formatCOP(ventaAsoc.valor_envio_internacional) : '$0'}</td>
                                 ` : ''}
@@ -490,7 +619,20 @@ export const createLogisticsModal = async (id, navigateTo) => {
     }
     
     const itemsInUSA = list.filter(it => it.fase && it.fase.includes('3.') && it.id.toString() !== data.id?.toString());
-    
+
+    // Consolidación en Bodega Colombia (fase 5→6): otras ventas del mismo cliente,
+    // también en fase 5 y pagas por completo, con las que se puede compartir un mismo envío.
+    const currentVentaConsol = data.venta_id ? ventas.find(v => v.id.toString() === data.venta_id.toString()) : null;
+    const currentClienteConsolId = currentVentaConsol?.cliente_id;
+    const currentPagadoCompleto = currentVentaConsol ? parseFloat(currentVentaConsol.saldo_pendiente || 0) <= 0 : false;
+    const itemsEnBodegaColMismoCliente = currentClienteConsolId ? list.filter(it => {
+        if (it.id.toString() === data.id?.toString()) return false;
+        if (!it.fase || !it.fase.includes('5.')) return false;
+        const v = ventas.find(vt => vt.id.toString() === it.venta_id?.toString());
+        if (!v || v.cliente_id?.toString() !== currentClienteConsolId.toString()) return false;
+        return parseFloat(v.saldo_pendiente || 0) <= 0;
+    }) : [];
+
     const comprasList = comprasData.error ? [] : comprasData;
     
     const paramsList = conf.error ? [] : conf;
@@ -707,10 +849,14 @@ export const createLogisticsModal = async (id, navigateTo) => {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Notificación Cliente</label>
-                            <select name="cliente_notificado">
+                            <select name="cliente_notificado" onchange="const f=document.querySelector('[name=col_fecha_notificacion]'); if(this.value==='Sí' && f && !f.value){ f.value=new Date().toISOString().split('T')[0]; }">
                                 <option value="No" ${data.cliente_notificado === 'No' || !data.cliente_notificado ? 'selected' : ''}>Pendiente notificación</option>
                                 <option value="Sí" ${data.cliente_notificado === 'Sí' ? 'selected' : ''}>Cliente informado ✅</option>
                             </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fecha de Notificación</label>
+                            <input type="date" name="col_fecha_notificacion" value="${data.col_fecha_notificacion || ''}">
                         </div>
                         <div class="form-group full-width" id="fase5-action-board" style="display:none; grid-column: span 3; padding:1.2rem; border-radius:12px; border:1px solid var(--info);"></div>
                         
@@ -736,6 +882,30 @@ export const createLogisticsModal = async (id, navigateTo) => {
                         <span>🚚</span>
                         <h3 style="margin:0; font-size:0.85rem; color:var(--success-green); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Despacho Nacional a Cliente</h3>
                     </div>
+
+                    <div id="log-consolidation-box-col" style="margin-bottom:1.5rem;">
+                        <div id="consolidation-zone-col" style="display:none; padding:1rem; background:rgba(6,214,160,0.05); border:1px dashed var(--success-green); border-radius:12px;">
+                            <label style="font-weight:800; font-size:0.85rem; color:var(--success-green); margin-bottom:10px; display:block;">📦 Consolidar con otras ventas del mismo cliente en Bodega Colombia</label>
+                            ${!currentPagadoCompleto ? `
+                                <p style="font-size:0.8rem; color:var(--primary-red); margin:0;">⚠️ Esta venta tiene saldo pendiente — debe estar pagada por completo antes de poder consolidarla con otras.</p>
+                            ` : itemsEnBodegaColMismoCliente.length === 0 ? `
+                                <p style="font-size:0.8rem; opacity:0.6; margin:0;">Este cliente no tiene otras ventas pagas en Bodega Colombia para consolidar.</p>
+                            ` : `
+                                <p style="font-size:0.75rem; opacity:0.7; margin:0 0 8px;">Al marcarlas, heredarán la transportadora, guía, fecha de envío, URL y estado de este mismo despacho. El "Valor Envío Local" que ingreses abajo se dividirá en partes iguales entre esta venta y las que marques.</p>
+                                ${itemsEnBodegaColMismoCliente.map(it => {
+                                    const v = ventas.find(vt => vt.id.toString() === it.venta_id?.toString());
+                                    const p = v ? productos.find(prd => prd.id.toString() === v.producto_id?.toString()) : null;
+                                    return `
+                                        <label style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-base); cursor:pointer; font-size:0.82rem;">
+                                            <input type="checkbox" name="consolidate_col_ids" value="${it.id}" style="width:18px; height:18px;">
+                                            <span>${p?.nombre_producto || 'Producto'} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
+                                        </label>
+                                    `;
+                                }).join('')}
+                            `}
+                        </div>
+                    </div>
+
                     <div class="form-grid-3">
                         <div class="form-group">
                             <label class="form-label">Transportadora COL</label>
@@ -835,6 +1005,10 @@ export const createLogisticsModal = async (id, navigateTo) => {
             document.getElementById('fase-b5').style.display = 'block';
         } else if (val.includes('6.')) {
             document.getElementById('fase-b6').style.display = 'block';
+            if (data.fase?.includes('5.')) {
+                const czoneCol = document.getElementById('consolidation-zone-col');
+                if (czoneCol) czoneCol.style.display = 'block';
+            }
         }
     };
 
@@ -1004,7 +1178,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
         const fields = ['usa_guia','usa_empresa','usa_url','usa_fecha_envio','usa_fecha_estimada',
             'usa_bodega_nom','usa_bodega_fecha','usa_bodega_foto',
             'int_fecha_envio','int_guia','int_url',
-            'col_bodega_fecha','col_bodega_foto','cliente_notificado',
+            'col_bodega_fecha','col_bodega_foto','cliente_notificado','col_fecha_notificacion',
             'cli_guia','cli_empresa','cli_url','cli_fecha_envio','cli_estado_entrega','cli_fecha_recibido',
             'valor_envio_interno_colombia','comprado_viaje_encargos'
         ];
@@ -1056,7 +1230,18 @@ export const createLogisticsModal = async (id, navigateTo) => {
             const consolidateIds = fd.getAll('consolidate_ids');
             const guiaUSD = fd.get('guia_total_usd');
             const guiaCOP = fd.get('guia_total_cop');
-            
+
+            // Consolidación Bodega Colombia (fase 5→6): el valor de envío local ingresado
+            // se reparte en partes iguales entre esta venta y las que se consolidan con ella.
+            const consolidateColIds = fd.getAll('consolidate_col_ids');
+            let valorEnvioColDividido = null;
+            if (nuevaFase.includes('6.') && consolidateColIds.length > 0) {
+                const totalConsolidadas = consolidateColIds.length + 1;
+                const valorIngresado = parseFloat(fd.get('valor_envio_interno_colombia') || 0);
+                valorEnvioColDividido = totalConsolidadas > 0 ? (valorIngresado / totalConsolidadas) : valorIngresado;
+                payload.valor_envio_interno_colombia = valorEnvioColDividido;
+            }
+
             let newGuiaId = null;
             const intGuiaVal = (fd.get('int_guia') || payload.int_guia || '').trim();
             if (nuevaFase.includes('4.') && intGuiaVal) {
@@ -1144,7 +1329,42 @@ export const createLogisticsModal = async (id, navigateTo) => {
                 }
             }
 
-            window.closeModal(); 
+            // Actualizar otras ventas consolidadas en Bodega Colombia (fase 5 → 6):
+            // heredan transportadora/guía/fechas/URL del despacho, y el valor de envío
+            // ya dividido por partes iguales.
+            if (consolidateColIds.length > 0) {
+                btn.innerHTML = `<i class="loader"></i> Consolidando ${consolidateColIds.length} venta(s)...`;
+                for (const otherId of consolidateColIds) {
+                    const otherItem = list.find(it => it.id.toString() === otherId.toString());
+                    if (otherItem) {
+                        const otherPayload = {
+                            ...otherItem,
+                            fase: nuevaFase,
+                            cli_empresa: payload.cli_empresa,
+                            cli_guia: payload.cli_guia,
+                            cli_fecha_envio: payload.cli_fecha_envio,
+                            cli_url: payload.cli_url,
+                            cli_estado_entrega: payload.cli_estado_entrega,
+                            cli_fecha_recibido: payload.cli_fecha_recibido,
+                            valor_envio_interno_colombia: valorEnvioColDividido,
+                            fase_portal: payload.fase_portal,
+                            fase_portal_num: payload.fase_portal_num,
+                            fecha_actualizacion: new Date().toISOString()
+                        };
+                        let otherHist = [];
+                        try { otherHist = JSON.parse(otherItem.historial || '[]'); } catch(e){}
+                        otherHist.push({
+                            fase: nuevaFase,
+                            fecha: new Date().toLocaleString('es-CO'),
+                            notas: `Consolidado con guía ${payload.cli_guia || 's/n'} junto a otra(s) venta(s) del mismo cliente`
+                        });
+                        otherPayload.historial = JSON.stringify(otherHist);
+                        await db.postData('Logistica', otherPayload, 'UPDATE');
+                    }
+                }
+            }
+
+            window.closeModal();
             showToast('Guía logística procesada con éxito.', 'success');
             navigateTo('logistics'); 
         } catch (err) { 
@@ -1505,28 +1725,19 @@ window.confirmarAvanceGuia = async (guiaId) => {
     }
 };
 
+let _logSearchDebounce = null;
 function attachLogSearch() {
     const fi = document.getElementById('find-it');
     if (!fi) return;
     fi.oninput = (e) => {
-        const k = e.target.value.toLowerCase().trim();
-        document.querySelectorAll('#list-body .log-row').forEach(r => {
-            const m = (r.getAttribute('data-text')||'').toLowerCase().includes(k);
-            r.style.display = m ? '' : 'none';
-        });
-        
-        // Ocultar bloques de fase vacíos si el usuario está buscando y no hay coincidencias en esa fase
-        document.querySelectorAll('.log-fase-block').forEach(block => {
-            const rows = block.querySelectorAll('.log-row');
-            let hasVisible = false;
-            rows.forEach(r => {
-                if (r.style.display !== 'none') hasVisible = true;
-            });
-            const totalRows = rows.length;
-            if (totalRows > 0) {
-                block.style.display = hasVisible ? '' : 'none';
-            }
-        });
+        const val = e.target.value;
+        clearTimeout(_logSearchDebounce);
+        _logSearchDebounce = setTimeout(() => window.setLogSearch(val), 350);
     };
+    // Si había una búsqueda activa, el re-render reemplaza el input — recuperar el foco y el cursor.
+    if (_logSearchTerm) {
+        fi.focus();
+        fi.setSelectionRange(fi.value.length, fi.value.length);
+    }
 }
 
