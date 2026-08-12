@@ -799,6 +799,15 @@ function attachGroupToggles() {
     document.querySelectorAll('.purchase-group-card').forEach(el => {
         if (!el.classList.contains('open')) el.classList.add('open');
     });
+    if (typeof window.togglePurchaseGroup === 'undefined') {
+        window.togglePurchaseGroup = (id) => {
+            const c = document.getElementById(id);
+            if (!c) return;
+            const o = c.classList.toggle('open');
+            const t = c.querySelector('.purchase-group-toggle');
+            if (t) t.textContent = o ? '▲' : '▼';
+        };
+    }
 }
 
 // ─── Rentabilidad: per-sale profitability table (TablaPro sobre ventas_finanzas_view) ──

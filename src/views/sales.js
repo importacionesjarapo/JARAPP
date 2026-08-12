@@ -64,6 +64,54 @@ const renderSalesKPI = (ventas) => {
     </div>`;
 };
 
+// ─── Tarjetas de resumen por Fase/Estado ────────────────────────────────────────
+// Mismo cómputo de fase que la columna "Fase Logística" de la tabla y la vista
+// "Por Fase" (getLogisticaFase), para que cuenten exactamente lo mismo. Orden fijo
+// para las 6 fases logísticas canónicas; cualquier otro estado (p.ej. "Procesando"
+// o estados de venta sin registro logístico) se agrega al final, por conteo.
+const FASE_ORDEN_VENTAS = [
+    'Comprado (Esperando Tracking Local USA)',
+    'En Tránsito (Tienda -> Bodega USA)',
+    'En Bodega USA (Estados Unidos)',
+    'Tránsito Internacional / Aduana',
+    'En Bodega Colombia',
+    'Entregado a Cliente Final',
+];
+const faseIconVenta = (fase) => {
+    if (fase.includes('Comprado')) return '🛒';
+    if (fase.includes('Tránsito') && fase.includes('Bodega USA')) return '🚚';
+    if (fase.includes('Bodega USA')) return '🏭';
+    if (fase.includes('Aduana') || fase.includes('Internacional')) return '✈️';
+    if (fase.includes('Bodega Colombia')) return '🇨🇴';
+    if (fase.includes('Entregado')) return '✅';
+    return '🔄';
+};
+const renderSalesFaseCards = (ventas) => {
+    const groups = {};
+    ventas.forEach(v => {
+        const fase = getLogisticaFase(v.id, localLogisticaCache, v.estado_orden || 'Procesando');
+        groups[fase] = (groups[fase] || 0) + 1;
+    });
+    const entries = Object.entries(groups).sort((a, b) => {
+        const ia = FASE_ORDEN_VENTAS.indexOf(a[0]);
+        const ib = FASE_ORDEN_VENTAS.indexOf(b[0]);
+        if (ia === -1 && ib === -1) return b[1] - a[1];
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+    });
+    if (entries.length === 0) return '';
+    return `
+    <div class="kpi-strip" style="margin-top:0.8rem;">
+        ${entries.map(([fase, count]) => `
+        <div class="kpi-strip-card" onclick="window.openSalesFase('${fase.replace(/'/g,"\\'")}')">
+            <span class="kpi-strip-icon">${faseIconVenta(fase)}</span>
+            <div class="kpi-strip-value" style="color:${getLogisticaColor(fase)};">${count}</div>
+            <div class="kpi-strip-label">${fase}</div>
+        </div>`).join('')}
+    </div>`;
+};
+
 window.openSalesKPI = (kpiName) => {
     let title = kpiName;
     let subtitle = '';
@@ -123,6 +171,41 @@ window.openSalesKPI = (kpiName) => {
     }).join('');
     
     window.openKPIDetailModal(title, subtitle, itemsHtml);
+};
+
+window.openSalesFase = (faseName) => {
+    const ventasFiltradas = [...localVentasFiltered].reverse().filter(v =>
+        getLogisticaFase(v.id, localLogisticaCache, v.estado_orden || 'Procesando') === faseName
+    );
+
+    const itemsHtml = ventasFiltradas.map(v => {
+        const c = localClientesCache.find(x => x.id.toString() === v.cliente_id?.toString());
+        const prod = localProductosCache.find(p => p.id.toString() === v.producto_id?.toString());
+        const total = parseFloat(v.valor_total_cop) || 0;
+        const saldo = parseFloat(v.saldo_pendiente) || 0;
+        const date = normDate(v.fecha);
+
+        return `
+        <div class="kpi-modal-item">
+            <div class="kpi-item-main">
+                <div class="kpi-item-title">Orden #${v.id.toString().slice(-4)} <span style="font-size:0.8em;opacity:0.6;font-weight:normal;margin-left:6px;">${date}</span></div>
+                <div class="kpi-item-subtitle">${c ? c.nombre : 'Cliente Desconocido'}</div>
+                <div class="kpi-item-info">
+                    <span>${prod ? prod.nombre_producto : 'Sin producto'}</span>
+                    <span style="opacity:0.5;">|</span>
+                    <span style="color:${v.tipo_venta==='Encargo'?'var(--warning-orange)':'var(--success-green)'}">${v.tipo_venta || 'Venta'}</span>
+                </div>
+            </div>
+            <div class="kpi-item-right">
+                <div class="kpi-item-value">${formatCOP(total)}</div>
+                ${saldo > 0 ? `<div style="color:var(--primary-red);">Debe: ${formatCOP(saldo)}</div>` : `<div style="color:var(--success-green);">Pagada</div>`}
+                <button class="btn-action" onclick="window.modalDetalleVentaGlobal('${v.id}'); document.getElementById('kpi-detail-modal').classList.remove('active');" style="margin-top:4px;">👁️ Ver Venta</button>
+            </div>
+        </div>
+        `;
+    }).join('');
+
+    window.openKPIDetailModal(faseName, `Ventas actualmente en esta fase/estado.`, itemsHtml || `<div style="text-align:center;padding:2rem;opacity:0.5;">Sin ventas en esta fase.</div>`);
 };
 
 // ─── VIEW: Tabla (TablaPro) ────────────────────────────────────────────────────
@@ -582,6 +665,7 @@ export const renderSales = async (renderLayout, navigateTo) => {
             return true;
         });
         document.getElementById('sales-kpi-container').innerHTML = renderSalesKPI(localVentasFiltered);
+        document.getElementById('sales-fase-container').innerHTML = renderSalesFaseCards(localVentasFiltered);
         injectSalesView(_salesActiveView);
     };
 
@@ -646,6 +730,10 @@ export const renderSales = async (renderLayout, navigateTo) => {
 
     <div id="sales-kpi-container">
         ${renderSalesKPI(localVentasFiltered)}
+    </div>
+
+    <div id="sales-fase-container">
+        ${renderSalesFaseCards(localVentasFiltered)}
     </div>
 
     <div class="purchase-view-switcher" style="margin-bottom:1.5rem;">

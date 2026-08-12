@@ -1125,6 +1125,93 @@ export const createLogisticsModal = async (id, navigateTo) => {
         const formEl = document.getElementById('form-tracking');
         if (!formEl) return;
 
+        // Registra (o actualiza, si ya existía) el valor de envío local COP como un
+        // Egreso en Finanzas — categoría "Logística Externa / Envíos". Idempotente:
+        // si el registro logístico ya tenía un gasto vinculado (col_envio_gasto_id),
+        // se actualiza ese mismo Gasto en vez de crear uno nuevo cada vez que se guarda.
+        const registrarEgresoEnvioCol = async (ventaId, valorCop, guia, gastoIdExistente, fechaEnvio) => {
+            const valor = parseFloat(valorCop || 0);
+            if (!valor || valor <= 0) return gastoIdExistente || null;
+
+            const vRef = ventaId ? ventas.find(v => v.id.toString() === ventaId.toString()) : null;
+            const cRef = vRef ? clientes.find(c => c.id.toString() === vRef.cliente_id?.toString()) : null;
+            const concepto = `Envío local Colombia${guia ? ' - Guía ' + guia : ''}${cRef ? ' - ' + cRef.nombre : ''}${ventaId ? ' (Venta #' + ventaId.toString().slice(-4) + ')' : ''}`;
+
+            if (gastoIdExistente) {
+                await db.postData('Gastos', {
+                    id: gastoIdExistente,
+                    tipo_gasto: 'Logística Externa / Envíos',
+                    concepto,
+                    moneda: 'COP',
+                    valor_origen: valor,
+                    trm: null,
+                    valor_cop: valor,
+                    fecha_real_factura: fechaEnvio || null,
+                }, 'UPDATE');
+                return gastoIdExistente;
+            }
+
+            const nuevoId = Date.now().toString() + Math.floor(Math.random()*1000);
+            await db.postData('Gastos', {
+                id: nuevoId,
+                tipo_gasto: 'Logística Externa / Envíos',
+                concepto,
+                numero_factura: null,
+                fecha_real_factura: fechaEnvio || null,
+                moneda: 'COP',
+                valor_origen: valor,
+                trm: null,
+                valor_cop: valor,
+                fecha: new Date().toLocaleDateString(),
+                comprobante_url: ''
+            }, 'INSERT');
+            return nuevoId;
+        };
+
+        // Registra (o actualiza) el costo de flete/guía internacional (USD + su
+        // equivalente COP) como un Egreso en Finanzas, en moneda USD. Idempotente:
+        // el vínculo vive en GuiasInternacionales.gasto_id — como la guía puede ser
+        // compartida por varios productos consolidados, el gasto se registra UNA
+        // sola vez por guía, no por cada producto.
+        const registrarEgresoFleteGuia = async (valorUSD, valorCOP, numeroGuia, gastoIdExistente, fechaFlete) => {
+            const vCOP = parseFloat(valorCOP || 0);
+            const vUSD = parseFloat(valorUSD || 0);
+            if (!vCOP || vCOP <= 0) return gastoIdExistente || null;
+
+            const concepto = `Flete / Guía Internacional${numeroGuia ? ' - ' + numeroGuia : ''}`;
+            const trmImplicita = vUSD > 0 ? (vCOP / vUSD) : null;
+
+            if (gastoIdExistente) {
+                await db.postData('Gastos', {
+                    id: gastoIdExistente,
+                    tipo_gasto: 'Logística Externa / Envíos',
+                    concepto,
+                    moneda: 'USD',
+                    valor_origen: vUSD,
+                    trm: trmImplicita,
+                    valor_cop: vCOP,
+                    fecha_real_factura: fechaFlete || null,
+                }, 'UPDATE');
+                return gastoIdExistente;
+            }
+
+            const nuevoId = Date.now().toString() + Math.floor(Math.random()*1000);
+            await db.postData('Gastos', {
+                id: nuevoId,
+                tipo_gasto: 'Logística Externa / Envíos',
+                concepto,
+                numero_factura: null,
+                fecha_real_factura: fechaFlete || null,
+                moneda: 'USD',
+                valor_origen: vUSD,
+                trm: trmImplicita,
+                valor_cop: vCOP,
+                fecha: new Date().toLocaleDateString(),
+                comprobante_url: ''
+            }, 'INSERT');
+            return nuevoId;
+        };
+
         window._saveLogistica = async () => {
             const e = { target: formEl, preventDefault: () => {} };
         const fd = new FormData(e.target);
@@ -1242,6 +1329,15 @@ export const createLogisticsModal = async (id, navigateTo) => {
                 payload.valor_envio_interno_colombia = valorEnvioColDividido;
             }
 
+            // Registrar/actualizar el egreso del envío local en Finanzas
+            if (nuevaFase.includes('6.') && parseFloat(payload.valor_envio_interno_colombia || 0) > 0) {
+                btn.innerHTML = '<i class="loader"></i> Registrando egreso de envío...';
+                payload.col_envio_gasto_id = await registrarEgresoEnvioCol(
+                    payload.venta_id, payload.valor_envio_interno_colombia, payload.cli_guia,
+                    data.col_envio_gasto_id, payload.cli_fecha_envio
+                );
+            }
+
             let newGuiaId = null;
             const intGuiaVal = (fd.get('int_guia') || payload.int_guia || '').trim();
             if (nuevaFase.includes('4.') && intGuiaVal) {
@@ -1253,25 +1349,34 @@ export const createLogisticsModal = async (id, navigateTo) => {
                 if (guiaExistente) {
                     newGuiaId = guiaExistente.id;
                     payload.guia_internacional_id = newGuiaId;
-                    
+
                     // Opcionalmente actualizar valores si el usuario los ingresó
                     const updatedGuia = { ...guiaExistente };
                     let changed = false;
                     if (guiaUSD) { updatedGuia.valor_usd = parseFloat(guiaUSD); changed = true; }
                     if (guiaCOP) { updatedGuia.valor_cop = parseInt(guiaCOP); changed = true; }
                     if (changed) {
+                        btn.innerHTML = '<i class="loader"></i> Registrando egreso de flete...';
+                        updatedGuia.gasto_id = await registrarEgresoFleteGuia(
+                            updatedGuia.valor_usd, updatedGuia.valor_cop, intGuiaVal,
+                            guiaExistente.gasto_id, payload.int_fecha_envio
+                        );
                         await db.postData('GuiasInternacionales', updatedGuia, 'UPDATE');
                     }
                 } else {
                     btn.innerHTML = '<i class="loader"></i> Creando Guía Internacional...';
                     newGuiaId = Date.now().toString();
+                    const gastoFleteId = await registrarEgresoFleteGuia(
+                        guiaUSD, guiaCOP, intGuiaVal, null, payload.int_fecha_envio
+                    );
                     const guiaPayload = {
                         id: newGuiaId,
                         numero_guia: intGuiaVal,
                         valor_usd: parseFloat(guiaUSD || 0),
                         valor_cop: parseInt(guiaCOP || 0),
                         courier: fd.get('paq') || payload.paqueteria || '',
-                        fecha_creacion: new Date().toISOString()
+                        fecha_creacion: new Date().toISOString(),
+                        gasto_id: gastoFleteId
                     };
                     await db.postData('GuiasInternacionales', guiaPayload, 'INSERT');
                     payload.guia_internacional_id = newGuiaId;
@@ -1351,6 +1456,12 @@ export const createLogisticsModal = async (id, navigateTo) => {
                             fase_portal_num: payload.fase_portal_num,
                             fecha_actualizacion: new Date().toISOString()
                         };
+                        if (valorEnvioColDividido > 0) {
+                            otherPayload.col_envio_gasto_id = await registrarEgresoEnvioCol(
+                                otherItem.venta_id, valorEnvioColDividido, payload.cli_guia,
+                                otherItem.col_envio_gasto_id, payload.cli_fecha_envio
+                            );
+                        }
                         let otherHist = [];
                         try { otherHist = JSON.parse(otherItem.historial || '[]'); } catch(e){}
                         otherHist.push({
