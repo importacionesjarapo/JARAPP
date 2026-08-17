@@ -58,6 +58,8 @@ const estadoBadgeHTML = (estado) => {
   return `<span class="status-badge" style="background:${c.bg};color:${c.text};">${escapeHtml(ESTADO_LABELS[estado] || estado || '—')}</span>`;
 };
 
+const shouldShowGuionParaTipo = (tipo) => /reel|histor|story/i.test(tipo || '');
+
 const checklistItemHTML = (label, checked) => `
   <div class="cal-check-item ${checked ? 'ok' : 'pending'}">
     <span class="cal-check-icon">${checked ? '✓' : '○'}</span>
@@ -383,6 +385,7 @@ function renderItemDetail(item) {
       </div>
 
       ${item.hook ? `<div class="cal-detail-hook">${escapeHtml(item.hook)}</div>` : ''}
+      ${item.guion ? `<div class="cal-detail-block"><label>Guion</label><p>${escapeHtml(item.guion).replace(/\n/g, '<br>')}</p></div>` : ''}
       ${item.copy_final ? `<div class="cal-detail-block"><label>Copy final</label><p>${escapeHtml(item.copy_final).replace(/\n/g, '<br>')}</p></div>` : ''}
       ${item.cta ? `<div class="cal-detail-cta">${escapeHtml(item.cta)}</div>` : ''}
 
@@ -551,7 +554,7 @@ async function openCalendarioModal(id, prefillDate) {
   let data = {
     fecha: prefillDate || new Date().toISOString().slice(0, 10),
     hora: '', canal: CANALES[0], categoria: CATEGORIAS[0], tipo_contenido: '',
-    estado: 'idea', responsable: '', fecha_limite_entrega: '', hook: '', copy_final: '', cta: '',
+    estado: 'idea', responsable: '', fecha_limite_entrega: '', hook: '', guion: '', copy_final: '', cta: '',
     marcas_productos: [], assets_necesarios: '', codigo_descuento: '',
     link_verificado: false, codigo_verificado: false, reglas_marca_revisadas: false,
   };
@@ -609,7 +612,7 @@ async function openCalendarioModal(id, prefillDate) {
             </div>
             <div class="form-group">
               <label class="form-label">Tipo de contenido</label>
-              <input type="text" name="tipo_contenido" value="${escapeHtml(data.tipo_contenido)}" placeholder="Post, Reel, Story, Carrusel…">
+              <input type="text" name="tipo_contenido" id="cal-input-tipo" value="${escapeHtml(data.tipo_contenido)}" placeholder="Post, Reel, Story, Carrusel…">
             </div>
             <div class="form-group">
               <label class="form-label">Responsable</label>
@@ -628,6 +631,11 @@ async function openCalendarioModal(id, prefillDate) {
           <div class="form-group full-width" style="margin-top:0.5rem;">
             <label class="form-label">Hook</label>
             <input type="text" name="hook" value="${escapeHtml(data.hook)}" placeholder="Frase gancho de la publicación">
+          </div>
+
+          <div class="form-group full-width" id="cal-guion-group" style="display:${(shouldShowGuionParaTipo(data.tipo_contenido) || data.guion) ? 'flex' : 'none'};">
+            <label class="form-label">Guion (Historia / Reel)</label>
+            <textarea name="guion" rows="4" placeholder="Guion o storyboard: escena por escena, texto en pantalla, indicaciones de grabación…">${escapeHtml(data.guion)}</textarea>
           </div>
 
           <div class="form-group full-width">
@@ -681,8 +689,16 @@ async function openCalendarioModal(id, prefillDate) {
 
   const catEl = document.getElementById('cal-input-categoria');
   const codEl = document.getElementById('cal-input-codigo');
+  const tipoEl = document.getElementById('cal-input-tipo');
   const noticeEl = document.getElementById('cal-reminder-notice');
   const codigoRowEl = document.getElementById('cal-codigo-verificado-row');
+  const guionGroupEl = document.getElementById('cal-guion-group');
+
+  const updateGuionVisibility = () => {
+    if (!guionGroupEl) return;
+    guionGroupEl.style.display = shouldShowGuionParaTipo(tipoEl.value) ? 'flex' : 'none';
+  };
+  tipoEl.addEventListener('input', updateGuionVisibility);
 
   const updateReminder = () => {
     if (!noticeEl) return;
@@ -728,6 +744,7 @@ async function openCalendarioModal(id, prefillDate) {
       responsable: fd.get('responsable')?.trim() || null,
       fecha_limite_entrega: fd.get('fecha_limite_entrega') || null,
       hook: fd.get('hook')?.trim() || null,
+      guion: fd.get('guion')?.trim() || null,
       copy_final: fd.get('copy_final')?.trim() || null,
       cta: fd.get('cta')?.trim() || null,
       marcas_productos: _calModalTags,
