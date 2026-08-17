@@ -592,11 +592,11 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
 }
 
 function buildPermsGrid(perms) {
-  const modules = ['dashboard','clients','inventory','sales','vendedores','purchases','logistics','finance','calculadora','params','documentacion','admin','feat_money','feat_usa','feat_calc_desglose','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno'];
+  const modules = ['dashboard','clients','inventory','sales','vendedores','purchases','logistics','finance','calculadora','params','documentacion','admin','feat_money','feat_usa','feat_calc_desglose','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno','calendario_ver','calendario_crear','calendario_editar','calendario_eliminar'];
 
   return modules.map(mod => {
     const perm = perms[mod];
-    const isBoolean = mod === 'admin' || mod === 'dashboard' || mod.startsWith('feat_') || mod.startsWith('cotizador_');
+    const isBoolean = mod === 'admin' || mod === 'dashboard' || mod.startsWith('feat_') || mod.startsWith('cotizador_') || mod.startsWith('calendario_');
 
     return `
       <div class="admin-perm-row">
@@ -606,6 +606,7 @@ function buildPermsGrid(perms) {
           ${mod === 'admin' ? '<span class="admin-badge-admin">Solo Admin</span>' : ''}
           ${mod.startsWith('feat_') ? '<span style="font-size:0.65rem; background:var(--glass-border); padding:2px 6px; border-radius:4px; margin-left:6px;">UI Feature</span>' : ''}
           ${mod.startsWith('cotizador_') ? '<span style="font-size:0.65rem; background:rgba(230,57,70,0.12); color:var(--primary); padding:2px 6px; border-radius:4px; margin-left:6px;">Cotizador</span>' : ''}
+          ${mod.startsWith('calendario_') ? '<span style="font-size:0.65rem; background:rgba(124,58,237,0.12); color:#7C3AED; padding:2px 6px; border-radius:4px; margin-left:6px;">Calendario</span>' : ''}
         </div>
         <div class="admin-perm-controls">
           ${isBoolean ? `

@@ -11,36 +11,42 @@ export const ROLE_TEMPLATES = {
     purchases: 'edit', logistics: 'edit', finance: 'edit', vendedores: 'edit', params: 'edit', documentacion: 'edit',
     calculadora: 'edit', admin: true, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
+    calendario_ver: true, calendario_crear: true, calendario_editar: true, calendario_eliminar: true,
   },
   gerente: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
     purchases: 'edit', logistics: 'edit', finance: 'edit', vendedores: 'edit', params: 'view', documentacion: 'edit',
     calculadora: 'edit', admin: false, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
+    calendario_ver: true, calendario_crear: true, calendario_editar: true, calendario_eliminar: true,
   },
   ventas: {
     dashboard: true, clients: 'edit', inventory: 'view', sales: 'edit',
     purchases: false, logistics: 'view', finance: false, vendedores: 'view', params: false, documentacion: 'view',
     calculadora: 'edit', admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: true, cotizador_desglose: false, cotizador_pdf_cliente: true, cotizador_pdf_interno: false,
+    calendario_ver: true, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
   },
   logistica: {
     dashboard: true, clients: 'view', inventory: 'edit', sales: 'view',
     purchases: 'edit', logistics: 'edit', finance: false, vendedores: false, params: false, documentacion: 'view',
     calculadora: 'view', admin: false, feat_money: false, feat_usa: true, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
+    calendario_ver: false, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
   },
   finanzas: {
     dashboard: true, clients: 'view', inventory: 'view', sales: 'view',
     purchases: 'view', logistics: 'view', finance: 'edit', vendedores: 'edit', params: false, documentacion: 'view',
     calculadora: 'view', admin: false, feat_money: true, feat_usa: false, feat_calc_desglose: true,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
+    calendario_ver: false, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
   },
   viewer: {
     dashboard: true, clients: false, inventory: false, sales: false,
     purchases: false, logistics: false, finance: false, vendedores: false, params: false, documentacion: false,
     calculadora: false, admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
+    calendario_ver: false, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
   }
 };
 
@@ -54,7 +60,11 @@ export const MODULE_LABELS = {
   logistics: 'Seguimientos', finance: 'Gastos y Finanzas', vendedores: 'Vendedores', params: 'Parametrización',
   calculadora: 'Calculadora de Precios', admin: 'Administración',
   feat_money: 'Ver Tarjetas de Dinero', feat_usa: 'Ver Submódulo EEUU',
-  feat_calc_desglose: 'Ver Desglose en Calculadora'
+  feat_calc_desglose: 'Ver Desglose en Calculadora',
+  calendario_ver: 'Calendario de Contenido — Ver',
+  calendario_crear: 'Calendario de Contenido — Crear',
+  calendario_editar: 'Calendario de Contenido — Editar',
+  calendario_eliminar: 'Calendario de Contenido — Eliminar',
 };
 
 export const ROLE_LABELS = {
