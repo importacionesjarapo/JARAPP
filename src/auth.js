@@ -12,7 +12,7 @@ export const ROLE_TEMPLATES = {
     calculadora: 'edit', admin: true, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
     calendario_ver: true, calendario_crear: true, calendario_editar: true, calendario_eliminar: true,
-    calendario_plantilla_editar: true,
+    calendario_plantilla_editar: true, calendario_fechas_editar: true,
   },
   gerente: {
     dashboard: true, clients: 'edit', inventory: 'edit', sales: 'edit',
@@ -20,7 +20,7 @@ export const ROLE_TEMPLATES = {
     calculadora: 'edit', admin: false, feat_money: true, feat_usa: true, feat_calc_desglose: true,
     cotizador_ver: true, cotizador_desglose: true, cotizador_pdf_cliente: true, cotizador_pdf_interno: true,
     calendario_ver: true, calendario_crear: true, calendario_editar: true, calendario_eliminar: true,
-    calendario_plantilla_editar: true,
+    calendario_plantilla_editar: true, calendario_fechas_editar: true,
   },
   ventas: {
     dashboard: true, clients: 'edit', inventory: 'view', sales: 'edit',
@@ -28,7 +28,7 @@ export const ROLE_TEMPLATES = {
     calculadora: 'edit', admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: true, cotizador_desglose: false, cotizador_pdf_cliente: true, cotizador_pdf_interno: false,
     calendario_ver: true, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
-    calendario_plantilla_editar: false,
+    calendario_plantilla_editar: false, calendario_fechas_editar: false,
   },
   logistica: {
     dashboard: true, clients: 'view', inventory: 'edit', sales: 'view',
@@ -36,7 +36,7 @@ export const ROLE_TEMPLATES = {
     calculadora: 'view', admin: false, feat_money: false, feat_usa: true, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
     calendario_ver: false, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
-    calendario_plantilla_editar: false,
+    calendario_plantilla_editar: false, calendario_fechas_editar: false,
   },
   finanzas: {
     dashboard: true, clients: 'view', inventory: 'view', sales: 'view',
@@ -44,7 +44,7 @@ export const ROLE_TEMPLATES = {
     calculadora: 'view', admin: false, feat_money: true, feat_usa: false, feat_calc_desglose: true,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
     calendario_ver: false, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
-    calendario_plantilla_editar: false,
+    calendario_plantilla_editar: false, calendario_fechas_editar: false,
   },
   viewer: {
     dashboard: true, clients: false, inventory: false, sales: false,
@@ -52,7 +52,7 @@ export const ROLE_TEMPLATES = {
     calculadora: false, admin: false, feat_money: false, feat_usa: false, feat_calc_desglose: false,
     cotizador_ver: false, cotizador_desglose: false, cotizador_pdf_cliente: false, cotizador_pdf_interno: false,
     calendario_ver: false, calendario_crear: false, calendario_editar: false, calendario_eliminar: false,
-    calendario_plantilla_editar: false,
+    calendario_plantilla_editar: false, calendario_fechas_editar: false,
   }
 };
 
@@ -72,6 +72,7 @@ export const MODULE_LABELS = {
   calendario_editar: 'Calendario de Contenido — Editar',
   calendario_eliminar: 'Calendario de Contenido — Eliminar',
   calendario_plantilla_editar: 'Calendario de Contenido — Editar Plantilla Semanal',
+  calendario_fechas_editar: 'Calendario de Contenido — Editar Fechas Clave',
 };
 
 export const ROLE_LABELS = {

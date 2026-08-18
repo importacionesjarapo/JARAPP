@@ -14,10 +14,15 @@ import {
   PlantillaService, DIAS_SEMANA_FULL, TIPOS_CONTENIDO, TIPO_CONTENIDO_LABELS,
   diaSemanaDeFecha, esFueraDePlantilla
 } from '../services/plantillaSemanal.js';
+import {
+  FechasClaveService, TIPOS_FECHA_CLAVE, TIPO_FECHA_LABELS, TIPO_FECHA_COLORS, fechaClaveAplicaA
+} from '../services/fechasClave.js';
 
 // ── Estado del módulo ───────────────────────────────────────────────────────────
 let _calCache = [];
 let _calPlantillaCache = [];
+let _calFechasClaveCache = [];
+let _calFechasClaveEditId = null; // null en modo lista, 'new' o id en modo formulario
 let _calView = 'calendario'; // 'calendario' | 'lista' | 'plantilla'
 let _calYear = null;
 let _calMonth = null; // 0-11
@@ -190,6 +195,16 @@ function injectStyles() {
     .cal-row-vencida td { background:var(--danger-dim); }
 
     .modal-content.modal-narrow { max-width:420px; }
+
+    .cal-day-keydates { display:flex; flex-direction:column; gap:2px; margin:-6px -6px 4px -6px; }
+    .cal-day-keydate-bar { height:5px; }
+    .cal-day-keydates .cal-day-keydate-bar:first-child { border-radius:9px 9px 0 0; }
+
+    .cal-fechaclave-row { display:flex; align-items:center; gap:10px; padding:10px; border-radius:10px; background:var(--surface-1); border:1px solid var(--border-base); }
+    .cal-fechaclave-row-main { flex:1; min-width:0; }
+    .cal-fechaclave-row-title { font-size:0.85rem; font-weight:700; color:var(--text-main); }
+    .cal-fechaclave-row-sub { font-size:0.72rem; color:var(--text-faint); margin-top:2px; }
+    .cal-fechaclave-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
   `;
   document.head.appendChild(s);
 }
@@ -211,7 +226,9 @@ export const renderCalendarioContenido = async (renderLayout, navigateTo) => {
   }
 
   try {
-    [_calCache, _calPlantillaCache] = await Promise.all([CalendarioService.fetchAll(), PlantillaService.fetchAll()]);
+    [_calCache, _calPlantillaCache, _calFechasClaveCache] = await Promise.all([
+      CalendarioService.fetchAll(), PlantillaService.fetchAll(), FechasClaveService.fetchAll()
+    ]);
   } catch (err) {
     renderError(renderLayout, err.message, navigateTo);
     return;
@@ -261,6 +278,15 @@ async function _calReloadPlantilla() {
   _reloadCalContent();
 }
 
+async function _calReloadFechasClave() {
+  try {
+    _calFechasClaveCache = await FechasClaveService.fetchAll();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+  _reloadCalContent();
+}
+
 function renderToolbar() {
   const canCrear = auth.canAccess('calendario_crear');
   return `
@@ -271,6 +297,7 @@ function renderToolbar() {
         <button class="pv-tab ${_calView === 'plantilla' ? 'active' : ''}" onclick="window.calSetView('plantilla')">🗂️ Plantilla Semanal</button>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        ${_calView === 'calendario' ? `<button class="btn-secondary" onclick="window.calAbrirFechasClave()">🚩 Fechas clave</button>` : ''}
         ${(_calView === 'calendario' && canCrear) ? `<button class="btn-secondary" onclick="window.calGenerarDesdePlantilla()">Generar mes desde plantilla</button>` : ''}
         ${canCrear ? `<button class="btn-primary" onclick="window.calOpenModal()">+ Nueva publicación</button>` : ''}
       </div>
@@ -346,8 +373,10 @@ function dayCellHTML(dateStr, dayNum, inMonth, items, isToday, isSelected) {
   const hasFueraDePlantilla = items.some(it => esFueraDePlantilla(it, plantillaDia));
   const visible = items.slice(0, 2);
   const extra = items.length - visible.length;
+  const fechasClaveDia = _calFechasClaveCache.filter(fc => fechaClaveAplicaA(fc, dateStr));
   return `
     <div class="cal-day ${isToday ? 'cal-day-today' : ''} ${isSelected ? 'cal-day-selected' : ''}" onclick="window.calSelectDay('${dateStr}')">
+      ${fechasClaveDia.length ? `<div class="cal-day-keydates">${fechasClaveDia.map(fc => `<div class="cal-day-keydate-bar" style="background:${TIPO_FECHA_COLORS[fc.tipo] || '#64748B'}" title="${escapeHtml(fc.titulo)}"></div>`).join('')}</div>` : ''}
       <div class="cal-day-head">
         <span class="cal-day-num">${dayNum}</span>
         <span style="display:flex; align-items:center; gap:4px;">
@@ -739,6 +768,176 @@ window.calGenerarDesdePlantilla = async () => {
     await CalendarioService.createMany(nuevos);
     await _calReload();
     await window.customAlert('Mes generado', `Se crearon ${nuevos.length} publicación${nuevos.length === 1 ? '' : 'es'}, se omitieron ${omitidos} día${omitidos === 1 ? '' : 's'} que ya tenían contenido.`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+// ── Fechas Clave ──────────────────────────────────────────────────────────────────
+window.calAbrirFechasClave = () => {
+  _calFechasClaveEditId = null;
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `<div class="modal-content" id="cal-fechasclave-modal">${_fechasClaveModalBodyHTML()}</div>`;
+  container.style.display = 'flex';
+};
+
+function _fechasClaveModalBodyHTML() {
+  return _calFechasClaveEditId ? _fechasClaveFormHTML() : _fechasClaveListHTML();
+}
+
+function _reRenderFechasClaveModal() {
+  const el = document.getElementById('cal-fechasclave-modal');
+  if (!el) return;
+  el.innerHTML = _fechasClaveModalBodyHTML();
+  if (_calFechasClaveEditId) _wireFechasClaveForm();
+}
+
+function _fechasClaveListHTML() {
+  const canEditar = auth.canAccess('calendario_fechas_editar');
+  const items = [..._calFechasClaveCache].sort((a, b) => String(a.fecha_inicio).localeCompare(String(b.fecha_inicio)));
+
+  const rows = items.map(fc => `
+    <div class="cal-fechaclave-row">
+      <span class="cal-fechaclave-dot" style="background:${TIPO_FECHA_COLORS[fc.tipo] || '#64748B'}"></span>
+      <div class="cal-fechaclave-row-main">
+        <div class="cal-fechaclave-row-title">${escapeHtml(fc.titulo)}</div>
+        <div class="cal-fechaclave-row-sub">${formatFechaCorta(fc.fecha_inicio)}${fc.fecha_fin && fc.fecha_fin !== fc.fecha_inicio ? ` – ${formatFechaCorta(fc.fecha_fin)}` : ''} · ${escapeHtml(TIPO_FECHA_LABELS[fc.tipo] || fc.tipo)}</div>
+      </div>
+      ${canEditar ? `
+        <button type="button" class="btn-action" onclick="window.fechaClaveEditar('${fc.id}')" title="Editar">✏️</button>
+        <button type="button" class="btn-action" onclick="window.fechaClaveEliminar('${fc.id}')" title="Eliminar">🗑️</button>
+      ` : ''}
+    </div>
+  `).join('') || `<p class="text-faint" style="padding:1rem 0;">No hay fechas clave registradas.</p>`;
+
+  return `
+    <div class="modal-header">
+      <div>
+        <h2>Fechas clave</h2>
+        <p style="opacity:0.6;font-size:0.85rem;margin-top:4px;">Viajes, temporadas de descuento y fechas comerciales</p>
+      </div>
+      <button onclick="window.closeModal()" class="modal-close">&times;</button>
+    </div>
+    <div class="modal-body" style="display:flex; flex-direction:column; gap:8px;">${rows}</div>
+    <div class="modal-footer">
+      <button type="button" class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
+      ${canEditar ? `<button type="button" class="btn-primary" onclick="window.fechaClaveNueva()">+ Nueva fecha clave</button>` : ''}
+    </div>
+  `;
+}
+
+function _fechasClaveFormHTML() {
+  const isEdit = _calFechasClaveEditId && _calFechasClaveEditId !== 'new';
+  let data = { fecha_inicio: new Date().toISOString().slice(0, 10), fecha_fin: '', titulo: '', tipo: TIPOS_FECHA_CLAVE[0], notas: '' };
+  if (isEdit) {
+    const found = _calFechasClaveCache.find(fc => String(fc.id) === String(_calFechasClaveEditId));
+    if (found) data = { ...data, ...found };
+  }
+
+  return `
+    <div class="modal-header">
+      <div>
+        <h2>${isEdit ? 'Editar fecha clave' : 'Nueva fecha clave'}</h2>
+      </div>
+      <button onclick="window.closeModal()" class="modal-close">&times;</button>
+    </div>
+    <form id="cal-fechaclave-form">
+      <div class="modal-body">
+        <div class="form-grid-3">
+          <div class="form-group">
+            <label class="form-label">Fecha inicio</label>
+            <input type="date" name="fecha_inicio" value="${escapeHtml(String(data.fecha_inicio).slice(0, 10))}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fecha fin (opcional)</label>
+            <input type="date" name="fecha_fin" value="${data.fecha_fin ? escapeHtml(String(data.fecha_fin).slice(0, 10)) : ''}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tipo</label>
+            <select name="tipo">
+              ${TIPOS_FECHA_CLAVE.map(t => `<option value="${t}" ${data.tipo === t ? 'selected' : ''}>${TIPO_FECHA_LABELS[t]}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group full-width">
+          <label class="form-label">Título</label>
+          <input type="text" name="titulo" value="${escapeHtml(data.titulo)}" placeholder="Ej: Viaje a Miami, Black Friday…" required>
+        </div>
+        <div class="form-group full-width">
+          <label class="form-label">Notas</label>
+          <textarea name="notas" rows="3" placeholder="Opcional">${escapeHtml(data.notas || '')}</textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="window.fechaClaveVolverLista()">← Volver</button>
+        <button type="submit" class="btn-primary" id="cal-fechaclave-submit-btn">${isEdit ? 'Guardar cambios' : 'Crear'}</button>
+      </div>
+    </form>
+  `;
+}
+
+function _wireFechasClaveForm() {
+  const form = document.getElementById('cal-fechaclave-form');
+  if (!form) return;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!auth.canAccess('calendario_fechas_editar')) return showToast('No tienes permiso para editar fechas clave.', 'error');
+    const fd = new FormData(e.target);
+    const payload = {
+      fecha_inicio: fd.get('fecha_inicio'),
+      fecha_fin: fd.get('fecha_fin') || null,
+      titulo: fd.get('titulo')?.trim(),
+      tipo: fd.get('tipo'),
+      notas: fd.get('notas')?.trim() || null,
+    };
+    const isEdit = _calFechasClaveEditId && _calFechasClaveEditId !== 'new';
+    const btn = document.getElementById('cal-fechaclave-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    try {
+      if (isEdit) await FechasClaveService.update(_calFechasClaveEditId, payload);
+      else await FechasClaveService.create(payload);
+      _calFechasClaveCache = await FechasClaveService.fetchAll();
+      showToast(isEdit ? 'Fecha clave actualizada' : 'Fecha clave creada', 'success');
+      _calFechasClaveEditId = null;
+      _reRenderFechasClaveModal();
+      _reloadCalContent();
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = isEdit ? 'Guardar cambios' : 'Crear';
+    }
+  };
+}
+
+window.fechaClaveNueva = () => {
+  if (!auth.canAccess('calendario_fechas_editar')) return showToast('No tienes permiso para crear fechas clave.', 'error');
+  _calFechasClaveEditId = 'new';
+  _reRenderFechasClaveModal();
+};
+
+window.fechaClaveEditar = (id) => {
+  if (!auth.canAccess('calendario_fechas_editar')) return showToast('No tienes permiso para editar fechas clave.', 'error');
+  _calFechasClaveEditId = id;
+  _reRenderFechasClaveModal();
+};
+
+window.fechaClaveVolverLista = () => {
+  _calFechasClaveEditId = null;
+  _reRenderFechasClaveModal();
+};
+
+window.fechaClaveEliminar = async (id) => {
+  if (!auth.canAccess('calendario_fechas_editar')) return showToast('No tienes permiso para eliminar fechas clave.', 'error');
+  const ok = await window.customConfirm('Eliminar fecha clave', '¿Seguro que deseas eliminar esta fecha clave? Esta acción no se puede deshacer.');
+  if (!ok) return;
+  try {
+    await FechasClaveService.remove(id);
+    showToast('Fecha clave eliminada', 'success');
+    _calFechasClaveCache = await FechasClaveService.fetchAll();
+    _reRenderFechasClaveModal();
+    _reloadCalContent();
   } catch (err) {
     showToast(err.message, 'error');
   }
