@@ -8,7 +8,8 @@ import { showToast, renderError } from '../utils.js';
 import {
   CalendarioService, CATEGORIAS, CATEGORIA_LABELS, CATEGORIA_COLORS,
   CANALES, CANAL_LABELS, CANAL_GRIS, ESTADOS, ESTADO_LABELS, ESTADO_BADGE_COLORS,
-  colorDePublicacion, requiereAtencion, esPublicadoTarde, esVencidoSinPublicar, puedeMarcarPublicado
+  colorDePublicacion, requiereAtencion, esPublicadoTarde, esVencidoSinPublicar, puedeMarcarPublicado,
+  buscarRepeticionHook, buscarRepeticionMarca
 } from '../services/calendarioContenido.js';
 import {
   PlantillaService, DIAS_SEMANA_FULL, TIPOS_CONTENIDO, TIPO_CONTENIDO_LABELS,
@@ -31,6 +32,7 @@ let _calSelectedItemId = null;
 let _calListFiltroCategoria = 'todas';
 let _calListFiltroEstado = 'todos';
 let _calListFiltroVencidos = false;
+let _calResumenAbierto = false;
 let _calModalTags = [];
 let _calReprogramarId = null;
 let _renderLayout = null;
@@ -94,6 +96,59 @@ function _plantillaPorDia() {
   const map = {};
   for (const p of _calPlantillaCache) map[p.dia_semana] = p;
   return map;
+}
+
+function _diasEntre(fechaStrAntigua, fechaStrReciente) {
+  const a = parseDateStr(fechaStrAntigua);
+  const b = parseDateStr(fechaStrReciente);
+  const ms = new Date(b.y, b.m, b.d) - new Date(a.y, a.m, a.d);
+  return Math.round(ms / 86400000);
+}
+
+function _resumenMesData() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const monthPrefix = `${_calYear}-${pad2(_calMonth + 1)}-`;
+  const itemsDelMes = _calCache.filter(it => String(it.fecha || '').startsWith(monthPrefix));
+  const total = itemsDelMes.length;
+
+  // 1. Distribución por categoría
+  const conteo = {};
+  CATEGORIAS.forEach(c => { conteo[c] = 0; });
+  itemsDelMes.forEach(it => { if (conteo[it.categoria] != null) conteo[it.categoria]++; });
+  const distribucion = CATEGORIAS
+    .map(c => ({ categoria: c, count: conteo[c], pct: total ? Math.round((conteo[c] / total) * 100) : 0 }))
+    .filter(d => d.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  // 2. Categorías con 10+ días naturales sin publicación programada o publicada
+  const alertasCategoria = CATEGORIAS.map(c => {
+    const relevantes = _calCache.filter(it =>
+      it.categoria === c && (it.estado === 'programado' || it.estado === 'publicado') && String(it.fecha).slice(0, 10) <= hoy
+    );
+    if (relevantes.length === 0) return { categoria: c, dias: null };
+    const ultima = relevantes.reduce((max, it) => (it.fecha > max ? it.fecha : max), relevantes[0].fecha);
+    return { categoria: c, dias: _diasEntre(ultima, hoy) };
+  }).filter(a => a.dias === null || a.dias >= 10);
+
+  // 3. Días sin nada planificado en el mes
+  const itemsByDate = _calItemsByDate();
+  const daysInMonth = new Date(_calYear, _calMonth + 1, 0).getDate();
+  const huecos = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = dateStrOf(_calYear, _calMonth, d);
+    if (!(itemsByDate[dateStr] && itemsByDate[dateStr].length)) huecos.push(dateStr);
+  }
+
+  // 4. % de cumplimiento del mes
+  let aTiempo = 0, tarde = 0, reprogramado = 0, vencido = 0;
+  itemsDelMes.forEach(it => {
+    if (it.estado === 'publicado' && !esPublicadoTarde(it)) aTiempo++;
+    else if (it.estado === 'publicado' && esPublicadoTarde(it)) tarde++;
+    else if (esVencidoSinPublicar(it)) vencido++;
+    else if (it.veces_reprogramado > 0) reprogramado++;
+  });
+
+  return { total, distribucion, alertasCategoria, huecos, cumplimiento: { aTiempo, tarde, reprogramado, vencido } };
 }
 
 // ── Estilos (inyectados una sola vez) ────────────────────────────────────────────
@@ -205,6 +260,27 @@ function injectStyles() {
     .cal-fechaclave-row-title { font-size:0.85rem; font-weight:700; color:var(--text-main); }
     .cal-fechaclave-row-sub { font-size:0.72rem; color:var(--text-faint); margin-top:2px; }
     .cal-fechaclave-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+    .cal-resumen { margin-top:1.25rem; padding:1.25rem; }
+    .cal-resumen-header { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+    .cal-resumen-title { margin:0; font-size:0.95rem; font-weight:800; color:var(--text-main); }
+    .cal-resumen-chevron { color:var(--text-faint); font-size:0.8rem; }
+    .cal-resumen-body { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid var(--border-base); }
+    @media (max-width:900px) { .cal-resumen-body { grid-template-columns:1fr; } }
+    .cal-resumen-section-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-faint); margin-bottom:0.75rem; }
+
+    .cal-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .cal-bar-label { width:90px; flex-shrink:0; font-size:0.76rem; font-weight:600; color:var(--text-muted); }
+    .cal-bar-track { flex:1; height:8px; background:var(--surface-3); border-radius:8px; overflow:hidden; }
+    .cal-bar-fill { height:100%; border-radius:8px; }
+    .cal-bar-pct { width:64px; flex-shrink:0; text-align:right; font-size:0.72rem; font-weight:700; color:var(--text-main); }
+
+    .cal-alert-item { font-size:0.8rem; color:var(--text-main); background:var(--danger-dim); border-radius:8px; padding:8px 10px; margin-bottom:6px; }
+
+    .cal-huecos-wrap { display:flex; flex-wrap:wrap; gap:6px; max-height:120px; overflow-y:auto; }
+    .cal-hueco-chip { background:var(--surface-2); border:1px solid var(--border-base); color:var(--text-muted); font-size:0.7rem; font-weight:600; padding:3px 9px; border-radius:20px; }
+
+    .cal-hook-repeat-notice { display:none; align-items:flex-start; gap:8px; background:var(--warning-dim); border:1px solid var(--warning); border-radius:10px; padding:8px 12px; font-size:0.74rem; color:var(--text-main); line-height:1.4; margin-top:6px; }
   `;
   document.head.appendChild(s);
 }
@@ -326,8 +402,80 @@ function renderCalendarBody() {
         ${renderPanelContent()}
       </div>
     </div>
+    ${renderResumenMes()}
   `;
 }
+
+function renderResumenMes() {
+  return `
+    <div class="glass-card cal-resumen">
+      <div class="cal-resumen-header" onclick="window.calToggleResumen()">
+        <h3 class="cal-resumen-title">📊 Resumen del mes</h3>
+        <span class="cal-resumen-chevron">${_calResumenAbierto ? '▲' : '▼'}</span>
+      </div>
+      ${_calResumenAbierto ? renderResumenBody(_resumenMesData()) : ''}
+    </div>
+  `;
+}
+
+function renderResumenBody(data) {
+  const pctDe = (n) => (data.total ? Math.round((n / data.total) * 100) : 0);
+  const { aTiempo, tarde, reprogramado, vencido } = data.cumplimiento;
+
+  return `
+    <div class="cal-resumen-body">
+      <div class="cal-resumen-section">
+        <div class="cal-resumen-section-title">Distribución de publicaciones por categoría</div>
+        ${data.distribucion.length ? data.distribucion.map(d => `
+          <div class="cal-bar-row">
+            <span class="cal-bar-label">${escapeHtml(CATEGORIA_LABELS[d.categoria])}</span>
+            <div class="cal-bar-track"><div class="cal-bar-fill" style="width:${d.pct}%;background:${CATEGORIA_COLORS[d.categoria]};"></div></div>
+            <span class="cal-bar-pct">${d.pct}% (${d.count})</span>
+          </div>
+        `).join('') : '<p class="text-faint">No hay publicaciones este mes.</p>'}
+      </div>
+
+      <div class="cal-resumen-section">
+        <div class="cal-resumen-section-title">Categorías sin actividad reciente (10+ días)</div>
+        ${data.alertasCategoria.length ? data.alertasCategoria.map(a => `
+          <div class="cal-alert-item">⚠ <strong>${escapeHtml(CATEGORIA_LABELS[a.categoria])}</strong> — ${a.dias === null ? 'sin publicaciones programadas o publicadas registradas' : `${a.dias} días sin publicar`}</div>
+        `).join('') : '<p class="text-faint">Todas las categorías tienen actividad reciente.</p>'}
+      </div>
+
+      <div class="cal-resumen-section">
+        <div class="cal-resumen-section-title">Días sin nada planificado (${data.huecos.length})</div>
+        ${data.huecos.length ? `<div class="cal-huecos-wrap">${data.huecos.map(d => `<span class="cal-hueco-chip">${formatFechaCorta(d)}</span>`).join('')}</div>` : '<p class="text-faint">No hay huecos este mes.</p>'}
+      </div>
+
+      <div class="cal-resumen-section">
+        <div class="cal-resumen-section-title">% de cumplimiento del mes</div>
+        <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr);margin-bottom:0;">
+          <div class="kpi-strip-card" style="cursor:default;">
+            <div class="kpi-strip-value" style="color:#1B8A5A;">${pctDe(aTiempo)}%</div>
+            <div class="kpi-strip-label">Publicado a tiempo</div>
+          </div>
+          <div class="kpi-strip-card" style="cursor:default;">
+            <div class="kpi-strip-value" style="color:#B7791F;">${pctDe(tarde)}%</div>
+            <div class="kpi-strip-label">Publicado tarde</div>
+          </div>
+          <div class="kpi-strip-card" style="cursor:default;">
+            <div class="kpi-strip-value" style="color:#1F6FEB;">${pctDe(reprogramado)}%</div>
+            <div class="kpi-strip-label">Reprogramado</div>
+          </div>
+          <div class="kpi-strip-card" style="cursor:default;">
+            <div class="kpi-strip-value" style="color:#D91010;">${pctDe(vencido)}%</div>
+            <div class="kpi-strip-label">Vencido sin publicar</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.calToggleResumen = () => {
+  _calResumenAbierto = !_calResumenAbierto;
+  _reloadCalContent();
+};
 
 function buildMonthGrid(year, month) {
   const itemsByDate = _calItemsByDate();
@@ -1100,7 +1248,8 @@ async function openCalendarioModal(id, prefillDate) {
 
           <div class="form-group full-width" style="margin-top:0.5rem;">
             <label class="form-label">Hook</label>
-            <input type="text" name="hook" value="${escapeHtml(data.hook)}" placeholder="Frase gancho de la publicación">
+            <input type="text" name="hook" id="cal-input-hook" value="${escapeHtml(data.hook)}" placeholder="Frase gancho de la publicación">
+            <div id="cal-hook-repeat-notice" class="cal-hook-repeat-notice"></div>
           </div>
 
           <div class="form-group full-width" id="cal-guion-group" style="display:${(shouldShowGuionParaTipo(data.tipo_contenido) || data.guion) ? 'flex' : 'none'};">
@@ -1124,6 +1273,7 @@ async function openCalendarioModal(id, prefillDate) {
               <div class="cal-tags-chips" id="cal-tags-chips"></div>
               <input type="text" id="cal-tags-raw" placeholder="Escribe y presiona Enter…">
             </div>
+            <div id="cal-marca-repeat-notice" class="cal-hook-repeat-notice"></div>
           </div>
 
           <div class="form-group full-width">
@@ -1184,12 +1334,41 @@ async function openCalendarioModal(id, prefillDate) {
   updateReminder();
   updateCodigoRow();
 
+  const hookEl = document.getElementById('cal-input-hook');
+  const hookNoticeEl = document.getElementById('cal-hook-repeat-notice');
+  const checkHookRepeticion = () => {
+    const rep = buscarRepeticionHook(_calCache, hookEl.value, isEdit ? id : null);
+    if (rep) {
+      hookNoticeEl.style.display = 'flex';
+      hookNoticeEl.innerHTML = `<span style="font-size:1.1rem;">⚠️</span><span>Este hook se usó el ${formatFechaCorta(rep.fecha)} en una publicación de ${escapeHtml(CATEGORIA_LABELS[rep.categoria] || rep.categoria)} (${escapeHtml(CANAL_LABELS[rep.canal] || rep.canal || '—')}).</span>`;
+    } else {
+      hookNoticeEl.style.display = 'none';
+    }
+  };
+  hookEl.addEventListener('blur', checkHookRepeticion);
+  if (isEdit) checkHookRepeticion();
+
+  const marcaNoticeEl = document.getElementById('cal-marca-repeat-notice');
+  const checkMarcaRepeticion = (marca) => {
+    const rep = buscarRepeticionMarca(_calCache, marca, isEdit ? id : null);
+    if (rep) {
+      marcaNoticeEl.style.display = 'flex';
+      marcaNoticeEl.innerHTML = `<span style="font-size:1.1rem;">⚠️</span><span>"${escapeHtml(marca)}" se usó el ${formatFechaCorta(rep.fecha)} en una publicación de ${escapeHtml(CATEGORIA_LABELS[rep.categoria] || rep.categoria)}.</span>`;
+    } else {
+      marcaNoticeEl.style.display = 'none';
+    }
+  };
+
   const tagsRaw = document.getElementById('cal-tags-raw');
   tagsRaw.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       const v = tagsRaw.value.trim().replace(/,$/, '');
-      if (v && !_calModalTags.includes(v)) { _calModalTags.push(v); _renderTagsChips(); }
+      if (v && !_calModalTags.includes(v)) {
+        _calModalTags.push(v);
+        _renderTagsChips();
+        checkMarcaRepeticion(v);
+      }
       tagsRaw.value = '';
     } else if (e.key === 'Backspace' && !tagsRaw.value && _calModalTags.length) {
       _calModalTags.pop();

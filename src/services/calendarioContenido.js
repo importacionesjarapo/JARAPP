@@ -78,6 +78,41 @@ export const puedeMarcarPublicado = (item) => {
   return item.estado === 'programado' && String(item.fecha).slice(0, 10) <= hoyISO();
 };
 
+const hace30DiasISO = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  return d.toISOString().slice(0, 10);
+};
+
+const _masReciente = (candidatos) => candidatos.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))[0];
+
+/** Publicación más reciente (últimos 30 días) que usó el mismo hook, si existe. */
+export const buscarRepeticionHook = (cache, hook, excludeId) => {
+  const valor = String(hook || '').trim().toLowerCase();
+  if (!valor) return null;
+  const limite = hace30DiasISO();
+  const candidatos = (cache || []).filter(it =>
+    String(it.id) !== String(excludeId) &&
+    String(it.hook || '').trim().toLowerCase() === valor &&
+    String(it.fecha).slice(0, 10) >= limite
+  );
+  return candidatos.length ? _masReciente(candidatos) : null;
+};
+
+/** Publicación más reciente (últimos 30 días) que usó la misma marca/producto, si existe. */
+export const buscarRepeticionMarca = (cache, marca, excludeId) => {
+  const valor = String(marca || '').trim().toLowerCase();
+  if (!valor) return null;
+  const limite = hace30DiasISO();
+  const candidatos = (cache || []).filter(it =>
+    String(it.id) !== String(excludeId) &&
+    Array.isArray(it.marcas_productos) &&
+    it.marcas_productos.some(m => String(m).trim().toLowerCase() === valor) &&
+    String(it.fecha).slice(0, 10) >= limite
+  );
+  return candidatos.length ? _masReciente(candidatos) : null;
+};
+
 export const CalendarioService = {
   async fetchAll() {
     if (!db.client) throw new Error('Conexión a Supabase no configurada. Ve a Configuración.');
