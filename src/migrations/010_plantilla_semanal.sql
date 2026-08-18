@@ -21,7 +21,13 @@ ALTER TABLE "PlantillaSemanal" ADD COLUMN IF NOT EXISTS tipo_contenido_sugerido 
 ALTER TABLE "PlantillaSemanal" ADD COLUMN IF NOT EXISTS notas text;
 ALTER TABLE "PlantillaSemanal" ADD COLUMN IF NOT EXISTS activo boolean NOT NULL DEFAULT false;
 
+-- El CREATE TABLE de arriba ya deja dia_semana como UNIQUE. Este bloque solo
+-- cubre el caso de una tabla preexistente sin esa restricción.
 DO $$ BEGIN
-  ALTER TABLE "PlantillaSemanal" ADD CONSTRAINT plantillasemanal_dia_semana_key UNIQUE (dia_semana);
-EXCEPTION WHEN duplicate_object THEN NULL;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'plantillasemanal_dia_semana_key'
+  ) THEN
+    ALTER TABLE "PlantillaSemanal" ADD CONSTRAINT plantillasemanal_dia_semana_key UNIQUE (dia_semana);
+  END IF;
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
 END $$;
