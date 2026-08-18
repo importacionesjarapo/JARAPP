@@ -373,9 +373,9 @@ function renderToolbar() {
         <button class="pv-tab ${_calView === 'plantilla' ? 'active' : ''}" onclick="window.calSetView('plantilla')">🗂️ Plantilla Semanal</button>
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        ${_calView === 'calendario' ? `<button class="btn-secondary" onclick="window.calAbrirFechasClave()">🚩 Fechas clave</button>` : ''}
-        ${_calView === 'calendario' ? `<button class="btn-secondary" id="cal-export-semana-btn" onclick="window.calExportarSemana()">⬇️ Exportar semana</button>` : ''}
-        ${(_calView === 'calendario' && canCrear) ? `<button class="btn-secondary" onclick="window.calGenerarDesdePlantilla()">Generar mes desde plantilla</button>` : ''}
+        ${_calView === 'calendario' ? `<button class="btn-action" onclick="window.calAbrirFechasClave()">🚩 Fechas clave</button>` : ''}
+        ${_calView === 'calendario' ? `<button class="btn-action" id="cal-export-semana-btn" onclick="window.calExportarSemana()">⬇️ Exportar semana</button>` : ''}
+        ${(_calView === 'calendario' && canCrear) ? `<button class="btn-action" onclick="window.calGenerarDesdePlantilla()">Generar mes desde plantilla</button>` : ''}
         ${canCrear ? `<button class="btn-primary" onclick="window.calOpenModal()">+ Nueva publicación</button>` : ''}
       </div>
     </div>
@@ -695,6 +695,7 @@ function renderPlantillaView() {
   }).join('');
 
   return `
+    ${renderToolbar()}
     <div style="margin-bottom:1rem;">
       <p style="font-size:0.82rem; color:var(--text-muted);">Define el canal, categoría y tipo de contenido sugeridos para cada día de la semana. Los días inactivos no generan publicaciones al usar "Generar mes desde plantilla".</p>
     </div>
