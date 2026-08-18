@@ -97,6 +97,14 @@ export const CalendarioService = {
     return data;
   },
 
+  /** Inserta varias publicaciones a la vez (usado por "Generar mes desde plantilla"). */
+  async createMany(payloads) {
+    if (!db.client) throw new Error('Conexión a Supabase no configurada.');
+    const { data, error } = await db.client.from(TABLE).insert(payloads).select();
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+
   async update(id, payload) {
     if (!db.client) throw new Error('Conexión a Supabase no configurada.');
     const { data, error } = await db.client.from(TABLE).update(payload).eq('id', id).select().maybeSingle();

@@ -592,7 +592,7 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
 }
 
 function buildPermsGrid(perms) {
-  const modules = ['dashboard','clients','inventory','sales','vendedores','purchases','logistics','finance','calculadora','params','documentacion','admin','feat_money','feat_usa','feat_calc_desglose','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno','calendario_ver','calendario_crear','calendario_editar','calendario_eliminar'];
+  const modules = ['dashboard','clients','inventory','sales','vendedores','purchases','logistics','finance','calculadora','params','documentacion','admin','feat_money','feat_usa','feat_calc_desglose','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno','calendario_ver','calendario_crear','calendario_editar','calendario_eliminar','calendario_plantilla_editar'];
 
   return modules.map(mod => {
     const perm = perms[mod];

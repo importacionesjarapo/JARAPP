@@ -10,10 +10,15 @@ import {
   CANALES, CANAL_LABELS, CANAL_GRIS, ESTADOS, ESTADO_LABELS, ESTADO_BADGE_COLORS,
   colorDePublicacion, requiereAtencion, esPublicadoTarde, esVencidoSinPublicar, puedeMarcarPublicado
 } from '../services/calendarioContenido.js';
+import {
+  PlantillaService, DIAS_SEMANA_FULL, TIPOS_CONTENIDO, TIPO_CONTENIDO_LABELS,
+  diaSemanaDeFecha, esFueraDePlantilla
+} from '../services/plantillaSemanal.js';
 
 // ── Estado del módulo ───────────────────────────────────────────────────────────
 let _calCache = [];
-let _calView = 'calendario'; // 'calendario' | 'lista'
+let _calPlantillaCache = [];
+let _calView = 'calendario'; // 'calendario' | 'lista' | 'plantilla'
 let _calYear = null;
 let _calMonth = null; // 0-11
 let _calSelectedDate = null; // 'YYYY-MM-DD'
@@ -77,6 +82,12 @@ function _calItemsByDate() {
     map[key].push(it);
   }
   Object.values(map).forEach(arr => arr.sort((a, b) => String(a.hora || '').localeCompare(String(b.hora || ''))));
+  return map;
+}
+
+function _plantillaPorDia() {
+  const map = {};
+  for (const p of _calPlantillaCache) map[p.dia_semana] = p;
   return map;
 }
 
@@ -200,7 +211,7 @@ export const renderCalendarioContenido = async (renderLayout, navigateTo) => {
   }
 
   try {
-    _calCache = await CalendarioService.fetchAll();
+    [_calCache, _calPlantillaCache] = await Promise.all([CalendarioService.fetchAll(), PlantillaService.fetchAll()]);
   } catch (err) {
     renderError(renderLayout, err.message, navigateTo);
     return;
@@ -209,13 +220,19 @@ export const renderCalendarioContenido = async (renderLayout, navigateTo) => {
   renderMain();
 };
 
+function renderViewContent() {
+  if (_calView === 'lista') return renderListView();
+  if (_calView === 'plantilla') return renderPlantillaView();
+  return renderCalendarBody();
+}
+
 function renderMain() {
   const html = `
     <div style="margin-bottom:1.25rem;">
       <span class="page-eyebrow">Marketing · Redes Sociales</span>
       <h2 class="page-title">Calendario de Contenido</h2>
     </div>
-    <div id="cal-content">${_calView === 'lista' ? renderListView() : renderCalendarBody()}</div>
+    <div id="cal-content">${renderViewContent()}</div>
   `;
   _renderLayout(html);
 }
@@ -223,12 +240,21 @@ function renderMain() {
 function _reloadCalContent() {
   const el = document.getElementById('cal-content');
   if (!el) { renderMain(); return; }
-  el.innerHTML = _calView === 'lista' ? renderListView() : renderCalendarBody();
+  el.innerHTML = renderViewContent();
 }
 
 async function _calReload() {
   try {
     _calCache = await CalendarioService.fetchAll();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+  _reloadCalContent();
+}
+
+async function _calReloadPlantilla() {
+  try {
+    _calPlantillaCache = await PlantillaService.fetchAll();
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -242,8 +268,12 @@ function renderToolbar() {
       <div class="purchase-view-switcher">
         <button class="pv-tab ${_calView === 'calendario' ? 'active' : ''}" onclick="window.calSetView('calendario')">📅 Calendario</button>
         <button class="pv-tab ${_calView === 'lista' ? 'active' : ''}" onclick="window.calSetView('lista')">📋 Lista</button>
+        <button class="pv-tab ${_calView === 'plantilla' ? 'active' : ''}" onclick="window.calSetView('plantilla')">🗂️ Plantilla Semanal</button>
       </div>
-      ${canCrear ? `<button class="btn-primary" onclick="window.calOpenModal()">+ Nueva publicación</button>` : ''}
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        ${(_calView === 'calendario' && canCrear) ? `<button class="btn-secondary" onclick="window.calGenerarDesdePlantilla()">Generar mes desde plantilla</button>` : ''}
+        ${canCrear ? `<button class="btn-primary" onclick="window.calOpenModal()">+ Nueva publicación</button>` : ''}
+      </div>
     </div>
   `;
 }
@@ -312,13 +342,18 @@ function dayCellHTML(dateStr, dayNum, inMonth, items, isToday, isSelected) {
     return `<div class="cal-day cal-day-outside"><span class="cal-day-num">${dayNum}</span></div>`;
   }
   const hasAlert = items.some(requiereAtencion);
+  const plantillaDia = _plantillaPorDia()[diaSemanaDeFecha(dateStr)];
+  const hasFueraDePlantilla = items.some(it => esFueraDePlantilla(it, plantillaDia));
   const visible = items.slice(0, 2);
   const extra = items.length - visible.length;
   return `
     <div class="cal-day ${isToday ? 'cal-day-today' : ''} ${isSelected ? 'cal-day-selected' : ''}" onclick="window.calSelectDay('${dateStr}')">
       <div class="cal-day-head">
         <span class="cal-day-num">${dayNum}</span>
-        ${hasAlert ? '<span class="cal-day-dot" title="Requiere atención: link o código sin verificar"></span>' : ''}
+        <span style="display:flex; align-items:center; gap:4px;">
+          ${hasFueraDePlantilla ? '<span title="Fuera de plantilla" style="font-size:0.72rem;">⚠</span>' : ''}
+          ${hasAlert ? '<span class="cal-day-dot" title="Requiere atención: link o código sin verificar"></span>' : ''}
+        </span>
       </div>
       <div class="cal-day-pills">
         ${visible.map(it => `<div class="cal-pill" style="background:${colorDePublicacion(it)}">${it.hora ? escapeHtml(String(it.hora).slice(0, 5)) + ' ' : ''}${escapeHtml(it.hook || CATEGORIA_LABELS[it.categoria] || 'Publicación')}</div>`).join('')}
@@ -424,6 +459,75 @@ function renderItemDetail(item) {
       <div class="cal-detail-actions">
         ${canEditar ? `<button class="btn-primary" onclick="window.calOpenModal('${item.id}')">✏️ Editar</button>` : ''}
         ${canEliminar ? `<button class="btn-secondary" onclick="window.calEliminar('${item.id}')">🗑️ Eliminar</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ── Vista Plantilla Semanal ──────────────────────────────────────────────────────
+function renderPlantillaView() {
+  const canEditar = auth.canAccess('calendario_plantilla_editar');
+  const porDia = _plantillaPorDia();
+
+  const rows = DIAS_SEMANA_FULL.map((label, dia) => {
+    const p = porDia[dia] || { canal: CANALES[0], categoria_sugerida: CATEGORIAS[0], tipo_contenido_sugerido: TIPOS_CONTENIDO[0], notas: '', activo: false };
+
+    if (!canEditar) {
+      return `
+        <tr>
+          <td style="font-weight:700;">${label}</td>
+          <td>${escapeHtml(CANAL_LABELS[p.canal] || p.canal || '—')}</td>
+          <td>${categoriaChipHTML(p.categoria_sugerida)}</td>
+          <td>${escapeHtml(TIPO_CONTENIDO_LABELS[p.tipo_contenido_sugerido] || p.tipo_contenido_sugerido || '—')}</td>
+          <td>${escapeHtml(p.notas || '—')}</td>
+          <td><span class="status-badge" style="background:${p.activo ? '#E7F6EF' : '#E2E8F0'};color:${p.activo ? '#1B8A5A' : '#475569'};">${p.activo ? 'Activo' : 'Inactivo'}</span></td>
+        </tr>`;
+    }
+
+    return `
+      <tr>
+        <td style="font-weight:700; white-space:nowrap;">${label}</td>
+        <td>
+          <select id="plantilla-canal-${dia}">
+            ${CANALES.map(c => `<option value="${c}" ${p.canal === c ? 'selected' : ''}>${CANAL_LABELS[c]}</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span id="plantilla-dot-${dia}" style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${CATEGORIA_COLORS[p.categoria_sugerida] || '#64748B'};"></span>
+            <select id="plantilla-categoria-${dia}" onchange="document.getElementById('plantilla-dot-${dia}').style.background = ({${CATEGORIAS.map(c => `${c}:'${CATEGORIA_COLORS[c]}'`).join(',')}})[this.value] || '#64748B';">
+              ${CATEGORIAS.map(c => `<option value="${c}" ${p.categoria_sugerida === c ? 'selected' : ''}>${CATEGORIA_LABELS[c]}</option>`).join('')}
+            </select>
+          </div>
+        </td>
+        <td>
+          <select id="plantilla-tipo-${dia}">
+            ${TIPOS_CONTENIDO.map(t => `<option value="${t}" ${p.tipo_contenido_sugerido === t ? 'selected' : ''}>${TIPO_CONTENIDO_LABELS[t]}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="text" id="plantilla-notas-${dia}" value="${escapeHtml(p.notas || '')}" placeholder="Opcional"></td>
+        <td>
+          <label class="admin-toggle-wrap">
+            <input type="checkbox" id="plantilla-activo-${dia}" ${p.activo ? 'checked' : ''}>
+            <span class="admin-toggle-slider"></span>
+          </label>
+        </td>
+        <td><button type="button" class="btn-action" onclick="window.plantillaGuardarDia(${dia})">Guardar</button></td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div style="margin-bottom:1rem;">
+      <p style="font-size:0.82rem; color:var(--text-muted);">Define el canal, categoría y tipo de contenido sugeridos para cada día de la semana. Los días inactivos no generan publicaciones al usar "Generar mes desde plantilla".</p>
+    </div>
+    <div class="glass-card" style="padding:0;overflow:hidden;">
+      <div style="overflow-x:auto;">
+        <table class="data-table">
+          <thead><tr>
+            <th>Día</th><th>Canal</th><th>Categoría sugerida</th><th>Tipo de contenido</th><th>Notas</th><th>Estado</th>${canEditar ? '<th></th>' : ''}
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>
     </div>
   `;
@@ -573,6 +677,68 @@ window.calEliminar = async (id) => {
     showToast('Publicación eliminada', 'success');
     if (String(_calSelectedItemId) === String(id)) _calSelectedItemId = null;
     await _calReload();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+// ── Plantilla Semanal ────────────────────────────────────────────────────────────
+window.plantillaGuardarDia = async (dia) => {
+  if (!auth.canAccess('calendario_plantilla_editar')) return showToast('No tienes permiso para editar la plantilla.', 'error');
+  const payload = {
+    canal: document.getElementById(`plantilla-canal-${dia}`).value,
+    categoria_sugerida: document.getElementById(`plantilla-categoria-${dia}`).value,
+    tipo_contenido_sugerido: document.getElementById(`plantilla-tipo-${dia}`).value,
+    notas: document.getElementById(`plantilla-notas-${dia}`).value.trim() || null,
+    activo: document.getElementById(`plantilla-activo-${dia}`).checked,
+  };
+  try {
+    await PlantillaService.upsertDia(dia, payload);
+    showToast(`Plantilla de ${DIAS_SEMANA_FULL[dia]} guardada`, 'success');
+    await _calReloadPlantilla();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+window.calGenerarDesdePlantilla = async () => {
+  if (!auth.canAccess('calendario_crear')) return showToast('No tienes permiso para crear publicaciones.', 'error');
+  const activas = _calPlantillaCache.filter(p => p.activo);
+  if (activas.length === 0) {
+    return window.customAlert('Sin plantilla activa', 'No hay días activos en la Plantilla Semanal. Configúrala antes de generar el mes.', 'warning');
+  }
+
+  const ok = await window.customConfirm('Generar mes desde plantilla', `¿Generar publicaciones para ${MESES[_calMonth]} ${_calYear} usando la Plantilla Semanal? No se sobreescribirán los días que ya tengan contenido planificado.`);
+  if (!ok) return;
+
+  const porDia = _plantillaPorDia();
+  const itemsByDate = _calItemsByDate();
+  const daysInMonth = new Date(_calYear, _calMonth + 1, 0).getDate();
+
+  const nuevos = [];
+  let omitidos = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = dateStrOf(_calYear, _calMonth, d);
+    const plantilla = porDia[diaSemanaDeFecha(dateStr)];
+    if (!plantilla || !plantilla.activo) continue;
+    if ((itemsByDate[dateStr] || []).length > 0) { omitidos++; continue; }
+    nuevos.push({
+      fecha: dateStr,
+      canal: plantilla.canal,
+      categoria: plantilla.categoria_sugerida,
+      tipo_contenido: plantilla.tipo_contenido_sugerido,
+      estado: 'idea',
+    });
+  }
+
+  if (nuevos.length === 0) {
+    return window.customAlert('Nada por generar', `Se omitieron ${omitidos} día${omitidos === 1 ? '' : 's'} que ya tenían contenido planificado. No se creó ninguna publicación nueva.`, 'warning');
+  }
+
+  try {
+    await CalendarioService.createMany(nuevos);
+    await _calReload();
+    await window.customAlert('Mes generado', `Se crearon ${nuevos.length} publicación${nuevos.length === 1 ? '' : 'es'}, se omitieron ${omitidos} día${omitidos === 1 ? '' : 's'} que ya tenían contenido.`, 'success');
   } catch (err) {
     showToast(err.message, 'error');
   }
