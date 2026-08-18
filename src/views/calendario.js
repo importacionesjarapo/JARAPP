@@ -374,6 +374,7 @@ function renderToolbar() {
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         ${_calView === 'calendario' ? `<button class="btn-secondary" onclick="window.calAbrirFechasClave()">🚩 Fechas clave</button>` : ''}
+        ${_calView === 'calendario' ? `<button class="btn-secondary" id="cal-export-semana-btn" onclick="window.calExportarSemana()">⬇️ Exportar semana</button>` : ''}
         ${(_calView === 'calendario' && canCrear) ? `<button class="btn-secondary" onclick="window.calGenerarDesdePlantilla()">Generar mes desde plantilla</button>` : ''}
         ${canCrear ? `<button class="btn-primary" onclick="window.calOpenModal()">+ Nueva publicación</button>` : ''}
       </div>
@@ -1088,6 +1089,92 @@ window.fechaClaveEliminar = async (id) => {
     _reloadCalContent();
   } catch (err) {
     showToast(err.message, 'error');
+  }
+};
+
+// ── Exportar semana ──────────────────────────────────────────────────────────────
+function _semanaDe(dateStr) {
+  const { y, m, d } = parseDateStr(dateStr);
+  const dt = new Date(y, m, d);
+  const offset = (dt.getDay() + 6) % 7; // 0=lunes
+  const lunes = new Date(y, m, d - offset);
+  const dias = [];
+  for (let i = 0; i < 7; i++) {
+    const di = new Date(lunes.getFullYear(), lunes.getMonth(), lunes.getDate() + i);
+    dias.push(dateStrOf(di.getFullYear(), di.getMonth(), di.getDate()));
+  }
+  return dias; // [lunes..domingo]
+}
+
+window.calExportarSemana = async () => {
+  const dias = _semanaDe(_calSelectedDate || new Date().toISOString().slice(0, 10));
+  const itemsByDate = _calItemsByDate();
+  const btn = document.getElementById('cal-export-semana-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generando PDF...'; }
+
+  try {
+    const pdfmake = await import('pdfmake/build/pdfmake.js');
+    const pdfFonts = await import('pdfmake/build/vfs_fonts.js');
+    const lib = pdfmake.default || pdfmake;
+    lib.vfs = (pdfFonts.default || pdfFonts).pdfMake?.vfs || pdfFonts.vfs;
+
+    const rojo = '#E63946';
+    const gris = '#64748B';
+
+    const body = [[
+      { text: 'Fecha', bold: true, fillColor: '#F1F5F9', fontSize: 9 },
+      { text: 'Categoría', bold: true, fillColor: '#F1F5F9', fontSize: 9 },
+      { text: 'Canal', bold: true, fillColor: '#F1F5F9', fontSize: 9 },
+      { text: 'Tipo', bold: true, fillColor: '#F1F5F9', fontSize: 9 },
+      { text: 'Hook', bold: true, fillColor: '#F1F5F9', fontSize: 9 },
+      { text: 'Responsable', bold: true, fillColor: '#F1F5F9', fontSize: 9 },
+    ]];
+
+    dias.forEach(dateStr => {
+      const items = itemsByDate[dateStr] || [];
+      const fechaCell = { text: formatFechaLarga(dateStr), fontSize: 8, bold: true };
+      if (items.length === 0) {
+        body.push([fechaCell, { text: 'Sin publicación', italics: true, color: gris, colSpan: 5, fontSize: 9 }, {}, {}, {}, {}]);
+        return;
+      }
+      items.forEach((it, i) => {
+        body.push([
+          i === 0 ? fechaCell : { text: '' },
+          { text: CATEGORIA_LABELS[it.categoria] || it.categoria || '—', fontSize: 9 },
+          { text: CANAL_LABELS[it.canal] || it.canal || '—', fontSize: 9 },
+          { text: it.tipo_contenido || '—', fontSize: 9 },
+          { text: it.hook || '—', fontSize: 9 },
+          { text: it.responsable || '—', fontSize: 9 },
+        ]);
+      });
+    });
+
+    const docDef = {
+      pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [30, 30, 30, 40],
+      defaultStyle: { font: 'Roboto', fontSize: 10, color: '#0F172A' },
+      content: [
+        { text: 'Importaciones Jarapo', fontSize: 10, color: gris },
+        { text: 'Calendario de Contenido — Semana', fontSize: 18, bold: true, margin: [0, 2, 0, 2] },
+        { text: `${formatFechaLarga(dias[0])} — ${formatFechaLarga(dias[6])}`, fontSize: 10, color: gris, margin: [0, 0, 0, 14] },
+        { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 782, y2: 0, lineWidth: 1.5, lineColor: rojo }], margin: [0, 0, 0, 12] },
+        {
+          table: { headerRows: 1, widths: [95, 65, 90, 60, '*', 80], body },
+          layout: { hLineColor: () => '#E2E8F0', vLineColor: () => '#E2E8F0', paddingLeft: () => 6, paddingRight: () => 6, paddingTop: () => 6, paddingBottom: () => 6 },
+        },
+      ],
+      footer: (current) => ({
+        stack: [
+          { canvas: [{ type: 'line', x1: 30, y1: 0, x2: 812, y2: 0, lineWidth: 1, lineColor: '#E2E8F0' }], margin: [0, 0, 0, 4] },
+          { text: `Generado desde JARAPP · Página ${current}`, fontSize: 8, color: gris, alignment: 'center' },
+        ], margin: [0, 8, 0, 0],
+      }),
+    };
+
+    lib.createPdf(docDef).download(`Semana_${dias[0]}_a_${dias[6]}.pdf`);
+  } catch (err) {
+    showToast('No se pudo generar el PDF: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Exportar semana'; }
   }
 };
 
