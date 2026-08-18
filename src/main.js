@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -21,6 +21,7 @@ import { renderCotizador } from './views/cotizador.js';
 import { renderDocumentacion } from './views/documentacion.js';
 import { renderTracker } from './views/tracker.js';
 import { renderVendedores } from './views/vendedores.js';
+import { renderCalendarioContenido } from './views/calendario.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
 import { AlertasService } from './services/alertas.js';
@@ -67,6 +68,7 @@ const NAV_GROUPS = [
       { view: 'finance',     icon: 'activity',          label: 'Finanzas',     module: 'finance'     },
       { view: 'vendedores',  icon: 'user-circle',       label: 'Vendedores',   module: 'vendedores'  },
       { view: 'calculadora', icon: 'calculator',        label: 'Calculadora',  module: 'calculadora' },
+      { view: 'calendario',  icon: 'calendar',          label: 'Calendario de Contenido', module: 'calendario_ver' },
     ]
   },
   {
@@ -292,7 +294,7 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg (delay 0 = próximo microtask, sin flash visible)
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar }
     });
 
     // Restaurar logo desde sessionStorage (persiste entre navegaciones)
@@ -401,7 +403,7 @@ const TITULOS = {
   clients: 'Clientes', purchases: 'Compras', logistics: 'Logística',
   finance: 'Finanzas', vendedores: 'Vendedores', params: 'Parámetros', calculadora: 'Calculadora',
   admin: 'Administración', settings: 'Configuración', viaje: 'Viaje EEUU', documentacion: 'Documentación',
-  cotizador: 'Cotizador', tracker: 'Competitor Tracker',
+  cotizador: 'Cotizador', tracker: 'Competitor Tracker', calendario: 'Calendario de Contenido',
 };
 
 export const navigateTo = (view) => {
@@ -428,7 +430,7 @@ export const navigateTo = (view) => {
     clients: 'clients', inventory: 'inventory', sales: 'sales',
     purchases: 'purchases', logistics: 'logistics', finance: 'finance',
     vendedores: 'vendedores',
-    params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver'
+    params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver', calendario: 'calendario_ver'
   };
   
   if (moduleMap[view] && !auth.canAccess(moduleMap[view])) {
@@ -464,13 +466,14 @@ export const navigateTo = (view) => {
     case 'cotizador':    renderCotizador(renderLayout, navigateTo); break;
     case 'documentacion': renderDocumentacion(renderLayout, navigateTo); break;
     case 'tracker':       renderTracker(renderLayout, navigateTo); break;
+    case 'calendario':    renderCalendarioContenido(renderLayout, navigateTo); break;
     default: renderPlaceholder(view); break;
   }
   
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar }
     });
   }, 200);
 };
