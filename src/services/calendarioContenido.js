@@ -58,6 +58,26 @@ export const requiereAtencion = (item) => {
   return false;
 };
 
+const hoyISO = () => new Date().toISOString().slice(0, 10);
+
+/** true si se publicó en fecha distinta a la fecha programada */
+export const esPublicadoTarde = (item) => {
+  if (!item?.fecha_publicacion_real) return false;
+  return String(item.fecha_publicacion_real).slice(0, 10) !== String(item.fecha).slice(0, 10);
+};
+
+/** true si la fecha programada ya pasó y la publicación no quedó publicada ni cancelada */
+export const esVencidoSinPublicar = (item) => {
+  if (!item?.fecha) return false;
+  return String(item.fecha).slice(0, 10) < hoyISO() && item.estado !== 'publicado' && item.estado !== 'cancelado';
+};
+
+/** true si el botón "Publicado" debe mostrarse: programado y con fecha ya cumplida */
+export const puedeMarcarPublicado = (item) => {
+  if (!item) return false;
+  return item.estado === 'programado' && String(item.fecha).slice(0, 10) <= hoyISO();
+};
+
 export const CalendarioService = {
   async fetchAll() {
     if (!db.client) throw new Error('Conexión a Supabase no configurada. Ve a Configuración.');
@@ -88,6 +108,23 @@ export const CalendarioService = {
     if (!db.client) throw new Error('Conexión a Supabase no configurada.');
     const { error } = await db.client.from(TABLE).delete().eq('id', id);
     if (error) throw new Error(error.message);
+  },
+
+  /** Marca una publicación como publicada hoy. */
+  async marcarPublicado(item) {
+    return this.update(item.id, { estado: 'publicado', fecha_publicacion_real: hoyISO() });
+  },
+
+  /** Reprograma una publicación a una nueva fecha/hora, llevando la cuenta de reprogramaciones. */
+  async reprogramar(item, nuevaFecha, nuevaHora) {
+    const payload = {
+      fecha: nuevaFecha,
+      hora: nuevaHora || null,
+      estado: 'programado',
+      veces_reprogramado: (item.veces_reprogramado || 0) + 1,
+    };
+    if (!item.fecha_original_programada) payload.fecha_original_programada = item.fecha;
+    return this.update(item.id, payload);
   },
 };
 

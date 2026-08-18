@@ -8,7 +8,7 @@ import { showToast, renderError } from '../utils.js';
 import {
   CalendarioService, CATEGORIAS, CATEGORIA_LABELS, CATEGORIA_COLORS,
   CANALES, CANAL_LABELS, CANAL_GRIS, ESTADOS, ESTADO_LABELS, ESTADO_BADGE_COLORS,
-  colorDePublicacion, requiereAtencion
+  colorDePublicacion, requiereAtencion, esPublicadoTarde, esVencidoSinPublicar, puedeMarcarPublicado
 } from '../services/calendarioContenido.js';
 
 // ── Estado del módulo ───────────────────────────────────────────────────────────
@@ -20,7 +20,9 @@ let _calSelectedDate = null; // 'YYYY-MM-DD'
 let _calSelectedItemId = null;
 let _calListFiltroCategoria = 'todas';
 let _calListFiltroEstado = 'todos';
+let _calListFiltroVencidos = false;
 let _calModalTags = [];
+let _calReprogramarId = null;
 let _renderLayout = null;
 let _navigateTo = null;
 
@@ -167,6 +169,16 @@ function injectStyles() {
     .cal-checkbox-row { display:flex; align-items:center; gap:8px; }
     .cal-checkbox-row input[type=checkbox] { width:auto; accent-color:var(--primary); }
     .cal-checkbox-row label { margin:0; }
+
+    .cal-quick-filter { display:inline-flex; align-items:center; gap:6px; background:var(--surface-2); border:1px solid var(--border-base); color:var(--text-muted); padding:8px 14px; border-radius:10px; font-family:var(--font); font-size:0.8rem; font-weight:600; cursor:pointer; transition:all 0.15s; }
+    .cal-quick-filter:hover { border-color:var(--danger); color:var(--danger); }
+    .cal-quick-filter.active { background:var(--danger-dim); border-color:var(--danger); color:var(--danger); }
+
+    .cal-tag-late { display:inline-block; margin-top:3px; background:#FDF3E3; color:#B7791F; font-size:0.62rem; font-weight:700; padding:2px 8px; border-radius:20px; white-space:nowrap; }
+    .cal-badge-reprog { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 6px; background:var(--surface-3); color:var(--text-muted); border-radius:20px; font-size:0.7rem; font-weight:700; }
+    .cal-row-vencida td { background:var(--danger-dim); }
+
+    .modal-content.modal-narrow { max-width:420px; }
   `;
   document.head.appendChild(s);
 }
@@ -425,24 +437,35 @@ function renderListView() {
   let items = [..._calCache];
   if (_calListFiltroCategoria !== 'todas') items = items.filter(it => it.categoria === _calListFiltroCategoria);
   if (_calListFiltroEstado !== 'todos') items = items.filter(it => it.estado === _calListFiltroEstado);
+  if (_calListFiltroVencidos) items = items.filter(esVencidoSinPublicar);
   items.sort((a, b) => `${a.fecha || ''}${a.hora || ''}`.localeCompare(`${b.fecha || ''}${b.hora || ''}`));
 
-  const rows = items.map(it => `
-    <tr onclick="window.calOpenDetailFromList('${it.id}')" style="cursor:pointer;">
-      <td>${formatFechaCorta(it.fecha)}</td>
+  const rows = items.map(it => {
+    const vencida = esVencidoSinPublicar(it);
+    const tarde = esPublicadoTarde(it);
+    return `
+    <tr onclick="window.calOpenDetailFromList('${it.id}')" style="cursor:pointer;" class="${vencida ? 'cal-row-vencida' : ''}">
+      <td>
+        ${formatFechaCorta(it.fecha)}
+        ${tarde ? `<br><span class="cal-tag-late">Publicado tarde</span>` : ''}
+      </td>
       <td>${categoriaChipHTML(it.categoria)}</td>
       <td>${escapeHtml(CANAL_LABELS[it.canal] || it.canal || '—')}</td>
       <td>${estadoBadgeHTML(it.estado)}</td>
       <td class="cell-title">${escapeHtml(it.hook || '—')}</td>
       <td>${escapeHtml(it.responsable || '—')}</td>
+      <td>${it.veces_reprogramado > 0 ? `<span class="cal-badge-reprog" title="Veces reprogramado">${it.veces_reprogramado}</span>` : ''}</td>
       <td class="td-actions">
         <div class="td-actions-group">
+          ${canEditar && puedeMarcarPublicado(it) ? `<button class="btn-action" onclick="event.stopPropagation();window.calMarcarPublicado('${it.id}')" title="Marcar como publicado">✓ Publicado</button>` : ''}
+          ${canEditar ? `<button class="btn-action" onclick="event.stopPropagation();window.calOpenReprogramar('${it.id}')" title="Reprogramar">↻ Reprogramar</button>` : ''}
           ${canEditar ? `<button class="btn-action" onclick="event.stopPropagation();window.calOpenModal('${it.id}')" title="Editar">✏️</button>` : ''}
           ${canEliminar ? `<button class="btn-action" onclick="event.stopPropagation();window.calEliminar('${it.id}')" title="Eliminar">🗑️</button>` : ''}
         </div>
       </td>
     </tr>
-  `).join('') || `<tr class="table-empty-row"><td colspan="7">No hay publicaciones que coincidan con los filtros.</td></tr>`;
+  `;
+  }).join('') || `<tr class="table-empty-row"><td colspan="8">No hay publicaciones que coincidan con los filtros.</td></tr>`;
 
   return `
     ${renderToolbar()}
@@ -455,12 +478,13 @@ function renderListView() {
         <option value="todos">Todos los estados</option>
         ${ESTADOS.map(e => `<option value="${e}" ${_calListFiltroEstado === e ? 'selected' : ''}>${ESTADO_LABELS[e]}</option>`).join('')}
       </select>
+      <button type="button" class="cal-quick-filter ${_calListFiltroVencidos ? 'active' : ''}" onclick="window.calToggleVencidos()">⚠ Vencidos sin publicar</button>
     </div>
     <div class="glass-card" style="padding:0;overflow:hidden;">
       <div style="overflow-x:auto;">
         <table class="data-table">
           <thead><tr>
-            <th>Fecha</th><th>Categoría</th><th>Canal</th><th>Estado</th><th>Título</th><th>Responsable</th><th></th>
+            <th>Fecha</th><th>Categoría</th><th>Canal</th><th>Estado</th><th>Título</th><th>Responsable</th><th>Reprogramaciones</th><th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
@@ -511,6 +535,24 @@ window.calListFilter = (type, value) => {
   _reloadCalContent();
 };
 
+window.calToggleVencidos = () => {
+  _calListFiltroVencidos = !_calListFiltroVencidos;
+  _reloadCalContent();
+};
+
+window.calMarcarPublicado = async (id) => {
+  if (!auth.canAccess('calendario_editar')) return showToast('No tienes permiso para editar.', 'error');
+  const item = _calCache.find(x => String(x.id) === String(id));
+  if (!item) return;
+  try {
+    await CalendarioService.marcarPublicado(item);
+    showToast('Publicación marcada como publicada', 'success');
+    await _calReload();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
 window.calOpenDetailFromList = (id) => {
   const it = _calCache.find(x => String(x.id) === String(id));
   if (!it) return;
@@ -535,6 +577,69 @@ window.calEliminar = async (id) => {
     showToast(err.message, 'error');
   }
 };
+
+// ── Modal de reprogramación ──────────────────────────────────────────────────────
+window.calOpenReprogramar = (id) => openReprogramarModal(id);
+
+function openReprogramarModal(id) {
+  if (!auth.canAccess('calendario_editar')) return showToast('No tienes permiso para editar.', 'error');
+  const item = _calCache.find(x => String(x.id) === String(id));
+  if (!item) return;
+  _calReprogramarId = id;
+
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  const fechaActual = String(item.fecha || '').slice(0, 10);
+  const horaActual = item.hora ? String(item.hora).slice(0, 5) : '00:00';
+  const datetimeValue = `${fechaActual}T${horaActual}`;
+
+  content.innerHTML = `
+    <div class="modal-content modal-narrow">
+      <div class="modal-header">
+        <div>
+          <h2>Reprogramar publicación</h2>
+          <p style="opacity:0.6;font-size:0.85rem;margin-top:4px;">${escapeHtml(item.hook || CATEGORIA_LABELS[item.categoria] || 'Publicación')}</p>
+        </div>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+      <form id="cal-reprogramar-form">
+        <div class="modal-body">
+          <div class="form-group full-width">
+            <label class="form-label">Nueva fecha y hora</label>
+            <input type="datetime-local" name="nueva_fecha_hora" value="${datetimeValue}" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+          <button type="submit" class="btn-primary" id="cal-reprogramar-submit-btn">Guardar</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  container.style.display = 'flex';
+
+  document.getElementById('cal-reprogramar-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const raw = fd.get('nueva_fecha_hora');
+    if (!raw) return;
+    const [nuevaFecha, nuevaHora] = raw.split('T');
+    const btn = document.getElementById('cal-reprogramar-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    try {
+      await CalendarioService.reprogramar(item, nuevaFecha, nuevaHora);
+      window.closeModal();
+      showToast('Publicación reprogramada', 'success');
+      await _calReload();
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+    }
+  };
+}
 
 // ── Modal de creación/edición ────────────────────────────────────────────────────
 window.calOpenModal = (id, prefillDate) => openCalendarioModal(id, prefillDate);
