@@ -15,7 +15,7 @@ const APIFY_ACTOR = 'apify~instagram-profile-scraper';
 const APIFY_BASE  = 'https://api.apify.com/v2';
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL   = 'llama-3.3-70b-versatile';
+const GROQ_MODEL   = 'openai/gpt-oss-120b';
 const GROQ_KEY     = import.meta.env.VITE_GROQ_API_KEY;
 
 const GROQ_SYSTEM = `Eres el estratega de contenido de Importaciones Jarapo, una empresa colombiana de personal shopping que importa productos originales desde USA (calzado, ropa, accesorios, vitaminas, perfumes, tecnología). El perfil de Instagram es @importaciones_jarapo con 36.3K seguidores verificados. El viaje es siempre a Orlando, nunca a Miami. El tono de contenido es "copy violento" — impactante, aspiracional, emocional y directo. El CTA siempre dirige a WhatsApp.

@@ -4,7 +4,6 @@ import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cached data ───────────────────────────────────────────────────────────────
 let _finCache = null;
-let _finMetodosPagoCache = [];
 let _finRenderLayout = null;
 let _finNavigateTo = null;
 let _finActiveMain = 'ingresos'; // 'ingresos' | 'egresos'
@@ -448,24 +447,6 @@ function getFinPanelHTML(main, subView, cache) {
     }
 }
 
-// ─── Helper: opciones de métodos de pago (dinámico + fallback) ─────────────────
-const _FIN_METODOS_FALLBACK = [
-    { nombre: 'Transferencia Bancolombia' },
-    { nombre: 'Nequi' },
-    { nombre: 'Efectivo' },
-    { nombre: 'Tarjeta de Crédito', valor: 'Tarjeta' },
-];
-const _buildFinMetodosOptions = () => {
-    const fuente = _finMetodosPagoCache.length
-        ? _finMetodosPagoCache.filter(m => m.activo !== false).sort((a,b) => (a.orden||0)-(b.orden||0))
-        : _FIN_METODOS_FALLBACK;
-    return fuente.map(m => {
-        const val   = m.valor || m.nombre;
-        const label = m.nombre;
-        return `<option value="${val}">${label}</option>`;
-    }).join('');
-};
-
 // ─── Main render ───────────────────────────────────────────────────────────────
 export const renderFinance = async (renderLayout, navigateTo) => {
     _finRenderLayout = renderLayout;
@@ -473,18 +454,16 @@ export const renderFinance = async (renderLayout, navigateTo) => {
 
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Finanzas...</div>`);
 
-    const [gastosList, ventasList, comprasList, logisticaList, configList, metodosPagoList, clientesList, productosList] = await Promise.all([
+    const [gastosList, ventasList, comprasList, logisticaList, configList, clientesList, productosList] = await Promise.all([
         db.fetchData('Gastos'),
         db.fetchData('Ventas'),
         db.fetchData('Compras'),
         db.fetchData('Logistica'),
         db.fetchData('Configuracion'),
-        db.fetchData('MetodosPago'),
         db.fetchData('Clientes'),
         db.fetchData('Productos'),
     ]);
     const configData = configList?.error ? [] : (configList || []);
-    _finMetodosPagoCache = metodosPagoList?.error ? [] : (metodosPagoList || []);
 
     const gastos   = gastosList.error  ? [] : gastosList;
     const ventas   = ventasList.error  ? [] : ventasList;
@@ -616,59 +595,8 @@ export const renderFinance = async (renderLayout, navigateTo) => {
         _reloadFinPanel();
     };
 
-    window.modalAbono = (ventaId, saldoPendiente) => {
-        const container = document.getElementById('modal-container');
-        const content = document.getElementById('modal-content');
-        content.innerHTML = `
-            <h2 style="margin-bottom:0.5rem;">Registrar Abono</h2>
-            <p style="opacity:0.7;margin-bottom:0;">Saldo pendiente: <strong style="color:var(--primary-red);">${formatCOP(saldoPendiente)}</strong></p>
-            <form id="form-abono" style="display:flex; flex-direction:column; gap:1.2rem; margin-top:1.5rem;">
-                <div><label>Valor a Abonar (COP)</label><input type="number" id="valor_abono" required min="1" max="${saldoPendiente}"></div>
-                <div><label>Método de Pago</label>
-                    <select name="metodo_pago" required>
-                        ${_buildFinMetodosOptions()}
-                    </select>
-                </div>
-                <div>
-                    <label style="margin-bottom:6px;display:block;">Comprobante de Pago <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span></label>
-                    ${buildComprobanteUploadHTML('comp-fin-abono-file')}
-                </div>
-                <div style="display:flex; gap:15px; margin-top:0.5rem;">
-                    <button type="submit" class="btn-primary" style="flex:1;">Confirmar Abono</button>
-                    <button type="button" onclick="window.closeModal()" style="flex:1; background:none; border:1px solid var(--glass-border); color:var(--text-main); border-radius:16px;">Cancelar</button>
-                </div>
-            </form>`;
-        container.style.display = 'flex';
-        setTimeout(() => attachComprobanteInput('comp-fin-abono-file'), 100);
-        document.getElementById('form-abono').onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = e.target.querySelector('button[type="submit"]');
-            btn.disabled = true; btn.innerText = 'Registrando...';
-            const abono = parseInt(document.getElementById('valor_abono').value);
-            const nuevoSaldo = saldoPendiente - abono;
-            try {
-                const comprobanteFile = document.getElementById('comp-fin-abono-file')?.files[0];
-                let comprobanteUrl = '';
-                if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
-                const metodoPago = document.querySelector('#form-abono [name="metodo_pago"]')?.value || '';
-                btn.innerText = 'Guardando...';
-                const ventasFull = await db.fetchData('Ventas');
-                const v = ventasFull.find(x => x.id.toString() === ventaId.toString());
-                if (!v) throw new Error('Venta no encontrada.');
-                v.abonos_acumulados = (parseInt(v.abonos_acumulados||0)) + abono;
-                v.saldo_pendiente = nuevoSaldo;
-                if (comprobanteUrl) v.comprobante_ultimo_abono = comprobanteUrl;
-                await db.postData('Ventas', v, 'UPDATE');
-                // ── Registrar en historial individual de Abonos ─────────────────
-                const abonoRecord = { id: Date.now().toString(), venta_id: ventaId.toString(), valor: abono, metodo_pago: metodoPago, fecha: new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
-                await db.postData('Abonos', abonoRecord, 'INSERT');
-                window.closeModal();
-                showToast('✅ Abono registrado exitosamente');
-                _finCache = null;
-                renderFinance(renderLayout, navigateTo);
-            } catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.innerText = 'Reintentar'; }
-        };
-    };
+    // window.modalAbono se registra una sola vez en main.js (ver views/sales.js
+    // openAbonoModal) para que funcione sin importar qué módulo esté activo.
 
     const ingSubTabs = [
         { id:'tabla',    icon:'📋', label:'Tabla' },

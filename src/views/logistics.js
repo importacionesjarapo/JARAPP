@@ -13,6 +13,20 @@ let _logPageByFase = {};
 let _logRppByFase = {};
 const LOG_RPP_DEFAULT = 15;
 
+// Mapa de fase interna -> fase visible en el portal de clientes. Compartido entre
+// el guardado normal del formulario y la asociación retroactiva a guía existente.
+const MAPA_FASE_PORTAL = {
+  '1. Comprado (Esperando Tracking Local USA)': { num: 2, nombre: 'Compra realizada en USA' },
+  '2. Comprado Local':                          { num: 1, nombre: 'Pedido confirmado' },
+  '3. En Bodega USA (Estados Unidos)':          { num: 3, nombre: 'En bodega USA' },
+  '4. En Camino a Colombia':                    { num: 4, nombre: 'En camino a Colombia' },
+  '5. En Aduana Colombia':                      { num: 5, nombre: 'En aduana / trámites' },
+  '6. Entregado a Cliente Final':               { num: 9, nombre: 'Entregado' },
+  '7. En Bodega Medellín':                      { num: 6, nombre: 'Llegó a bodega en Medellín' },
+  '8. Notificado al Cliente':                   { num: 7, nombre: 'Pedido confirmado al cliente' },
+  '9. Enviado Interno Colombia':                { num: 8, nombre: 'Enviado' },
+};
+
 export const renderLogistics = async (renderLayout, navigateTo) => {
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Módulo de Logística...</div>`);
     
@@ -279,7 +293,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                 <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyLogDateFilter()">Filtrar</button>
             </div>
             <button class="btn-excel" onclick="window.exportLogExcel()">📥 Excel</button>
-            <input type="text" id="find-it" value="${_logSearchTerm.replace(/"/g,'&quot;')}" placeholder="Filtrar por guía, cliente o fase..." style="background:var(--input-bg); color:var(--text-main); padding:10px 15px; border-radius:12px; border:1px solid var(--glass-border); width:260px; outline:none;">
+            <input type="text" id="find-it" value="${_logSearchTerm.replace(/"/g,'&quot;')}" placeholder="Filtrar por guía, cliente, producto o fase..." style="background:var(--input-bg); color:var(--text-main); padding:10px 15px; border-radius:12px; border:1px solid var(--glass-border); width:260px; outline:none;">
             ${auth.canEdit('logistics') ? `<button class="btn-primary" onclick="window.modalLogistica()">+ Agregar Seguimiento</button>` : ''}
         </div>
       </div>
@@ -471,14 +485,22 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                                   if (histArr.length > 0) ultimaNota = histArr[histArr.length - 1].notas || '';
                               }
                           } catch(e) {}
-                          const searchStr = `${c.id_seguimiento_internacional || ''} ${nombreCli} ${td1} ${td3} ${td4}`.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+                          const searchStr = `${c.id_seguimiento_internacional || ''} ${nombreCli} ${prodAsoc?.nombre_producto || ''} ${td1} ${td3} ${td4}`.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
                           const safeSearchStr = searchStr.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                           return `
                               <tr class="log-row" data-log-id="${c.id}" data-text="${safeSearchStr}">
                                 <td style="padding:15px 20px;">${td1}</td>
                                 <td style="padding:15px 20px;">
-                                    <strong style="color:var(--warning-orange);">${nombreCli}</strong><br>
-                                    <span style="font-size:0.7rem; opacity:0.6;">Venta #${c.venta_id ? c.venta_id.toString().slice(-4) : '-'}</span>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <div style="width:30px; height:30px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--glass-border);">
+                                            ${prodAsoc?.url_imagen ? `<img src="${prodAsoc.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
+                                        </div>
+                                        <div>
+                                            <strong style="color:var(--text-main); font-size:0.85rem; display:block; line-height:1.2;">${prodAsoc?.nombre_producto || (c.venta_id ? 'Sin producto' : 'Stock')}</strong>
+                                            <span style="color:var(--warning-orange); font-size:0.75rem;">${nombreCli}</span>
+                                        </div>
+                                    </div>
+                                    <span style="font-size:0.7rem; opacity:0.6; display:block; margin-top:4px;">Venta #${c.venta_id ? c.venta_id.toString().slice(-4) : '-'}</span>
                                     ${ultimaNota ? `<div style="font-size:0.75rem; opacity:0.7; font-style:italic; margin-top:4px; max-width:150px; overflow:hidden; text-overflow:ellipsis;">💬 ${ultimaNota}</div>` : ''}
                                 </td>
                                 <td style="padding:15px 20px;">${td3}</td>
@@ -490,6 +512,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                                 <td style="padding:15px 20px; text-align:right;">
                                     <div style="display:flex; gap:8px; justify-content:flex-end;">
                                         ${i === 3 && c.guia_internacional_id && auth.canEdit('logistics') ? `<button class="btn-action" style="background:var(--success-green); color:#000; font-weight:700; white-space:nowrap;" onclick="window.modalAvanzarGuia('${c.guia_internacional_id}')" title="Ver y recibir en bloque todos los productos de esta guía en Bodega Colombia">📦 Recibir Guía</button>` : ''}
+                                        ${i === 2 && !c.guia_internacional_id && auth.canEdit('logistics') ? `<button class="btn-action" style="background:var(--info-blue); color:#fff; font-weight:700; white-space:nowrap;" onclick="window.modalAsociarGuiaExistente('${c.id}')" title="Asociar este producto a una guía internacional ya consolidada y enviada">🔗 Asociar a Guía</button>` : ''}
                                         <button class="btn-action" onclick="window.modalDetalleLogistica('${c.id}')">👁️</button>
                                         ${auth.canEdit('logistics') ? `<button class="btn-action" onclick="window.modalLogistica('${c.id}')">✏️</button>` : ''}
                                     </div>
@@ -519,7 +542,21 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
         
         const compraRef = !compras.error ? compras.find(cmp => cmp.id.toString() === item.compra_id?.toString() || (item.venta_id && cmp.venta_id?.toString() === item.venta_id?.toString())) : null;
         const ventaAsoc = (!ventas.error && item.venta_id) ? ventas.find(v => v.id.toString() === item.venta_id.toString()) : null;
-        
+        const prodAsocDetalle = (ventaAsoc && productos && !productos.error) ? productos.find(p => p.id.toString() === ventaAsoc.producto_id?.toString()) : null;
+        const cliDetalle = (ventaAsoc && !clientes.error) ? clientes.find(cl => cl.id.toString() === ventaAsoc.cliente_id?.toString()) : null;
+
+        const productoBannerHtml = `
+            <div style="display:flex; align-items:center; gap:15px; background:var(--glass-hover); border:1px solid var(--glass-border); padding:1rem 1.2rem; border-radius:12px; margin-bottom:1.5rem;">
+                <div style="width:56px; height:56px; border-radius:10px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--glass-border);">
+                    ${prodAsocDetalle?.url_imagen ? `<img src="${prodAsocDetalle.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.65rem;">SIN FOTO</span>'}
+                </div>
+                <div>
+                    <div style="font-weight:800; font-size:1rem;">${prodAsocDetalle?.nombre_producto || (item.venta_id ? 'Sin producto' : 'Stock General')}</div>
+                    <div style="font-size:0.8rem; opacity:0.7; margin-top:2px;">${cliDetalle ? `Cliente: <strong style="color:var(--warning-orange);">${cliDetalle.nombre}</strong> · ` : ''}Venta #${item.venta_id ? item.venta_id.toString().slice(-4) : '-'}</div>
+                </div>
+            </div>
+        `;
+
         let pFechaVenta = '';
         if (ventaAsoc && ventaAsoc.fecha) {
             let dateStr = String(ventaAsoc.fecha).split(' ')[0];
@@ -580,6 +617,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                     <button class="modal-close" onclick="window.closeModal()">&times;</button>
                 </div>
                 <div class="modal-body">
+                    ${productoBannerHtml}
                     ${compraBoxHtml}
                     <h3 style="margin-bottom:15px; font-size:1.1rem;">Cronología</h3>
                     ${timelineHtml}
@@ -678,7 +716,12 @@ export const createLogisticsModal = async (id, navigateTo) => {
                             <label class="form-label">Vincular a Orden de Venta (Opcional)</label>
                             <select name="venta_id" id="log-venta-select">
                                 <option value="">-- Sin Vincular --</option>
-                                ${!(ventas.error) ? ventas.reverse().map(v => `<option value="${v.id}" ${data.venta_id == v.id ? 'selected' : ''}>Orden #${v.id} - ${v.fecha || 'Sin fecha'}</option>`).join('') : ''}
+                                ${!(ventas.error) ? ventas.reverse().map(v => {
+                                    const pOpt = !productos.error ? productos.find(p => p.id.toString() === v.producto_id?.toString()) : null;
+                                    const cOpt = !clientes.error ? clientes.find(cl => cl.id.toString() === v.cliente_id?.toString()) : null;
+                                    const label = `Orden #${v.id.toString().slice(-4)} · ${cOpt?.nombre || 'Sin cliente'} · ${pOpt?.nombre_producto || 'Sin producto'} (${v.fecha || 'Sin fecha'})`;
+                                    return `<option value="${v.id}" ${data.venta_id == v.id ? 'selected' : ''}>${label}</option>`;
+                                }).join('') : ''}
                             </select>
                         </div>
                         <div id="log-preview-box" style="display:none;"></div>
@@ -798,7 +841,10 @@ export const createLogisticsModal = async (id, navigateTo) => {
                                         const p = v ? productos.find(prd => prd.id.toString() === v.producto_id?.toString()) : null;
                                         return `
                                             <label style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-base); cursor:pointer; font-size:0.82rem;">
-                                                <input type="checkbox" name="consolidate_ids" value="${it.id}" style="width:18px; height:18px;">
+                                                <input type="checkbox" name="consolidate_ids" value="${it.id}" style="width:18px; height:18px; flex-shrink:0;">
+                                                <div style="width:34px; height:34px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--border-base);">
+                                                    ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
+                                                </div>
                                                 <span>${p?.nombre_producto || 'Producto Stock'} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
                                             </label>
                                         `;
@@ -897,7 +943,10 @@ export const createLogisticsModal = async (id, navigateTo) => {
                                     const p = v ? productos.find(prd => prd.id.toString() === v.producto_id?.toString()) : null;
                                     return `
                                         <label style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border-base); cursor:pointer; font-size:0.82rem;">
-                                            <input type="checkbox" name="consolidate_col_ids" value="${it.id}" style="width:18px; height:18px;">
+                                            <input type="checkbox" name="consolidate_col_ids" value="${it.id}" style="width:18px; height:18px; flex-shrink:0;">
+                                            <div style="width:34px; height:34px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--border-base);">
+                                                ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
+                                            </div>
                                             <span>${p?.nombre_producto || 'Producto'} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
                                         </label>
                                     `;
@@ -1384,20 +1433,9 @@ export const createLogisticsModal = async (id, navigateTo) => {
             }
 
             // Actualizar fase_portal y fase_portal_num para el portal de clientes
-            const mapaFasePortal = {
-              '1. Comprado (Esperando Tracking Local USA)': { num: 2, nombre: 'Compra realizada en USA' },
-              '2. Comprado Local':                          { num: 1, nombre: 'Pedido confirmado' },
-              '3. En Bodega USA (Estados Unidos)':          { num: 3, nombre: 'En bodega USA' },
-              '4. En Camino a Colombia':                    { num: 4, nombre: 'En camino a Colombia' },
-              '5. En Aduana Colombia':                      { num: 5, nombre: 'En aduana / trámites' },
-              '6. Entregado a Cliente Final':               { num: 9, nombre: 'Entregado' },
-              '7. En Bodega Medellín':                      { num: 6, nombre: 'Llegó a bodega en Medellín' },
-              '8. Notificado al Cliente':                   { num: 7, nombre: 'Pedido confirmado al cliente' },
-              '9. Enviado Interno Colombia':                { num: 8, nombre: 'Enviado' },
-            }
-            if (mapaFasePortal[nuevaFase]) {
-              payload.fase_portal     = mapaFasePortal[nuevaFase].nombre
-              payload.fase_portal_num = mapaFasePortal[nuevaFase].num
+            if (MAPA_FASE_PORTAL[nuevaFase]) {
+              payload.fase_portal     = MAPA_FASE_PORTAL[nuevaFase].nombre
+              payload.fase_portal_num = MAPA_FASE_PORTAL[nuevaFase].num
             }
 
             btn.innerHTML = '<i class="loader"></i> Guardando Registro Principal...';
@@ -1544,9 +1582,14 @@ window.modalDetalleGuia = async (guiaId) => {
 
         return `
             <div id="item-row-${l.id}" style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--glass-border); font-size:0.85rem;">
-                <div style="flex:1;">
-                    <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
-                    <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>
+                <div style="display:flex; align-items:center; gap:10px; flex:1;">
+                    <div style="width:34px; height:34px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--glass-border);">
+                        ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
+                    </div>
+                    <div>
+                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
+                        <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>
+                    </div>
                 </div>
                 <div style="text-align:right; margin-right:15px; width: 100px;">
                     <div style="font-weight:700; color:var(--violet);">${formatCOP(valorInt)}</div>
@@ -1666,6 +1709,158 @@ window.moverArticuloGuia = async (logisticaId, newGuiaId, currentGuiaId) => {
     }
 };
 
+// ─── Asociar a Guía Existente: Bodega USA (fase 3) → guía ya consolidada/enviada ──
+// Para un producto que llegó tarde a bodega y se quedó por fuera del consolidado
+// original: lo asocia a una guía internacional que ya fue despachada, heredando su
+// fase actual (4, 5 o 6 según qué tan avanzada esté la guía) y sus datos de tracking
+// internacional — el mismo comportamiento que si hubiera sido consolidado a tiempo.
+window.modalAsociarGuiaExistente = async (logisticaId) => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `<div style="text-align:center; padding:2rem;"><div class="loader"></div> Cargando guías disponibles...</div>`;
+    container.style.display = 'flex';
+
+    const [logistica, guias, ventas, productos] = await Promise.all([
+        db.fetchData('Logistica'),
+        db.fetchData('GuiasInternacionales'),
+        db.fetchData('Ventas'),
+        db.fetchData('Productos')
+    ]);
+
+    const logisticaList = Array.isArray(logistica) ? logistica : [];
+    const item = logisticaList.find(l => l.id.toString() === logisticaId.toString());
+    if (!item) {
+        showToast('Registro de logística no encontrado', 'error');
+        window.closeModal();
+        return;
+    }
+
+    const v = ventas.find(vt => vt.id.toString() === item.venta_id?.toString());
+    const p = v ? productos.find(pr => pr.id.toString() === v.producto_id?.toString()) : null;
+
+    const guiasList = Array.isArray(guias) ? guias : [];
+    const seenGuias = new Set();
+    const guiasConItems = [];
+    for (const g of guiasList) {
+        if (!g.numero_guia) continue;
+        if (seenGuias.has(g.numero_guia)) continue;
+        const gItems = logisticaList.filter(l => l.guia_internacional_id?.toString() === g.id.toString());
+        if (gItems.length === 0) continue;
+        const repItem = gItems.find(gi => (gi.fase || '').startsWith('4.')) || gItems[0];
+        guiasConItems.push({ guia: g, cantidad: gItems.length, fase: repItem.fase, fechaEnvio: repItem.int_fecha_envio });
+        seenGuias.add(g.numero_guia);
+    }
+    guiasConItems.sort((a, b) => (b.fechaEnvio || '').localeCompare(a.fechaEnvio || ''));
+
+    const optionsHtml = guiasConItems.map(({ guia, cantidad, fase, fechaEnvio }) =>
+        `<option value="${guia.id}">${guia.numero_guia}${guia.courier ? ' · ' + guia.courier : ''} — ${cantidad} producto(s) · ${fase || '?'}${fechaEnvio ? ' · Despachada ' + fechaEnvio : ''}</option>`
+    ).join('');
+
+    content.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" style="color:var(--info-blue);">🔗 Asociar a Guía Ya Enviada</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--glass-hover); border-radius:12px; margin-bottom:1.2rem; font-size:0.85rem;">
+                    <div style="width:44px; height:44px; border-radius:8px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--glass-border);">
+                        ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
+                    </div>
+                    <div>
+                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
+                        <span style="opacity:0.6;">Venta #${item.venta_id?.toString().slice(-4) || '-'}</span>
+                    </div>
+                </div>
+                <p style="font-size:0.82rem; opacity:0.75; margin-bottom:1rem;">
+                    Este producto pasará a la misma fase logística de la guía elegida y heredará su tracking
+                    internacional (número de guía, courier, fecha de despacho y URL), como si hubiera sido
+                    consolidado con ella desde el principio.
+                </p>
+                ${guiasConItems.length === 0 ? `
+                    <p style="text-align:center; padding:1.5rem; opacity:0.6;">No hay guías internacionales ya despachadas para asociar.</p>
+                ` : `
+                    <div class="form-group">
+                        <label class="form-label">Guía Internacional</label>
+                        <select id="sel-guia-asociar">
+                            <option value="">-- Seleccionar guía --</option>
+                            ${optionsHtml}
+                        </select>
+                    </div>
+                `}
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+                ${guiasConItems.length > 0 ? `<button class="btn-primary" id="btn-confirmar-asociar-guia" onclick="window.confirmarAsociarGuia('${logisticaId}')">✅ Asociar</button>` : ''}
+            </div>
+        </div>
+    `;
+};
+
+window.confirmarAsociarGuia = async (logisticaId) => {
+    const sel = document.getElementById('sel-guia-asociar');
+    const guiaId = sel?.value;
+    if (!guiaId) {
+        showToast('Selecciona una guía', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirmar-asociar-guia');
+    if (btn) { btn.disabled = true; btn.innerText = 'Asociando...'; }
+
+    try {
+        const [logistica, guias] = await Promise.all([
+            db.fetchData('Logistica'),
+            db.fetchData('GuiasInternacionales')
+        ]);
+
+        const logisticaList = Array.isArray(logistica) ? logistica : [];
+        const item = logisticaList.find(l => l.id.toString() === logisticaId.toString());
+        const guiasList = Array.isArray(guias) ? guias : [];
+        const guia = guiasList.find(g => g.id.toString() === guiaId.toString());
+        if (!item || !guia) throw new Error('Registro o guía no encontrados');
+
+        const gItems = logisticaList.filter(l => l.guia_internacional_id?.toString() === guiaId.toString());
+        const repItem = gItems.find(gi => (gi.fase || '').startsWith('4.')) || gItems[0];
+        const nuevaFase = repItem?.fase || '4. Tránsito Internacional / Aduana';
+
+        let histArr = [];
+        try { histArr = JSON.parse(item.historial || '[]'); } catch(e) {}
+        histArr.push({
+            fase: nuevaFase,
+            fecha: new Date().toLocaleString('es-CO'),
+            notas: `Asociado a guía internacional ${guia.numero_guia} ya consolidada y enviada`
+        });
+
+        const payload = {
+            ...item,
+            fase: nuevaFase,
+            guia_internacional_id: guia.id,
+            int_guia: guia.numero_guia,
+            paqueteria: guia.courier || item.paqueteria,
+            id_seguimiento_internacional: guia.numero_guia,
+            int_fecha_envio: repItem?.int_fecha_envio || item.int_fecha_envio || '',
+            int_url: repItem?.int_url || item.int_url || '',
+            historial: JSON.stringify(histArr),
+            fecha_actualizacion: new Date().toISOString()
+        };
+        if (MAPA_FASE_PORTAL[nuevaFase]) {
+            payload.fase_portal     = MAPA_FASE_PORTAL[nuevaFase].nombre;
+            payload.fase_portal_num = MAPA_FASE_PORTAL[nuevaFase].num;
+        }
+
+        const res = await db.postData('Logistica', payload, 'UPDATE');
+        if (res.error) throw new Error(res.error);
+
+        window.closeModal();
+        showToast(`Producto asociado a la guía ${guia.numero_guia}`, 'success');
+        if (window._navigateTo) window._navigateTo('logistics');
+    } catch (err) {
+        showToast('Error asociando a la guía: ' + err.message, 'error');
+        if (btn) { btn.disabled = false; btn.innerText = '✅ Asociar'; }
+    }
+};
+
 // ─── Recepción masiva de guía: Aduana (fase 4) → Bodega Colombia (fase 5) ─────
 // Permite recibir de una vez todos los productos empacados en una guía, en lugar
 // de moverlos uno a uno. Los que tengan novedad (no llegó, defectuoso, retenido
@@ -1720,6 +1915,9 @@ window.modalAvanzarGuia = async (guiaId) => {
                     <input type="checkbox" class="avanzar-check" data-id="${l.id}" checked
                         onchange="window._toggleAvanzarNota('${l.id}', this.checked)"
                         style="width:20px; height:20px; cursor:pointer; flex-shrink:0;">
+                    <div style="width:34px; height:34px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--glass-border);">
+                        ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
+                    </div>
                     <div style="flex:1;">
                         <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
                         <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>

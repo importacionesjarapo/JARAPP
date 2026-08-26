@@ -472,7 +472,7 @@ def build_funcional():
     story.append(Spacer(1, 0.3 * cm))
     story.append(info_box(
         'JaraBot está disponible solo para Admin y Gerente. '
-        'Usa inteligencia artificial (Groq · llama-3.3-70b-versatile) con acceso a datos '
+        'Usa inteligencia artificial (Groq · openai/gpt-oss-120b) con acceso a datos '
         'reales del negocio actualizados en tiempo real. No almacena el historial de conversación '
         'entre sesiones.',
         bg=INFO_BG, border=INFO, st=st))
@@ -659,7 +659,7 @@ def build_tecnico():
         ['PDF',         'pdfmake',                         '0.3.9',   'Generación de PDFs para el Cotizador'],
         ['Excel',       'xlsx (SheetJS)',                  '0.18.5',  'Exportación de reportes a Excel'],
         ['HTTP',        'axios',                           '1.14.0',  'Peticiones HTTP auxiliares'],
-        ['IA / LLM',    'Groq API',                        '—',       'JaraBot — llama-3.3-70b-versatile'],
+        ['IA / LLM',    'Groq API',                        '—',       'JaraBot — openai/gpt-oss-120b'],
         ['TRM',         'open.er-api.com',                 '—',       'Tipo de cambio USD/COP actualizado diario'],
         ['Hosting',     'Netlify',                         '—',       'Deploy automático desde GitHub (main)'],
         ['CSS',         'Custom Properties + tokens.css',  '—',       'Design tokens, temas claro/oscuro'],
@@ -839,7 +839,7 @@ def build_tecnico():
         ('JaraBotService (jarabot.js)',
          ['buildContext(role) — consulta todos los datos del negocio en paralelo',
           'chat(message, role) — llama a Groq API con contexto real del negocio',
-          'Modelo: llama-3.3-70b-versatile',
+          'Modelo: openai/gpt-oss-120b',
           'Endpoint: https://api.groq.com/openai/v1/chat/completions']),
     ]
     for nombre, metodos in servicios:

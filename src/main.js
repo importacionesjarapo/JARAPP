@@ -8,7 +8,7 @@ import { renderDashboard } from './views/dashboard.js';
 import { renderClients, createClientModal } from './views/clients.js';
 import { renderInventory, createProductModal } from './views/inventory.js';
 import { renderSettingsView } from './views/settings.js';
-import { renderSales, createSaleModal, openSaleDetailModal } from './views/sales.js';
+import { renderSales, createSaleModal, openSaleDetailModal, openAbonoModal } from './views/sales.js';
 import { renderPurchases, createPurchaseModal } from './views/purchases.js';
 import { renderFinance, createFinanceModal } from './views/finance.js';
 import { renderLogistics, createLogisticsModal } from './views/logistics.js';
@@ -406,6 +406,7 @@ const TITULOS = {
 
 export const navigateTo = (view) => {
   state.currentView = view;
+  window._currentView = view;
   localStorage.setItem('JARAPP_VIEW', view);
   document.title = `${TITULOS[view] ?? view} · JARAPP`;
 
@@ -487,6 +488,9 @@ window.modalCliente = (id) => createClientModal(id, navigateTo);
 window.modalProducto = (id) => createProductModal(id, navigateTo);
 window.modalVenta = () => createSaleModal(navigateTo);
 window.modalDetalleVentaGlobal = (id, backAction) => openSaleDetailModal(id, backAction);
+// Registrado una sola vez al arrancar la app (no dentro de renderSales/renderFinance)
+// para que funcione sin importar qué módulo se haya visitado antes en la sesión.
+window.modalAbono = (ventaId, saldoPendiente, backAction) => openAbonoModal(ventaId, saldoPendiente, backAction);
 window.modalCompra = (ventaId) => createPurchaseModal(navigateTo, ventaId);
 window.modalGasto = () => createFinanceModal(navigateTo);
 window.modalLogistica = (id) => createLogisticsModal(id, navigateTo);

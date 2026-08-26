@@ -537,6 +537,90 @@ const _buildMetodosOptions = () => {
     }).join('');
 };
 
+// ── Modal Abono ──────────────────────────────────────────────────────────────
+// Función independiente (no closure de renderSales) y registrada una sola vez
+// en main.js al arrancar la app, para que funcione sin importar qué módulo se
+// haya visitado antes en la sesión (Seguimientos, Clientes, Dashboard, etc.).
+export const openAbonoModal = (ventaId, saldoPendiente, backAction = '') => {
+    const container = document.getElementById('modal-container');
+    const content   = document.getElementById('modal-content');
+    content.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Registrar Abono</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+
+            <form id="form-abono">
+                <div class="modal-body">
+                    <div style="background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px; margin-bottom:2rem; text-align:center; border:1px solid var(--brand-magenta-glow);">
+                        <span style="font-size:0.8rem; opacity:0.8; text-transform:uppercase;">Saldo Pendiente</span>
+                        <div style="font-size:2rem; font-weight:800; color:var(--brand-magenta); margin-top:6px;">${formatCOP(saldoPendiente)}</div>
+                    </div>
+
+                    <div class="form-grid-3">
+                        <div class="form-group">
+                            <label class="form-label">Valor a Abonar (COP)</label>
+                            <input type="number" id="valor_abono" required min="1" max="${saldoPendiente}" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Método de Pago</label>
+                            <select name="metodo_pago" required>
+                                ${_buildMetodosOptions()}
+                            </select>
+                        </div>
+                        <div class="form-group full-width" style="grid-column: span 3;">
+                            <label class="form-label">Comprobante de Pago <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
+                            ${buildComprobanteUploadHTML('comp-abono-file')}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-action" style="padding:10px 25px;" onclick="window.closeModal()">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="padding:10px 30px;">Confirmar Abono</button>
+                </div>
+            </form>
+        </div>`;
+    container.style.display = 'flex';
+    setTimeout(() => attachComprobanteInput('comp-abono-file'), 100);
+    document.getElementById('form-abono').onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true; btn.innerText = 'Registrando...';
+        const abono = parseInt(document.getElementById('valor_abono').value);
+        const nuevoSaldo = saldoPendiente - abono;
+        try {
+            const comprobanteFile = document.getElementById('comp-abono-file')?.files[0];
+            let comprobanteUrl = '';
+            if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
+            const metodoPago = document.querySelector('#form-abono [name="metodo_pago"]')?.value || '';
+            btn.innerText = 'Guardando...';
+            const ventasFull = await db.fetchData('Ventas');
+            const v = ventasFull.find(x => x.id.toString() === ventaId.toString());
+            if (!v) throw new Error('Venta no encontrada.');
+            v.abonos_acumulados = (parseInt(v.abonos_acumulados||0)) + abono;
+            v.saldo_pendiente = nuevoSaldo;
+            if (comprobanteUrl) v.comprobante_ultimo_abono = comprobanteUrl;
+            await db.postData('Ventas', v, 'UPDATE');
+            // ── Registrar en historial individual de Abonos ─────────────────
+            const abonoRecord = { id: Date.now().toString(), venta_id: ventaId.toString(), valor: abono, metodo_pago: metodoPago, fecha: new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
+            await db.postData('Abonos', abonoRecord, 'INSERT');
+            window.closeModal();
+            showToast('✅ Abono registrado');
+            // Si venimos de otro módulo (p.ej. Seguimientos), volvemos a la ficha de la
+            // venta en vez de forzar la navegación a Ventas y perder ese contexto. Si no
+            // hay backAction, refrescamos el módulo que esté activo en este momento
+            // (puede ser Ventas, Finanzas, o cualquier otro con una lista de ventas).
+            if (backAction) {
+                openSaleDetailModal(ventaId, backAction);
+            } else if (window._navigateTo) {
+                window._navigateTo(window._currentView || 'sales');
+            }
+        } catch (err) { showToast(err.message, 'error'); btn.disabled=false; btn.innerText='Reintentar'; }
+    };
+};
+
 // ─── Main render ───────────────────────────────────────────────────────────────
 export const renderSales = async (renderLayout, navigateTo) => {
     _salesRenderLayout = renderLayout;
@@ -573,79 +657,6 @@ export const renderSales = async (renderLayout, navigateTo) => {
             return true;
         });
     }
-
-    // ── Modal Abono ────────────────────────────────────────────────────────────
-    window.modalAbono = (ventaId, saldoPendiente) => {
-        const container = document.getElementById('modal-container');
-        const content   = document.getElementById('modal-content');
-        content.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>Registrar Abono</h2>
-                    <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
-                </div>
-                
-                <form id="form-abono">
-                    <div class="modal-body">
-                        <div style="background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px; margin-bottom:2rem; text-align:center; border:1px solid var(--brand-magenta-glow);">
-                            <span style="font-size:0.8rem; opacity:0.8; text-transform:uppercase;">Saldo Pendiente</span>
-                            <div style="font-size:2rem; font-weight:800; color:var(--brand-magenta); margin-top:6px;">${formatCOP(saldoPendiente)}</div>
-                        </div>
-
-                        <div class="form-grid-3">
-                            <div class="form-group">
-                                <label class="form-label">Valor a Abonar (COP)</label>
-                                <input type="number" id="valor_abono" required min="1" max="${saldoPendiente}" placeholder="0">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Método de Pago</label>
-                                <select name="metodo_pago" required>
-                                    ${_buildMetodosOptions()}
-                                </select>
-                            </div>
-                            <div class="form-group full-width" style="grid-column: span 3;">
-                                <label class="form-label">Comprobante de Pago <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
-                                ${buildComprobanteUploadHTML('comp-abono-file')}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="modal-footer">
-                        <button type="button" class="btn-action" style="padding:10px 25px;" onclick="window.closeModal()">Cancelar</button>
-                        <button type="submit" class="btn-primary" style="padding:10px 30px;">Confirmar Abono</button>
-                    </div>
-                </form>
-            </div>`;
-        container.style.display = 'flex';
-        setTimeout(() => attachComprobanteInput('comp-abono-file'), 100);
-        document.getElementById('form-abono').onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = e.target.querySelector('button[type="submit"]');
-            btn.disabled = true; btn.innerText = 'Registrando...';
-            const abono = parseInt(document.getElementById('valor_abono').value);
-            const nuevoSaldo = saldoPendiente - abono;
-            try {
-                const comprobanteFile = document.getElementById('comp-abono-file')?.files[0];
-                let comprobanteUrl = '';
-                if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
-                const metodoPago = document.querySelector('#form-abono [name="metodo_pago"]')?.value || '';
-                btn.innerText = 'Guardando...';
-                const ventasFull = await db.fetchData('Ventas');
-                const v = ventasFull.find(x => x.id.toString() === ventaId.toString());
-                if (!v) throw new Error('Venta no encontrada.');
-                v.abonos_acumulados = (parseInt(v.abonos_acumulados||0)) + abono;
-                v.saldo_pendiente = nuevoSaldo;
-                if (comprobanteUrl) v.comprobante_ultimo_abono = comprobanteUrl;
-                await db.postData('Ventas', v, 'UPDATE');
-                // ── Registrar en historial individual de Abonos ─────────────────
-                const abonoRecord = { id: Date.now().toString(), venta_id: ventaId.toString(), valor: abono, metodo_pago: metodoPago, fecha: new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
-                await db.postData('Abonos', abonoRecord, 'INSERT');
-                window.closeModal();
-                showToast('✅ Abono registrado');
-                renderSales(renderLayout, navigateTo);
-            } catch (err) { showToast(err.message, 'error'); btn.disabled=false; btn.innerText='Reintentar'; }
-        };
-    };
 
     window.switchSalesView = (view) => {
         _salesActiveView = view;
@@ -1538,7 +1549,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
         </div>
 
         <div class="modal-footer" style="justify-content:center;">
-            ${auth.canEdit('sales') && saldo > 0 ? `<button class="btn-primary" style="padding:12px 40px; font-size:1rem;" onclick="window.closeModal(); window.modalAbono('${v.id}', ${saldo})">Registrar Abono</button>` : ''}
+            ${auth.canEdit('sales') && saldo > 0 ? `<button class="btn-primary" style="padding:12px 40px; font-size:1rem;" onclick="window.closeModal(); window.modalAbono('${v.id}', ${saldo}, '${backAction.replace(/'/g, "\\'")}')">Registrar Abono</button>` : ''}
             ${saldo===0 ? `<div style="padding:10px 30px; background:rgba(6,214,160,0.1); color:var(--success); border-radius:30px; font-weight:800; border:1px solid var(--success);">✅ ORDEN COMPLETAMENTE PAGADA</div>` : ''}
         </div>
         </div>`;
