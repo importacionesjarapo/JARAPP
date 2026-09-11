@@ -688,7 +688,7 @@ function _tabScraping() {
       </div>
       <div style="background:#10B98115;border:1px solid #10B98133;border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#10B981;">
         ✅ Scraping automático activo vía Supabase Edge Functions —
-        corre todos los días entre 7:00 y 7:10 AM aunque JARAPP esté cerrado.
+        corre todos los días entre 7:00 y 7:10 AM aunque EncargosPro esté cerrado.
       </div>
     </div>`;
 

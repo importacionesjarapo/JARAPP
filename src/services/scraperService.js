@@ -740,7 +740,7 @@ export function construirMensajeWhatsApp(resumen) {
     msg += `✅ Sin novedades destacadas en las últimas 24 horas.\n`;
   }
 
-  msg += `\n🔗 Ver detalles en JARAPP → Competitor Tracker`;
+  msg += `\n🔗 Ver detalles en EncargosPro → Competitor Tracker`;
   return msg;
 }
 

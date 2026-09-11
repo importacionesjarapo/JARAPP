@@ -135,7 +135,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
              ${logoImgSrc ? `<img src="${logoImgSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<i data-lucide="image" style="opacity:0.3; width:30px; height:30px;"></i>`}
           </div>
           <div style="flex:1;">
-             <h3 style="margin-top:0;">Logotipo de JARAPP</h3>
+             <h3 style="margin-top:0;">Logotipo de EncargosPro</h3>
              <p style="opacity:0.6; font-size:0.8rem; margin-bottom:10px;">Sube o actualiza la imagen corporativa para el menú lateral (Recomendado 1:1 Cuadrado).</p>
              <input type="file" id="logo-upload-input" accept="image/*" style="font-size:0.8rem; padding:8px;">
           </div>

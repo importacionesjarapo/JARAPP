@@ -1,7 +1,7 @@
 {
-  "name": "JARAPP · Importaciones Jarapo",
-  "short_name": "JARAPP",
-  "description": "Sistema administrativo interno de Importaciones Jarapo",
+  "name": "EncargosPro",
+  "short_name": "EncargosPro",
+  "description": "Sistema de gestión para negocios de importación y personal shopping",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

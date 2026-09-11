@@ -179,14 +179,14 @@ export const renderLayout = (contentHTML) => {
          <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Logo Jarapo">
        </div>
        <div class="sidebar-brand">
-         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
+         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
          <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
        </div>`
     : `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">J</span>
+         <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">E</span>
        </div>
        <div class="sidebar-brand">
-         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
+         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
          <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
        </div>`;
 
@@ -410,7 +410,7 @@ export const navigateTo = (view) => {
   state.currentView = view;
   window._currentView = view;
   localStorage.setItem('JARAPP_VIEW', view);
-  document.title = `${TITULOS[view] ?? view} · JARAPP`;
+  document.title = `${TITULOS[view] ?? view} · EncargosPro`;
 
   // (Credenciales siempre disponibles via fallback en db.js)
 
@@ -781,7 +781,7 @@ function mostrarBannerInstalacioniOS() {
     ">
       <img src="/icon-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0;">
       <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;color:var(--text-main);">Instalar JARAPP</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-main);">Instalar EncargosPro</div>
         <div style="font-size:12px;color:var(--text-muted);">
           Toca <strong>⬆️ Compartir</strong> → <strong>"Añadir a inicio"</strong>
         </div>
