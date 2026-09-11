@@ -634,11 +634,10 @@ async function bootApp() {
 }
 
 function renderSuscripcionVencida(empresa) {
-  // TODO: reemplazar por el WhatsApp COMERCIAL de EncargosPro (el que cobra las
-  // suscripciones a los tenants) — todavía no lo tenemos, ver Fase A del plan.
-  // Este número es el operativo de Importaciones Jarapo, NO debe quedar así
-  // una vez haya clientes reales distintos de Jarapo.
-  const numeroWhatsapp = '573207761097';
+  // Configurable vía variable de entorno VITE_WHATSAPP_COMERCIAL (Netlify →
+  // Site settings → Environment variables), sin tocar código. El número de
+  // Jarapo queda solo como fallback de desarrollo si no está configurada.
+  const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
   const mensaje = encodeURIComponent(`Hola, mi suscripción a EncargosPro (${empresa.nombre}) está ${empresa.estado_suscripcion}. Quiero renovarla.`);
   document.querySelector('#app').innerHTML = `
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:1rem; text-align:center; padding:2rem;">

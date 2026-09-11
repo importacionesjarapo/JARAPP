@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EncargosPro — Software de gestión para importadores y personal shoppers</title>
+<meta name="description" content="EncargosPro es el sistema todo-en-uno para gestionar ventas, inventario, compras en el exterior, logística y finanzas de tu negocio de importación o personal shopping.">
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --primary: #E63946;
+    --primary-dark: #C1121F;
+    --ink: #0E1420;
+    --ink-soft: #3A4150;
+    --bg: #F8F8F6;
+    --surface: #FFFFFF;
+    --border: #E7E7E3;
+    --whatsapp: #25D366;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(248,248,246,0.9);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+  .logo { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.02em; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 22px; border-radius: 999px; font-weight: 700; font-size: 0.95rem;
+    text-decoration: none; border: none; cursor: pointer; transition: transform 0.15s, opacity 0.15s;
+  }
+  .btn:hover { transform: translateY(-1px); opacity: 0.92; }
+  .btn-whatsapp { background: var(--whatsapp); color: #fff; }
+  .btn-primary { background: var(--ink); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--border); }
+
+  section { padding: 88px 0; }
+  section.tight { padding: 56px 0; }
+
+  .hero { text-align: center; padding-top: 96px; }
+  .eyebrow {
+    display: inline-block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--primary-dark); background: #FCE9EA;
+    padding: 6px 14px; border-radius: 999px; margin-bottom: 20px;
+  }
+  h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 20px; }
+  .hero p.sub { font-size: 1.15rem; color: var(--ink-soft); max-width: 640px; margin: 0 auto 36px; }
+  .hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+  .mockup {
+    margin: 64px auto 0; max-width: 920px; border-radius: 20px; overflow: hidden;
+    border: 1px solid var(--border); box-shadow: 0 30px 60px -20px rgba(14,20,32,0.18);
+    background: var(--surface);
+  }
+  .mockup-bar { display: flex; gap: 6px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .mockup-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  .mockup-body { padding: 48px 32px; text-align: center; color: var(--ink-soft); font-size: 0.95rem; }
+
+  .quien {
+    background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .quien-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 28px; margin-top: 40px; }
+  .quien-card { padding: 28px; border-radius: 16px; background: var(--bg); border: 1px solid var(--border); }
+  .quien-card .ico { font-size: 1.8rem; margin-bottom: 12px; }
+  .quien-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .quien-card p { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
+
+  h2.section-title { font-size: clamp(1.6rem, 3.5vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; text-align: center; margin: 0 0 12px; }
+  p.section-sub { text-align: center; color: var(--ink-soft); max-width: 560px; margin: 0 auto 48px; }
+
+  .modulos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .modulo-card { padding: 26px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
+  .modulo-card .ico { font-size: 1.6rem; margin-bottom: 10px; }
+  .modulo-card h3 { margin: 0 0 6px; font-size: 1rem; }
+  .modulo-card p { margin: 0; color: var(--ink-soft); font-size: 0.88rem; }
+
+  .planes {
+    background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .planes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-top: 44px; }
+  .plan-card {
+    padding: 32px 28px; border-radius: 20px; background: var(--bg); border: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .plan-card.destacado { border: 2px solid var(--primary); background: var(--surface); position: relative; }
+  .plan-badge {
+    position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+    background: var(--primary); color: #fff; font-size: 0.72rem; font-weight: 700;
+    padding: 4px 14px; border-radius: 999px; letter-spacing: 0.03em;
+  }
+  .plan-card h3 { margin: 0; font-size: 1.1rem; }
+  .plan-price { font-size: 2rem; font-weight: 800; }
+  .plan-price span { font-size: 0.95rem; font-weight: 500; color: var(--ink-soft); }
+  .plan-card ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem; color: var(--ink-soft); }
+  .plan-card ul li::before { content: "✓ "; color: var(--primary-dark); font-weight: 800; }
+  .plan-nota { text-align: center; color: var(--ink-soft); font-size: 0.85rem; margin-top: 28px; }
+
+  .cta-final { text-align: center; }
+  .cta-final h2 { font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 800; margin: 0 0 16px; letter-spacing: -0.02em; }
+  .cta-final p { color: var(--ink-soft); max-width: 480px; margin: 0 auto 32px; }
+
+  footer { border-top: 1px solid var(--border); padding: 32px 0; }
+  footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 0.82rem; color: var(--ink-soft); }
+
+  .wa-float {
+    position: fixed; bottom: 22px; right: 22px; z-index: 30;
+    width: 58px; height: 58px; border-radius: 50%; background: var(--whatsapp);
+    display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+    box-shadow: 0 10px 24px -6px rgba(37,211,102,0.55); text-decoration: none;
+  }
+
+  @media (max-width: 640px) {
+    section { padding: 56px 0; }
+    .hero { padding-top: 56px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo">📦 EncargosPro</div>
+    <a class="btn btn-whatsapp" id="cta-header" href="#" target="_blank" rel="noopener">💬 Hablar por WhatsApp</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow">Para importadores y personal shoppers</span>
+    <h1>Gestiona todo tu negocio de importación<br>en un solo lugar</h1>
+    <p class="sub">Ventas, inventario, compras en el exterior, logística internacional y finanzas —
+      EncargosPro reemplaza tus hojas de Excel y grupos de WhatsApp desordenados por un
+      sistema hecho a la medida de tu operación.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-whatsapp" id="cta-hero" href="#" target="_blank" rel="noopener">💬 Quiero una demo</a>
+      <a class="btn btn-ghost" href="#modulos">Ver qué incluye ↓</a>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-bar"><span></span><span></span><span></span></div>
+      <div class="mockup-body">
+        [ Vista previa del Dashboard — reemplazar por captura real de la app ]
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="quien tight">
+  <div class="wrap">
+    <h2 class="section-title">¿Es para tu negocio?</h2>
+    <p class="section-sub">Si tu día a día se parece a esto, EncargosPro fue construido para ti.</p>
+    <div class="quien-grid">
+      <div class="quien-card">
+        <div class="ico">✈️</div>
+        <h3>Viajas a comprar</h3>
+        <p>Viajas al exterior (o tienes quien lo haga) a comprar producto para traer y revender localmente.</p>
+      </div>
+      <div class="quien-card">
+        <div class="ico">🛍️</div>
+        <h3>Eres personal shopper</h3>
+        <p>Compras por encargo de tus clientes en tiendas del exterior y gestionas el envío hasta su ciudad.</p>
+      </div>
+      <div class="quien-card">
+        <div class="ico">📦</div>
+        <h3>Importas para revender</h3>
+        <p>Traes mercancía en volumen para distribuirla o venderla al detal, y necesitas controlar costos reales.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="modulos">
+  <div class="wrap">
+    <h2 class="section-title">Todo lo que necesitas, en un solo sistema</h2>
+    <p class="section-sub">Los mismos módulos que usa un negocio de importación real, todos los días.</p>
+    <div class="modulos-grid">
+      <div class="modulo-card"><div class="ico">📊</div><h3>Dashboard 360°</h3><p>Ventas, margen, cartera y alertas en tiempo real, en un solo panel.</p></div>
+      <div class="modulo-card"><div class="ico">🛒</div><h3>Ventas y Clientes</h3><p>Registra ventas, abonos y el historial completo de cada cliente.</p></div>
+      <div class="modulo-card"><div class="ico">📦</div><h3>Inventario</h3><p>Stock por bodega (origen, tránsito y destino) siempre actualizado.</p></div>
+      <div class="modulo-card"><div class="ico">🌎</div><h3>Compras en el exterior</h3><p>Registra cada compra con su costo real y su viaje asociado.</p></div>
+      <div class="modulo-card"><div class="ico">🚚</div><h3>Seguimiento logístico</h3><p>Rastrea cada pedido desde la compra hasta la entrega final, fase por fase.</p></div>
+      <div class="modulo-card"><div class="ico">💰</div><h3>Finanzas</h3><p>Gastos, egresos, TRM del día y rentabilidad real por venta.</p></div>
+      <div class="modulo-card"><div class="ico">🧮</div><h3>Cotizador y Calculadora</h3><p>Cotiza a tus clientes en segundos con tus márgenes ya calculados.</p></div>
+      <div class="modulo-card"><div class="ico">🗓️</div><h3>Calendario de Contenido</h3><p>Planifica y da seguimiento a tu contenido de redes sociales.</p></div>
+      <div class="modulo-card"><div class="ico">👥</div><h3>Roles y permisos</h3><p>Da acceso a tu equipo con el rol exacto que necesita cada quien.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="planes tight">
+  <div class="wrap">
+    <h2 class="section-title">Planes</h2>
+    <p class="section-sub">Precios de referencia — te confirmamos el plan exacto para tu negocio por WhatsApp.</p>
+    <div class="planes-grid">
+      <div class="plan-card">
+        <h3>Starter</h3>
+        <div class="plan-price">$XX.000<span>/mes</span></div>
+        <ul>
+          <li>Hasta 2 usuarios</li>
+          <li>Ventas, Clientes, Inventario</li>
+          <li>Soporte por WhatsApp</li>
+        </ul>
+      </div>
+      <div class="plan-card destacado">
+        <span class="plan-badge">MÁS ELEGIDO</span>
+        <h3>Pro</h3>
+        <div class="plan-price">$XX.000<span>/mes</span></div>
+        <ul>
+          <li>Hasta 8 usuarios</li>
+          <li>Todos los módulos operativos</li>
+          <li>Finanzas y Dashboard 360°</li>
+          <li>Soporte prioritario</li>
+        </ul>
+      </div>
+      <div class="plan-card">
+        <h3>Empresarial</h3>
+        <div class="plan-price">A la medida</div>
+        <ul>
+          <li>Usuarios ilimitados</li>
+          <li>Todos los módulos + Calendario de Contenido</li>
+          <li>Onboarding acompañado</li>
+        </ul>
+      </div>
+    </div>
+    <p class="plan-nota">Precios y planes en definición — escríbenos y te contamos el detalle actualizado.</p>
+  </div>
+</section>
+
+<section class="cta-final">
+  <div class="wrap">
+    <h2>¿Listo para ordenar tu negocio?</h2>
+    <p>Cuéntanos cómo trabajas hoy y te mostramos cómo se vería con EncargosPro.</p>
+    <a class="btn btn-whatsapp" id="cta-final" href="#" target="_blank" rel="noopener">💬 Escríbenos por WhatsApp</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>EncargosPro © <span id="year"></span></div>
+    <div>Software de gestión para importadores y personal shoppers</div>
+  </div>
+</footer>
+
+<a class="wa-float" id="cta-float" href="#" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">💬</a>
+
+<script src="config.js"></script>
+<script>
+  const cfg = window.ENCARGOSPRO_CONFIG || {};
+  const waUrl = `https://wa.me/${cfg.whatsapp}?text=${encodeURIComponent(cfg.mensajeWhatsapp || '')}`;
+  ['cta-header', 'cta-hero', 'cta-final', 'cta-float'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.href = waUrl;
+  });
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>
