@@ -22,6 +22,7 @@ import { renderDocumentacion } from './views/documentacion.js';
 import { renderTracker } from './views/tracker.js';
 import { renderVendedores } from './views/vendedores.js';
 import { renderCalendarioContenido } from './views/calendario.js';
+import { renderSuperadmin } from './views/superadmin.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
 import { AlertasService } from './services/alertas.js';
@@ -78,6 +79,7 @@ const NAV_GROUPS = [
       { view: 'documentacion', icon: 'book-open',         label: 'Documentación',module: 'documentacion' },
       { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
       { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, adminOnly: true },
+      { view: 'superadmin',    icon: 'shield',            label: 'Empresas',     module: 'superadmin' },
     ]
   }
 ];
@@ -431,7 +433,8 @@ export const navigateTo = (view) => {
     clients: 'clients', inventory: 'inventory', sales: 'sales',
     purchases: 'purchases', logistics: 'logistics', finance: 'finance',
     vendedores: 'vendedores',
-    params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver', calendario: 'calendario_ver'
+    params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver', calendario: 'calendario_ver',
+    superadmin: 'superadmin',
   };
   
   if (moduleMap[view] && !auth.canAccess(moduleMap[view])) {
@@ -468,6 +471,7 @@ export const navigateTo = (view) => {
     case 'documentacion': renderDocumentacion(renderLayout, navigateTo); break;
     case 'tracker':       renderTracker(renderLayout, navigateTo); break;
     case 'calendario':    renderCalendarioContenido(renderLayout, navigateTo); break;
+    case 'superadmin':    renderSuperadmin(renderLayout); break;
     default: renderPlaceholder(view); break;
   }
   
@@ -708,6 +712,12 @@ async function startApp() {
       if (sourceEl) { sourceEl.textContent = 'Manual'; sourceEl.className = 'trm-badge-source trm-manual'; }
     });
   }, 1500);
+
+  // Superadmin no tiene dashboard de negocio — va directo a su panel de empresas
+  if (auth.isSuperadmin()) {
+    navigateTo('superadmin');
+    return;
+  }
 
   // Ir al dashboard si tiene acceso, si no al primer módulo permitido
   if (auth.canAccess('dashboard')) {

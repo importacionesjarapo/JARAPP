@@ -77,12 +77,14 @@ export const MODULE_LABELS = {
 
 export const ROLE_LABELS = {
   admin: 'Administrador', gerente: 'Gerente', ventas: 'Ventas',
-  logistica: 'Logística', finanzas: 'Finanzas', viewer: 'Solo Lectura'
+  logistica: 'Logística', finanzas: 'Finanzas', viewer: 'Solo Lectura',
+  superadmin: 'Superadmin',
 };
 
 export const ROLE_COLORS = {
   admin: '#D91010', gerente: '#7C3AED', ventas: '#059669',
-  logistica: '#2563EB', finanzas: '#D97706', viewer: '#64748B'
+  logistica: '#2563EB', finanzas: '#D97706', viewer: '#64748B',
+  superadmin: '#0E1420',
 };
 
 // Helper: promesa con timeout para evitar cuelgues infinitos
@@ -442,8 +444,12 @@ class Auth {
 
   canAccess(module) {
     if (!this._profile || !this._profile.is_active) return false;
+    // El módulo 'superadmin' es exclusivo de ese rol — ni siquiera el admin
+    // de una empresa normal debe verlo (si no, el bypass de admin de abajo
+    // le daría acceso al panel cross-tenant).
+    if (module === 'superadmin') return this._profile.role === 'superadmin';
     // Superadmin no opera ningún módulo de negocio — solo el panel de Fase D
-    if (this._profile.role === 'superadmin') return module === 'superadmin';
+    if (this._profile.role === 'superadmin') return false;
     // Admin siempre tiene acceso total
     if (this._profile.role === 'admin') return true;
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
@@ -456,7 +462,8 @@ class Auth {
 
   canEdit(module) {
     if (!this._profile || !this._profile.is_active) return false;
-    if (this._profile.role === 'superadmin') return module === 'superadmin';
+    if (module === 'superadmin') return this._profile.role === 'superadmin';
+    if (this._profile.role === 'superadmin') return false;
     // Admin siempre puede editar
     if (this._profile.role === 'admin') return true;
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
