@@ -231,16 +231,6 @@ class Auth {
     if (authResult.error) throw new Error(this._translateError(authResult.error.message));
     this._session = authResult.data.session;
 
-    // ── Registro de Logueo ────────────────────────────────
-    try {
-      await client.from('login_logs').insert({
-        user_id: this._session.user.id,
-        email: this._session.user.email
-      });
-    } catch (e) {
-      console.warn('[Auth] Error registrando log de logueo:', e.message);
-    }
-
     // ── Paso 2: Cargar perfil ─────────────────────────────
     await this._loadProfile();
 
@@ -283,6 +273,23 @@ class Auth {
       this._session = null;
       this._profile = null;
       throw new Error('Tu cuenta está desactivada. Contacta al administrador.');
+    }
+
+    // ── Registro de Logueo ────────────────────────────────
+    // Va después de resolver el perfil porque empresa_id es NOT NULL en
+    // login_logs (RLS exige empresa_id = current_empresa_id()). Si por algún
+    // caso borde no hay empresa (perfil huérfano en memoria), se omite el
+    // registro en vez de forzar un insert que la BD va a rechazar.
+    if (this.getEmpresaId()) {
+      try {
+        await client.from('login_logs').insert({
+          user_id: this._session.user.id,
+          email: this._session.user.email,
+          empresa_id: this.getEmpresaId(),
+        });
+      } catch (e) {
+        console.warn('[Auth] Error registrando log de logueo:', e.message);
+      }
     }
 
     return { session: this._session, profile: this._profile };
@@ -337,7 +344,8 @@ class Auth {
     const { error: profileError } = await withTimeout(
       client.from('user_profiles').upsert({
         id: data.user.id, full_name: fullName, email,
-        role, permissions, is_active: true
+        role, permissions, is_active: true,
+        empresa_id: this.getEmpresaId(),
       }, { onConflict: 'id' }),
       8000, 'Timeout al guardar perfil'
     );
@@ -398,12 +406,17 @@ class Auth {
   getProfile() { return this._profile; }
   isAuthenticated() { return !!this._session && !!this._profile; }
   isAdmin() { return this._profile?.role === 'admin'; }
+  isSuperadmin() { return this._profile?.role === 'superadmin'; }
   getUserRole() { return this._profile?.role || 'viewer'; }
   getUserName() { return this._profile?.full_name || 'Usuario'; }
   getUserEmail() { return this._profile?.email || this._session?.user?.email || ''; }
+  /** empresa_id del tenant actual — null para superadmin, que no pertenece a ninguna empresa */
+  getEmpresaId() { return this._profile?.empresa_id || null; }
 
   canAccess(module) {
     if (!this._profile || !this._profile.is_active) return false;
+    // Superadmin no opera ningún módulo de negocio — solo el panel de Fase D
+    if (this._profile.role === 'superadmin') return module === 'superadmin';
     // Admin siempre tiene acceso total
     if (this._profile.role === 'admin') return true;
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
@@ -416,6 +429,7 @@ class Auth {
 
   canEdit(module) {
     if (!this._profile || !this._profile.is_active) return false;
+    if (this._profile.role === 'superadmin') return module === 'superadmin';
     // Admin siempre puede editar
     if (this._profile.role === 'admin') return true;
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol

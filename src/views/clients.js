@@ -822,10 +822,11 @@ export const createClientModal = async (id, navigateTo) => {
                 direccion:dir, 
                 ciudad:fd.get('ciu'), 
                 whatsapp:wa, 
-                fecha_registro:data.fecha_registro||new Date().toLocaleDateString() 
+                fecha_registro:data.fecha_registro||new Date().toLocaleDateString()
             };
-            
-            await db.postData('Clientes',payload,mode); 
+            if (mode === 'INSERT') payload.empresa_id = auth.getEmpresaId();
+
+            await db.postData('Clientes',payload,mode);
             window.closeModal(); navigateTo('clients'); 
         }
         catch(err){ window.showToast(err.message, 'error'); btn.disabled=false; btn.innerText='Reintentar'; }

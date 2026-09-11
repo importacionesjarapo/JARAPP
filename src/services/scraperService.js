@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 
 const client = () => db.client;
 
@@ -121,7 +122,7 @@ export async function ejecutarScrapingDiario(onProgress = null) {
     const sb = await _obtenerCliente();
     const { data: logEntry, error: logErr } = await sb
       .from('scraping_logs')
-      .insert([{ estado: 'ejecutando', cuentas_procesadas: 0, posts_nuevos_detectados: 0, posts_virales_detectados: 0, errores: 0 }])
+      .insert([{ estado: 'ejecutando', cuentas_procesadas: 0, posts_nuevos_detectados: 0, posts_virales_detectados: 0, errores: 0, empresa_id: auth.getEmpresaId() }])
       .select('id')
       .maybeSingle();
     if (logErr) console.error('[Scraper] Error al crear scraping_log:', logErr.message, '| code:', logErr.code);
@@ -442,6 +443,7 @@ async function _procesarResultados(posts, cuentasMap) {
           categoria_contenido: cat,
           fecha_publicacion:   fechaPost ? fechaPost.toISOString() : null,
           origen:              'automatico',
+          empresa_id:          auth.getEmpresaId(),
         };
         const { data: inserted, error: insErr } = await sb
           .from('posts_tracker')
@@ -519,6 +521,7 @@ async function _procesarResultados(posts, cuentasMap) {
                   musica_sugerida:      ia.musica_sugerida,
                   checklist_produccion: ia.checklist_produccion,
                   estado:               'pendiente',
+                  empresa_id:           auth.getEmpresaId(),
                 }]);
               }
             } catch (iaErr) {
@@ -555,7 +558,7 @@ async function _guardarSnapshot(postId, vistas, likes, comentarios) {
     const sb  = await _obtenerCliente();
     const hoy = new Date().toISOString().split('T')[0];
     const { error } = await sb.from('snapshot_metricas').upsert(
-      { post_id: postId, vistas, likes, comentarios, fecha_snapshot: hoy },
+      { post_id: postId, vistas, likes, comentarios, fecha_snapshot: hoy, empresa_id: auth.getEmpresaId() },
       { onConflict: 'post_id,fecha_snapshot' }
     );
     if (error) console.warn('[Scraper] snapshot_metricas upsert error:', error.message);
@@ -801,6 +804,7 @@ export async function generarAnalisisPendientes(onProgress = null) {
           musica_sugerida:      ia.musica_sugerida,
           checklist_produccion: ia.checklist_produccion,
           estado:               'pendiente',
+          empresa_id:           auth.getEmpresaId(),
         }]);
       }
       procesados++;

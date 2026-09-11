@@ -5,6 +5,7 @@
  * dia_semana: 0=Lunes … 6=Domingo (mismo criterio que el resto del módulo Calendario).
  */
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 
 const TABLE = 'PlantillaSemanal';
 
@@ -37,12 +38,12 @@ export const PlantillaService = {
     return data || [];
   },
 
-  /** Crea o actualiza la fila de un día de la semana (una sola fila por dia_semana). */
+  /** Crea o actualiza la fila de un día de la semana (una sola fila por empresa+dia_semana). */
   async upsertDia(diaSemana, payload) {
     if (!db.client) throw new Error('Conexión a Supabase no configurada.');
     const { data, error } = await db.client
       .from(TABLE)
-      .upsert([{ dia_semana: diaSemana, ...payload }], { onConflict: 'dia_semana' })
+      .upsert([{ dia_semana: diaSemana, ...payload, empresa_id: auth.getEmpresaId() }], { onConflict: 'empresa_id,dia_semana' })
       .select()
       .maybeSingle();
     if (error) throw new Error(error.message);

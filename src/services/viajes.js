@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 
 const client = () => db.client;
 
@@ -50,7 +51,7 @@ export const ViajeService = {
 
     const { data, error } = await client()
       .from('viajes')
-      .insert([{ nombre, destino, fecha_inicio, modo_distribucion, notas }])
+      .insert([{ nombre, destino, fecha_inicio, modo_distribucion, notas, empresa_id: auth.getEmpresaId() }])
       .select()
       .single();
     if (error) throw new Error(error.message);

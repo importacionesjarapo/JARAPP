@@ -864,6 +864,7 @@ export const createProductModal = async (id, navigateTo) => {
             if(estProd==='Pendiente de compra') st_mde=0;
             if(estProd==='Disponible entrega inmediata'&&st_mde<=0){btn.disabled=false;btn.innerText=origText;return showToast('Bloqueado: Stock debe ser > 0 para disponibles','error');}
             const payload={id:id||Date.now().toString(),nombre_producto:fd.get('nom'),sku:fd.get('sku'),marca:fd.get('mrc'),categoria:fd.get('cat')||'Generico',genero:fd.get('gen')||'',talla:fd.get('tal')||'',tienda_cotizacion:fd.get('ori')||'',precio_usd:fd.get('pusd'),precio_cop:pcop,stock_medellin:st_mde,stock_miami:data.stock_miami||0,stock_transito:data.stock_transito||0,url_imagen:finalUrl,link_producto:fd.get('link')||'',estado_producto:estProd};
+            if (mode === 'INSERT') payload.empresa_id = auth.getEmpresaId();
             btn.innerText='Sincronizando...';
             await db.postData('Productos',payload,mode);
             window.closeModal(); showToast('✅ Producto actualizado','success'); navigateTo('inventory');

@@ -4,6 +4,7 @@
  * pero el cliente supabase-js se encarga de eso automáticamente vía .from()).
  */
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 
 const TABLE = 'FechasClave';
 
@@ -35,7 +36,7 @@ export const FechasClaveService = {
 
   async create(payload) {
     if (!db.client) throw new Error('Conexión a Supabase no configurada.');
-    const { data, error } = await db.client.from(TABLE).insert([payload]).select().maybeSingle();
+    const { data, error } = await db.client.from(TABLE).insert([{ ...payload, empresa_id: auth.getEmpresaId() }]).select().maybeSingle();
     if (error) throw new Error(error.message);
     return data;
   },

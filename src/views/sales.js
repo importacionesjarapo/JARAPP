@@ -604,7 +604,7 @@ export const openAbonoModal = (ventaId, saldoPendiente, backAction = '') => {
             if (comprobanteUrl) v.comprobante_ultimo_abono = comprobanteUrl;
             await db.postData('Ventas', v, 'UPDATE');
             // ── Registrar en historial individual de Abonos ─────────────────
-            const abonoRecord = { id: Date.now().toString(), venta_id: ventaId.toString(), valor: abono, metodo_pago: metodoPago, fecha: new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
+            const abonoRecord = { id: Date.now().toString(), venta_id: ventaId.toString(), valor: abono, metodo_pago: metodoPago, fecha: new Date().toLocaleDateString(), comprobante_url: comprobanteUrl, empresa_id: auth.getEmpresaId() };
             await db.postData('Abonos', abonoRecord, 'INSERT');
             window.closeModal();
             showToast('✅ Abono registrado');
@@ -1181,7 +1181,7 @@ export const createSaleModal = async (navigateTo) => {
                     } else {
                         const newId = Date.now().toString();
                         const fullDir = dir ? `${dir} (${ciu})` : '';
-                        const payload = { id: newId, nombre, numero_identificacion:nid, numero_lead_kommo:kommo, direccion:fullDir, ciudad:ciu, whatsapp:wa, fecha_registro:new Date().toLocaleDateString() };
+                        const payload = { id: newId, nombre, numero_identificacion:nid, numero_lead_kommo:kommo, direccion:fullDir, ciudad:ciu, whatsapp:wa, fecha_registro:new Date().toLocaleDateString(), empresa_id: auth.getEmpresaId() };
                         await db.postData('Clientes', payload, 'INSERT');
                         showToast('Cliente creado', 'success');
                         
@@ -1300,7 +1300,7 @@ export const createSaleModal = async (navigateTo) => {
             if(tipoVenta==='Encargo'&&uploadFile){ btn.innerText='Subiendo Foto...'; finalImageUrl=await uploadImageToSupabase(uploadFile); }
             if(tipoVenta==='Encargo'){
                 const newProdId=Date.now().toString(); finalProductId=newProdId;
-                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre').value||'Producto sin nombre', marca:document.getElementById('enc_marca').value, categoria:document.getElementById('enc_tipo').value, genero:document.getElementById('enc_genero').value, talla:document.getElementById('enc_talla').value, tienda_cotizacion:document.getElementById('enc_tienda').value, url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?document.getElementById('enc_link').value:'', cantidad_encargada:document.getElementById('enc_cantidad').value, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?document.getElementById('enc_precio_usd').value:'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU', ganancia_calculada: gananciaCalc };
+                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre').value||'Producto sin nombre', marca:document.getElementById('enc_marca').value, categoria:document.getElementById('enc_tipo').value, genero:document.getElementById('enc_genero').value, talla:document.getElementById('enc_talla').value, tienda_cotizacion:document.getElementById('enc_tienda').value, url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?document.getElementById('enc_link').value:'', cantidad_encargada:document.getElementById('enc_cantidad').value, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?document.getElementById('enc_precio_usd').value:'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU', ganancia_calculada: gananciaCalc, empresa_id: auth.getEmpresaId() };
                 showToast('Creando ficha del producto...','info');
                 await db.postData('Productos',pp,'INSERT');
             } else {
@@ -1342,13 +1342,14 @@ export const createSaleModal = async (navigateTo) => {
                 valor_envio_internacional: valorEnvioInt,
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
-                analista_id: auth.getProfile()?.id || null
+                analista_id: auth.getProfile()?.id || null,
+                empresa_id: auth.getEmpresaId()
             };
             showToast('Generando Venta...','info');
             await db.postData('Ventas',pv,'INSERT');
             // Registrar abono inicial en el historial si hubiera
             if (abonoIni > 0) {
-                const initAbono = { id: (Date.now()+1).toString(), venta_id: pvId, valor: abonoIni, metodo_pago: 'Pago Inicial', fecha: fd.get('fecha_real_venta') || new Date().toLocaleDateString(), comprobante_url: comprobanteUrl };
+                const initAbono = { id: (Date.now()+1).toString(), venta_id: pvId, valor: abonoIni, metodo_pago: 'Pago Inicial', fecha: fd.get('fecha_real_venta') || new Date().toLocaleDateString(), comprobante_url: comprobanteUrl, empresa_id: auth.getEmpresaId() };
                 await db.postData('Abonos', initAbono, 'INSERT');
             }
             window.closeModal(); showToast('✅ Operación Exitosa','success');

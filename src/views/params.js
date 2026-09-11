@@ -264,6 +264,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
                     if (!finalUrl) throw new Error("Fallo al subir archivo o ruta vacía.");
                     const payload = { id: globalLogoParam ? globalLogoParam.id : Date.now().toString(), clave: 'GLOBAL_LOGO', valor: finalUrl };
                     const action = globalLogoParam ? 'UPDATE' : 'INSERT';
+                    if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
                     await db.postData('Configuracion', payload, action);
                     localStorage.setItem('GLOBAL_LOGO_URL', finalUrl);
                     // Actualizar logo en toda la app sin recargar
@@ -297,6 +298,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
                 valor: valor,
             };
             const action = idExistente ? 'UPDATE' : 'INSERT';
+            if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
             await db.postData('MetasDashboard', payload, action);
             showToast(`✅ Meta "${labelMeta}" guardada`, 'success');
             // Invalidar caché del dashboard
@@ -357,7 +359,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
             if (!nombre) { showToast('El nombre es obligatorio.', 'error'); return; }
             btn.disabled = true; btn.innerText = 'Guardando...';
             try {
-                const payload = { id: Date.now().toString(), nombre, color, activo: true, orden };
+                const payload = { id: Date.now().toString(), nombre, color, activo: true, orden, empresa_id: auth.getEmpresaId() };
                 await db.postData('MetodosPago', payload, 'INSERT');
                 window.closeModal();
                 showToast('✅ Método de pago agregado', 'success');
@@ -456,7 +458,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
                 const clave = fd.get('clave');
                 const valorRaw = fd.get('valor');
                 if (!valorRaw || !valorRaw.toString().trim()) throw new Error('El campo Valor es obligatorio.');
-                const payload = { id: Date.now().toString(), clave: clave, valor: valorRaw.toString().trim() };
+                const payload = { id: Date.now().toString(), clave: clave, valor: valorRaw.toString().trim(), empresa_id: auth.getEmpresaId() };
                 await db.postData('Configuracion', payload, 'INSERT');
                 window.closeModal();
                 showToast('✅ Parámetro agregado con éxito', 'success');
