@@ -48,20 +48,52 @@ BEGIN
 END $$;
 
 -- ── user_profiles ───────────────────────────────────────────────────────────
--- Cada quien ve su propia fila (necesario para leer su propio perfil al
--- iniciar sesión, incluido el superadmin) y las de su misma empresa
--- (necesario para que un admin liste/gestione a su equipo).
+-- OJO: a propósito NO se usa una sola política "FOR ALL" con
+-- "id = auth.uid() OR empresa_id = current_empresa_id()". Eso permitiría a
+-- cualquier usuario autenticado hacer INSERT/UPDATE sobre su propia fila con
+-- CUALQUIER empresa_id (WITH CHECK solo exige id = auth.uid()), es decir,
+-- auto-asignarse a la empresa de otro cliente — el hueco de aislamiento que
+-- toda esta fase existe para cerrar. Por eso van separadas: lectura amplia
+-- (para poder leer el propio perfil incluso sin empresa asignada todavía),
+-- escritura solo dentro de la propia empresa.
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS user_profiles_all ON user_profiles;
+DROP POLICY IF EXISTS user_profiles_empresa_isolation ON user_profiles;
+
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_profiles' AND policyname = 'user_profiles_empresa_isolation'
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_profiles' AND policyname = 'user_profiles_select'
   ) THEN
-    CREATE POLICY user_profiles_empresa_isolation ON user_profiles
-      FOR ALL
-      USING (id = auth.uid() OR empresa_id = current_empresa_id())
-      WITH CHECK (id = auth.uid() OR empresa_id = current_empresa_id());
+    CREATE POLICY user_profiles_select ON user_profiles
+      FOR SELECT USING (id = auth.uid() OR empresa_id = current_empresa_id());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_profiles' AND policyname = 'user_profiles_insert'
+  ) THEN
+    -- El self-heal de login() (perfil faltante) intenta un upsert sin
+    -- empresa_id: current_empresa_id() da NULL para quien aún no tiene
+    -- perfil, así que esta política lo bloquea de forma segura (NULL = NULL
+    -- no es true) y el flujo cae al perfil en memoria de solo lectura. La
+    -- alta real de usuarios ocurre en admin.js/Fase D, que sí manda
+    -- empresa_id explícito.
+    CREATE POLICY user_profiles_insert ON user_profiles
+      FOR INSERT WITH CHECK (empresa_id = current_empresa_id());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_profiles' AND policyname = 'user_profiles_update'
+  ) THEN
+    CREATE POLICY user_profiles_update ON user_profiles
+      FOR UPDATE USING (empresa_id = current_empresa_id()) WITH CHECK (empresa_id = current_empresa_id());
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'user_profiles' AND policyname = 'user_profiles_delete'
+  ) THEN
+    CREATE POLICY user_profiles_delete ON user_profiles
+      FOR DELETE USING (empresa_id = current_empresa_id());
   END IF;
 END $$;
 
