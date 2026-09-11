@@ -260,7 +260,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
                 btnUpload.innerHTML = `Subiendo...`;
                 btnUpload.disabled = true;
                 try {
-                    const finalUrl = await uploadImageToSupabase(fileInput.files[0]);
+                    const finalUrl = await uploadImageToSupabase(fileInput.files[0], 'logos');
                     if (!finalUrl) throw new Error("Fallo al subir archivo o ruta vacía.");
                     const payload = { id: globalLogoParam ? globalLogoParam.id : Date.now().toString(), clave: 'GLOBAL_LOGO', valor: finalUrl };
                     const action = globalLogoParam ? 'UPDATE' : 'INSERT';

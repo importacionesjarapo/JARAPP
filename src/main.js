@@ -617,8 +617,39 @@ async function bootApp() {
     return;
   }
 
+  // Guard: suscripción de la empresa vencida/cancelada → bloquear navegación.
+  // El superadmin no tiene empresa propia (getEmpresa() da null) y no pasa por este guard.
+  const empresa = await auth.getEmpresa();
+  if (empresa && ['vencida', 'cancelada'].includes(empresa.estado_suscripcion)) {
+    renderSuscripcionVencida(empresa);
+    return;
+  }
+
   // Ya autenticado → arrancar directamente
   startApp();
+}
+
+function renderSuscripcionVencida(empresa) {
+  // TODO: reemplazar por el WhatsApp COMERCIAL de EncargosPro (el que cobra las
+  // suscripciones a los tenants) — todavía no lo tenemos, ver Fase A del plan.
+  // Este número es el operativo de Importaciones Jarapo, NO debe quedar así
+  // una vez haya clientes reales distintos de Jarapo.
+  const numeroWhatsapp = '573207761097';
+  const mensaje = encodeURIComponent(`Hola, mi suscripción a EncargosPro (${empresa.nombre}) está ${empresa.estado_suscripcion}. Quiero renovarla.`);
+  document.querySelector('#app').innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:1rem; text-align:center; padding:2rem;">
+      <div style="font-size:3rem;">⏸️</div>
+      <h2 style="color:var(--text-main);">Suscripción ${empresa.estado_suscripcion === 'cancelada' ? 'cancelada' : 'vencida'}</h2>
+      <p style="color:var(--text-faint); max-width:380px;">
+        El acceso de <strong>${empresa.nombre}</strong> a EncargosPro está pausado.
+        Contáctanos por WhatsApp para reactivar tu suscripción.
+      </p>
+      <a class="btn-primary" href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener">
+        💬 Reactivar por WhatsApp
+      </a>
+      <button class="btn-secondary" onclick="window.location.reload()">Ya renové — Recargar</button>
+    </div>
+  `;
 }
 
 async function startApp() {

@@ -1029,7 +1029,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             if (compFile) {
                 btn.textContent = 'Subiendo comprobante...';
             }
-            const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile) : "";
+            const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile, 'comprobantes') : "";
 
             const payload = { 
                 id: Date.now().toString(),

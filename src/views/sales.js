@@ -593,7 +593,7 @@ export const openAbonoModal = (ventaId, saldoPendiente, backAction = '') => {
         try {
             const comprobanteFile = document.getElementById('comp-abono-file')?.files[0];
             let comprobanteUrl = '';
-            if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
+            if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile, 'comprobantes'); }
             const metodoPago = document.querySelector('#form-abono [name="metodo_pago"]')?.value || '';
             btn.innerText = 'Guardando...';
             const ventasFull = await db.fetchData('Ventas');
@@ -1310,7 +1310,7 @@ export const createSaleModal = async (navigateTo) => {
             }
             const comprobanteFile = document.getElementById('comp-sale-file')?.files[0];
             let comprobanteUrl = '';
-            if (comprobanteFile) { btn.innerText='Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
+            if (comprobanteFile) { btn.innerText='Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile, 'comprobantes'); }
 
             // ─── Cálculo Envio Internacional (Limpieza de formatos) ───
             const cleanNum = (val) => {

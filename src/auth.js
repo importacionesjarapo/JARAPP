@@ -112,6 +112,7 @@ class Auth {
     this._session = null;
     this._profile = null;
     this._listeners = [];
+    this._empresa = null;
   }
 
   _getClient() {
@@ -217,6 +218,31 @@ class Auth {
     return this._profile;
   }
 
+  /**
+   * Fila de "Empresas" del tenant actual (nombre, logo, estado_suscripcion).
+   * null para superadmin (no tiene empresa) o si aún no hay perfil cargado.
+   * Se cachea en memoria durante la sesión — se limpia en logout().
+   */
+  async getEmpresa() {
+    if (!this.getEmpresaId()) return null;
+    if (this._empresa && this._empresa.id === this.getEmpresaId()) return this._empresa;
+
+    const client = this._getClient();
+    if (!client) return null;
+    try {
+      const { data, error } = await withTimeout(
+        client.from('Empresas').select('*').eq('id', this.getEmpresaId()).maybeSingle(),
+        8000, 'Timeout al cargar la empresa'
+      );
+      if (error) { console.error('[Auth] getEmpresa error:', error.message); return null; }
+      this._empresa = data;
+      return data;
+    } catch (e) {
+      console.error('[Auth] getEmpresa exception:', e.message);
+      return null;
+    }
+  }
+
   /** Login con email y password */
   async login(email, password) {
     const client = this._getClient();
@@ -303,6 +329,7 @@ class Auth {
     } catch (_) { /* no bloquear el logout */ }
     this._session = null;
     this._profile = null;
+    this._empresa = null;
   }
 
   /** Crear nuevo usuario (solo admin puede hacer esto desde el panel) */

@@ -1060,7 +1060,7 @@ export const createFinanceModal = async (navigateTo) => {
         try {
             const comprobanteFile = document.getElementById('comp-egreso-file')?.files[0];
             let comprobanteUrl = '';
-            if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
+            if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile, 'comprobantes'); }
             const payload = {
                 id:                  Date.now().toString(),
                 tipo_gasto:          fd.get('tipo_gasto'),
