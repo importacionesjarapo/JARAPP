@@ -125,83 +125,105 @@ export const handler = async (event) => {
 
   // ── MIGRAR IMÁGENES DEL BUCKET VIEJO "jarapo-images" (Tenant #1) ──
   // Antes de la Fase B, fotos de producto, logo y comprobantes de pago
-  // vivían todos juntos en un único bucket plano y público. Esta acción
-  // (de un solo uso, pensada para correr una vez desde el panel) copia
-  // cada archivo al bucket nuevo que le corresponde según qué tabla lo
-  // referencia (productos-publico o comprobantes-privado, bajo la
-  // carpeta de la empresa Jarapo), actualiza esa referencia con la URL
-  // nueva, y NO borra nada del bucket viejo — el borrado queda como paso
-  // manual aparte una vez confirmado que todo se ve bien.
-  if (accion === 'migrar_imagenes_jarapo') {
-    const { data: jarapo, error: errJarapo } = await supabase
+  // vivían todos juntos en un único bucket plano y público. Se divide en
+  // dos acciones para no toparse con el timeout de ~10s de las funciones
+  // síncronas de Netlify: un "plan" de solo lectura (rápido, sin importar
+  // cuántos archivos haya) y lotes pequeños de copiado real, que el
+  // cliente va llamando uno por uno. NO borra nada del bucket viejo — el
+  // borrado queda como paso manual aparte una vez confirmado que todo se
+  // ve bien.
+
+  async function empresaIdJarapo() {
+    const { data: jarapo, error } = await supabase
       .from('Empresas').select('id').eq('slug', 'jarapo').maybeSingle()
-    if (errJarapo) return res(500, { error: errJarapo.message })
-    if (!jarapo) return res(400, { error: 'No se encontró una empresa con slug="jarapo".' })
-    const empresaId = jarapo.id
+    if (error) throw new Error(error.message)
+    if (!jarapo) throw new Error('No se encontró una empresa con slug="jarapo".')
+    return jarapo.id
+  }
 
-    // Referencias conocidas a archivos de jarapo-images, por tabla/columna.
-    const REFERENCIAS = [
-      { tabla: 'Productos', columna: 'url_imagen',            categoria: 'productos' },
-      { tabla: 'Ventas',    columna: 'comprobante_url',        categoria: 'comprobantes' },
-      { tabla: 'Ventas',    columna: 'comprobante_ultimo_abono', categoria: 'comprobantes' },
-      { tabla: 'Abonos',    columna: 'comprobante_url',        categoria: 'comprobantes' },
-      { tabla: 'Compras',   columna: 'comprobante_url',        categoria: 'comprobantes' },
-      { tabla: 'Gastos',    columna: 'comprobante_url',        categoria: 'comprobantes' },
-    ]
+  // Referencias conocidas a archivos de jarapo-images, por tabla/columna.
+  const REFERENCIAS_IMAGENES = [
+    { tabla: 'Productos', columna: 'url_imagen',              categoria: 'productos' },
+    { tabla: 'Ventas',    columna: 'comprobante_url',          categoria: 'comprobantes' },
+    { tabla: 'Ventas',    columna: 'comprobante_ultimo_abono', categoria: 'comprobantes' },
+    { tabla: 'Abonos',    columna: 'comprobante_url',          categoria: 'comprobantes' },
+    { tabla: 'Compras',   columna: 'comprobante_url',          categoria: 'comprobantes' },
+    { tabla: 'Gastos',    columna: 'comprobante_url',          categoria: 'comprobantes' },
+  ]
 
-    // Mapa oldUrl -> { tabla, columna, id, categoria }
-    const referenciasPorUrl = new Map()
-    for (const ref of REFERENCIAS) {
-      const { data: filas, error: errFilas } = await supabase
-        .from(ref.tabla).select(`id, ${ref.columna}`)
-        .eq('empresa_id', empresaId)
-        .not(ref.columna, 'is', null)
-      if (errFilas) return res(500, { error: `Leyendo ${ref.tabla}.${ref.columna}: ${errFilas.message}` })
-      for (const fila of filas || []) {
-        const url = fila[ref.columna]
-        if (url) referenciasPorUrl.set(url, { tabla: ref.tabla, columna: ref.columna, id: fila.id, categoria: ref.categoria })
+  if (accion === 'plan_migracion_imagenes') {
+    try {
+      const empresaId = await empresaIdJarapo()
+
+      // Mapa oldUrl -> { tabla, columna, id, categoria }
+      const referenciasPorUrl = new Map()
+      for (const ref of REFERENCIAS_IMAGENES) {
+        const { data: filas, error: errFilas } = await supabase
+          .from(ref.tabla).select(`id, ${ref.columna}`)
+          .eq('empresa_id', empresaId)
+          .not(ref.columna, 'is', null)
+        if (errFilas) throw new Error(`Leyendo ${ref.tabla}.${ref.columna}: ${errFilas.message}`)
+        for (const fila of filas || []) {
+          const url = fila[ref.columna]
+          if (url) referenciasPorUrl.set(url, { tabla: ref.tabla, columna: ref.columna, id: fila.id, categoria: ref.categoria })
+        }
       }
+      const { data: logoRows, error: errLogo } = await supabase
+        .from('Configuracion').select('id, valor').eq('empresa_id', empresaId).eq('clave', 'GLOBAL_LOGO')
+      if (errLogo) throw new Error(`Leyendo Configuracion: ${errLogo.message}`)
+      for (const fila of logoRows || []) {
+        if (fila.valor) referenciasPorUrl.set(fila.valor, { tabla: 'Configuracion', columna: 'valor', id: fila.id, categoria: 'logos' })
+      }
+
+      // Listar el bucket viejo (paginado — es plano, sin carpetas).
+      const objetos = []
+      let offset = 0
+      const LIMITE = 100
+      while (true) {
+        const { data: pagina, error: errList } = await supabase.storage
+          .from('jarapo-images').list('', { limit: LIMITE, offset })
+        if (errList) throw new Error(`Listando jarapo-images: ${errList.message}`)
+        objetos.push(...(pagina || []))
+        if (!pagina || pagina.length < LIMITE) break
+        offset += LIMITE
+      }
+
+      const oldBase = `${process.env.SUPABASE_URL}/storage/v1/object/public/jarapo-images/`
+      const porMigrar = []
+      const huerfanos = []
+      for (const obj of objetos) {
+        if (!obj.id) continue // carpetas: la API de Storage las lista sin id
+        const match = referenciasPorUrl.get(oldBase + obj.name)
+        if (match) porMigrar.push({ archivo: obj.name, ...match })
+        else huerfanos.push(obj.name)
+      }
+
+      return res(200, { ok: true, empresaId, totalObjetos: objetos.length, porMigrar, huerfanos })
+    } catch (e) {
+      return res(500, { error: e.message })
     }
-    // Logo global (Configuracion.valor donde clave='GLOBAL_LOGO')
-    const { data: logoRows, error: errLogo } = await supabase
-      .from('Configuracion').select('id, valor').eq('empresa_id', empresaId).eq('clave', 'GLOBAL_LOGO')
-    if (errLogo) return res(500, { error: `Leyendo Configuracion: ${errLogo.message}` })
-    for (const fila of logoRows || []) {
-      if (fila.valor) referenciasPorUrl.set(fila.valor, { tabla: 'Configuracion', columna: 'valor', id: fila.id, categoria: 'logos' })
+  }
+
+  // Procesa un lote chico (lo decide el cliente, ideal 5-10) de los
+  // archivos que ya vinieron marcados como "porMigrar" en el plan.
+  if (accion === 'migrar_lote_imagenes') {
+    const { empresaId, archivos } = body
+    if (!empresaId || !Array.isArray(archivos) || archivos.length === 0) {
+      return res(400, { error: 'empresaId y archivos (array) son obligatorios.' })
     }
 
-    // Listar el bucket viejo (paginado — es plano, sin carpetas).
-    const objetos = []
-    let offset = 0
-    const LIMITE = 100
-    while (true) {
-      const { data: pagina, error: errList } = await supabase.storage
-        .from('jarapo-images').list('', { limit: LIMITE, offset })
-      if (errList) return res(500, { error: `Listando jarapo-images: ${errList.message}` })
-      objetos.push(...(pagina || []))
-      if (!pagina || pagina.length < LIMITE) break
-      offset += LIMITE
-    }
-
-    const oldBase = `${process.env.SUPABASE_URL}/storage/v1/object/public/jarapo-images/`
-    const resultado = { migrados: [], huerfanos: [], errores: [], totalObjetos: objetos.length }
-
-    for (const obj of objetos) {
-      // Los "objetos" que en realidad son carpetas vienen sin id en la API de Storage.
-      if (!obj.id) continue
-      const oldUrl = oldBase + obj.name
-      const match = referenciasPorUrl.get(oldUrl)
-      if (!match) { resultado.huerfanos.push(obj.name); continue }
-
+    const resultado = { migrados: [], errores: [] }
+    for (const item of archivos) {
+      const { archivo, tabla, columna, id, categoria } = item
       try {
-        const { data: archivo, error: errDown } = await supabase.storage.from('jarapo-images').download(obj.name)
+        const { data: bytes, error: errDown } = await supabase.storage.from('jarapo-images').download(archivo)
         if (errDown) throw errDown
 
-        const bucketNuevo = match.categoria === 'comprobantes' ? 'comprobantes-privado' : 'productos-publico'
-        const pathNuevo = `${match.categoria}/${empresaId}/${obj.name}`
+        const bucketNuevo = categoria === 'comprobantes' ? 'comprobantes-privado' : 'productos-publico'
+        const pathNuevo = `${categoria}/${empresaId}/${archivo}`
 
         const { error: errUp } = await supabase.storage.from(bucketNuevo)
-          .upload(pathNuevo, archivo, { upsert: true, contentType: archivo.type || undefined })
+          .upload(pathNuevo, bytes, { upsert: true, contentType: bytes.type || undefined })
         if (errUp) throw errUp
 
         let urlNueva
@@ -214,13 +236,12 @@ export const handler = async (event) => {
           urlNueva = firmada.signedUrl
         }
 
-        const { error: errUpdate } = await supabase.from(match.tabla)
-          .update({ [match.columna]: urlNueva }).eq('id', match.id)
+        const { error: errUpdate } = await supabase.from(tabla).update({ [columna]: urlNueva }).eq('id', id)
         if (errUpdate) throw errUpdate
 
-        resultado.migrados.push({ archivo: obj.name, tabla: match.tabla, columna: match.columna, id: match.id })
+        resultado.migrados.push({ archivo, tabla, columna, id })
       } catch (e) {
-        resultado.errores.push({ archivo: obj.name, error: e.message })
+        resultado.errores.push({ archivo, error: e.message })
       }
     }
 

@@ -97,6 +97,8 @@ function bindEvents(renderLayout) {
   });
 }
 
+const LOTE_MIGRACION = 8;
+
 async function modalMigrarImagenes() {
   const ok = await window.customConfirm(
     'Migrar imágenes antiguas',
@@ -113,27 +115,49 @@ async function modalMigrarImagenes() {
         <button onclick="window.closeModal()" class="modal-close">&times;</button>
       </div>
       <div class="modal-body" id="sa-migrar-body">
-        <div class="admin-loading"><div class="loader"></div><p>Esto puede tardar según cuántos archivos haya. No cierres esta ventana.</p></div>
+        <div class="admin-loading"><div class="loader"></div><p>Armando el plan de migración…</p></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
       </div>
     </div>`;
   container.style.display = 'flex';
+  const body = () => document.getElementById('sa-migrar-body');
 
   try {
-    const data = await callAdminEmpresas({ accion: 'migrar_imagenes_jarapo' });
-    document.getElementById('sa-migrar-body').innerHTML = `
-      <p>Total de archivos en el bucket viejo: <strong>${data.totalObjetos}</strong></p>
-      <p style="color:var(--success-green, #059669);">✅ Migrados correctamente: <strong>${data.migrados.length}</strong></p>
-      <p style="color:var(--warning, #DC6803);">⚠️ Sin referencia en la base de datos (huérfanos): <strong>${data.huerfanos.length}</strong></p>
-      <p style="color:var(--danger, #DC2626);">❌ Errores: <strong>${data.errores.length}</strong></p>
-      ${data.errores.length ? `<details style="margin-top:0.75rem;"><summary style="cursor:pointer;">Ver errores</summary><pre style="white-space:pre-wrap;font-size:0.78rem;max-height:200px;overflow:auto;">${data.errores.map(e => `${e.archivo}: ${e.error}`).join('\n')}</pre></details>` : ''}
-      ${data.huerfanos.length ? `<details style="margin-top:0.5rem;"><summary style="cursor:pointer;">Ver huérfanos</summary><pre style="white-space:pre-wrap;font-size:0.78rem;max-height:200px;overflow:auto;">${data.huerfanos.join('\n')}</pre></details>` : ''}
+    // 1) Plan: solo lectura, rápido sin importar cuántos archivos haya.
+    const plan = await callAdminEmpresas({ accion: 'plan_migracion_imagenes' });
+    const { empresaId, totalObjetos, porMigrar, huerfanos } = plan;
+
+    const migrados = [];
+    const errores = [];
+
+    // 2) Lotes chicos secuenciales — cada llamada a la función queda muy
+    //    por debajo del timeout de ~10s de Netlify, sin importar que en
+    //    total haya cientos de archivos.
+    for (let i = 0; i < porMigrar.length; i += LOTE_MIGRACION) {
+      const lote = porMigrar.slice(i, i + LOTE_MIGRACION);
+      body().innerHTML = `<div class="admin-loading"><div class="loader"></div><p>Migrando ${Math.min(i + LOTE_MIGRACION, porMigrar.length)} de ${porMigrar.length}… No cierres esta ventana.</p></div>`;
+      try {
+        const loteResultado = await callAdminEmpresas({ accion: 'migrar_lote_imagenes', empresaId, archivos: lote });
+        migrados.push(...loteResultado.migrados);
+        errores.push(...loteResultado.errores);
+      } catch (err) {
+        lote.forEach(item => errores.push({ archivo: item.archivo, error: err.message }));
+      }
+    }
+
+    body().innerHTML = `
+      <p>Total de archivos en el bucket viejo: <strong>${totalObjetos}</strong></p>
+      <p style="color:var(--success-green, #059669);">✅ Migrados correctamente: <strong>${migrados.length}</strong></p>
+      <p style="color:var(--warning, #DC6803);">⚠️ Sin referencia en la base de datos (huérfanos): <strong>${huerfanos.length}</strong></p>
+      <p style="color:var(--danger, #DC2626);">❌ Errores: <strong>${errores.length}</strong></p>
+      ${errores.length ? `<details style="margin-top:0.75rem;"><summary style="cursor:pointer;">Ver errores</summary><pre style="white-space:pre-wrap;font-size:0.78rem;max-height:200px;overflow:auto;">${errores.map(e => `${e.archivo}: ${e.error}`).join('\n')}</pre></details>` : ''}
+      ${huerfanos.length ? `<details style="margin-top:0.5rem;"><summary style="cursor:pointer;">Ver huérfanos</summary><pre style="white-space:pre-wrap;font-size:0.78rem;max-height:200px;overflow:auto;">${huerfanos.join('\n')}</pre></details>` : ''}
       <p style="margin-top:1rem;font-size:0.82rem;opacity:0.7;">El bucket viejo "jarapo-images" no se tocó — bórralo manualmente desde el dashboard de Supabase solo después de confirmar que todo se ve bien en la app.</p>
     `;
   } catch (err) {
-    document.getElementById('sa-migrar-body').innerHTML = `<div class="admin-error-banner">⚠ ${err.message}</div>`;
+    body().innerHTML = `<div class="admin-error-banner">⚠ ${err.message}</div>`;
   }
 }
 
