@@ -1,5 +1,5 @@
-const CACHE_STATIC  = 'jarapp-static-v3';
-const CACHE_DYNAMIC = 'jarapp-dynamic-v3';
+const CACHE_STATIC  = 'jarapp-static-v4';
+const CACHE_DYNAMIC = 'jarapp-dynamic-v4';
 
 // Assets estáticos — siempre desde caché
 const STATIC_ASSETS = [
@@ -40,9 +40,20 @@ self.addEventListener('fetch', (event) => {
 
   if (request.method !== 'GET') return;
 
-  // Supabase API — Network first, caché como fallback offline
+  // Supabase API — SOLO red, nunca caché. La URL de una consulta (ej.
+  // /rest/v1/Ventas?select=*) es la misma sin importar qué empresa la pida
+  // — RLS filtra por usuario en el servidor, no por la URL — así que
+  // cachear la respuesta y servirla como fallback (como se hacía antes)
+  // puede filtrar datos de una empresa a la sesión de otra si la petición
+  // de red falla justo en ese momento. No vale la pena el soporte offline
+  // a cambio de ese riesgo.
   if (url.hostname.includes('supabase.co')) {
-    event.respondWith(networkFirstWithCache(request, CACHE_DYNAMIC));
+    event.respondWith(
+      fetch(request).catch(() => new Response(
+        JSON.stringify({ error: 'Sin conexión', offline: true }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } }
+      ))
+    );
     return;
   }
 

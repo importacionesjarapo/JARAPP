@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 import { formatCOP, formatUSD, renderError, showToast, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase, downloadExcel } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
 
@@ -1059,7 +1060,7 @@ export const createFinanceModal = async (navigateTo) => {
         try {
             const comprobanteFile = document.getElementById('comp-egreso-file')?.files[0];
             let comprobanteUrl = '';
-            if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile); }
+            if (comprobanteFile) { btn.innerText = 'Subiendo comprobante...'; comprobanteUrl = await uploadImageToSupabase(comprobanteFile, 'comprobantes'); }
             const payload = {
                 id:                  Date.now().toString(),
                 tipo_gasto:          fd.get('tipo_gasto'),
@@ -1071,7 +1072,8 @@ export const createFinanceModal = async (navigateTo) => {
                 trm,
                 valor_cop:           totalCOP,
                 fecha:               new Date().toLocaleDateString(),
-                comprobante_url:     comprobanteUrl
+                comprobante_url:     comprobanteUrl,
+                empresa_id:          auth.getEmpresaId()
             };
             await db.postData('Gastos', payload, 'INSERT');
             window.closeModal();

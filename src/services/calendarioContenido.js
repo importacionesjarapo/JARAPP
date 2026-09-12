@@ -4,6 +4,7 @@
  * pero el cliente supabase-js se encarga de eso automáticamente vía .from()).
  */
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 
 const TABLE = 'ContenidoCalendario';
 
@@ -127,7 +128,7 @@ export const CalendarioService = {
 
   async create(payload) {
     if (!db.client) throw new Error('Conexión a Supabase no configurada.');
-    const { data, error } = await db.client.from(TABLE).insert([payload]).select().maybeSingle();
+    const { data, error } = await db.client.from(TABLE).insert([{ ...payload, empresa_id: auth.getEmpresaId() }]).select().maybeSingle();
     if (error) throw new Error(error.message);
     return data;
   },
@@ -135,7 +136,8 @@ export const CalendarioService = {
   /** Inserta varias publicaciones a la vez (usado por "Generar mes desde plantilla"). */
   async createMany(payloads) {
     if (!db.client) throw new Error('Conexión a Supabase no configurada.');
-    const { data, error } = await db.client.from(TABLE).insert(payloads).select();
+    const withEmpresa = payloads.map(p => ({ ...p, empresa_id: auth.getEmpresaId() }));
+    const { data, error } = await db.client.from(TABLE).insert(withEmpresa).select();
     if (error) throw new Error(error.message);
     return data || [];
   },

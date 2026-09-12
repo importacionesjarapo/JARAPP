@@ -1166,7 +1166,7 @@ window.calExportarSemana = async () => {
       footer: (current) => ({
         stack: [
           { canvas: [{ type: 'line', x1: 30, y1: 0, x2: 812, y2: 0, lineWidth: 1, lineColor: '#E2E8F0' }], margin: [0, 0, 0, 4] },
-          { text: `Generado desde JARAPP · Página ${current}`, fontSize: 8, color: gris, alignment: 'center' },
+          { text: `Generado desde EncargosPro · Página ${current}`, fontSize: 8, color: gris, alignment: 'center' },
         ], margin: [0, 8, 0, 0],
       }),
     };

@@ -77,12 +77,14 @@ export const MODULE_LABELS = {
 
 export const ROLE_LABELS = {
   admin: 'Administrador', gerente: 'Gerente', ventas: 'Ventas',
-  logistica: 'Logística', finanzas: 'Finanzas', viewer: 'Solo Lectura'
+  logistica: 'Logística', finanzas: 'Finanzas', viewer: 'Solo Lectura',
+  superadmin: 'Superadmin',
 };
 
 export const ROLE_COLORS = {
   admin: '#D91010', gerente: '#7C3AED', ventas: '#059669',
-  logistica: '#2563EB', finanzas: '#D97706', viewer: '#64748B'
+  logistica: '#2563EB', finanzas: '#D97706', viewer: '#64748B',
+  superadmin: '#0E1420',
 };
 
 // Helper: promesa con timeout para evitar cuelgues infinitos
@@ -112,6 +114,7 @@ class Auth {
     this._session = null;
     this._profile = null;
     this._listeners = [];
+    this._empresa = null;
   }
 
   _getClient() {
@@ -119,9 +122,26 @@ class Auth {
     const url = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL');
     const key = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY');
     if (!url || !key) return null;
-    this._client = createClient(url, key);
+    this._client = createClient(url, key, {
+      realtime: { params: { eventsPerSecond: -1 } },
+    });
     return this._client;
   }
+
+  /**
+   * Único cliente de Supabase de toda la app — db.js y las vistas lo usan
+   * en vez de crear el suyo propio. Antes db.js tenía su propia instancia
+   * de createClient(), con su propio GoTrueClient en memoria: un login/
+   * logout posterior actualizaba el cliente de Auth pero esa segunda
+   * instancia se quedaba con el JWT de la sesión con la que se creó,
+   * filtrando datos de esa sesión vieja a cualquier usuario que iniciara
+   * sesión después en la misma pestaña. Con un solo cliente compartido eso
+   * ya no puede pasar.
+   */
+  getClient() { return this._getClient(); }
+
+  /** Fuerza que la próxima llamada a getClient() reconstruya el cliente con las credenciales actuales de localStorage/env (usado tras cambiar la conexión en Ajustes). */
+  reconnect() { this._client = null; }
 
   /** Inicializa el módulo y verifica sesión activa */
   async init() {
@@ -217,6 +237,31 @@ class Auth {
     return this._profile;
   }
 
+  /**
+   * Fila de "Empresas" del tenant actual (nombre, logo, estado_suscripcion).
+   * null para superadmin (no tiene empresa) o si aún no hay perfil cargado.
+   * Se cachea en memoria durante la sesión — se limpia en logout().
+   */
+  async getEmpresa() {
+    if (!this.getEmpresaId()) return null;
+    if (this._empresa && this._empresa.id === this.getEmpresaId()) return this._empresa;
+
+    const client = this._getClient();
+    if (!client) return null;
+    try {
+      const { data, error } = await withTimeout(
+        client.from('Empresas').select('*').eq('id', this.getEmpresaId()).maybeSingle(),
+        8000, 'Timeout al cargar la empresa'
+      );
+      if (error) { console.error('[Auth] getEmpresa error:', error.message); return null; }
+      this._empresa = data;
+      return data;
+    } catch (e) {
+      console.error('[Auth] getEmpresa exception:', e.message);
+      return null;
+    }
+  }
+
   /** Login con email y password */
   async login(email, password) {
     const client = this._getClient();
@@ -230,16 +275,6 @@ class Auth {
     );
     if (authResult.error) throw new Error(this._translateError(authResult.error.message));
     this._session = authResult.data.session;
-
-    // ── Registro de Logueo ────────────────────────────────
-    try {
-      await client.from('login_logs').insert({
-        user_id: this._session.user.id,
-        email: this._session.user.email
-      });
-    } catch (e) {
-      console.warn('[Auth] Error registrando log de logueo:', e.message);
-    }
 
     // ── Paso 2: Cargar perfil ─────────────────────────────
     await this._loadProfile();
@@ -285,6 +320,23 @@ class Auth {
       throw new Error('Tu cuenta está desactivada. Contacta al administrador.');
     }
 
+    // ── Registro de Logueo ────────────────────────────────
+    // Va después de resolver el perfil porque empresa_id es NOT NULL en
+    // login_logs (RLS exige empresa_id = current_empresa_id()). Si por algún
+    // caso borde no hay empresa (perfil huérfano en memoria), se omite el
+    // registro en vez de forzar un insert que la BD va a rechazar.
+    if (this.getEmpresaId()) {
+      try {
+        await client.from('login_logs').insert({
+          user_id: this._session.user.id,
+          email: this._session.user.email,
+          empresa_id: this.getEmpresaId(),
+        });
+      } catch (e) {
+        console.warn('[Auth] Error registrando log de logueo:', e.message);
+      }
+    }
+
     return { session: this._session, profile: this._profile };
   }
 
@@ -296,6 +348,7 @@ class Auth {
     } catch (_) { /* no bloquear el logout */ }
     this._session = null;
     this._profile = null;
+    this._empresa = null;
   }
 
   /** Crear nuevo usuario (solo admin puede hacer esto desde el panel) */
@@ -337,7 +390,8 @@ class Auth {
     const { error: profileError } = await withTimeout(
       client.from('user_profiles').upsert({
         id: data.user.id, full_name: fullName, email,
-        role, permissions, is_active: true
+        role, permissions, is_active: true,
+        empresa_id: this.getEmpresaId(),
       }, { onConflict: 'id' }),
       8000, 'Timeout al guardar perfil'
     );
@@ -398,12 +452,21 @@ class Auth {
   getProfile() { return this._profile; }
   isAuthenticated() { return !!this._session && !!this._profile; }
   isAdmin() { return this._profile?.role === 'admin'; }
+  isSuperadmin() { return this._profile?.role === 'superadmin'; }
   getUserRole() { return this._profile?.role || 'viewer'; }
   getUserName() { return this._profile?.full_name || 'Usuario'; }
   getUserEmail() { return this._profile?.email || this._session?.user?.email || ''; }
+  /** empresa_id del tenant actual — null para superadmin, que no pertenece a ninguna empresa */
+  getEmpresaId() { return this._profile?.empresa_id || null; }
 
   canAccess(module) {
     if (!this._profile || !this._profile.is_active) return false;
+    // El módulo 'superadmin' es exclusivo de ese rol — ni siquiera el admin
+    // de una empresa normal debe verlo (si no, el bypass de admin de abajo
+    // le daría acceso al panel cross-tenant).
+    if (module === 'superadmin') return this._profile.role === 'superadmin';
+    // Superadmin no opera ningún módulo de negocio — solo el panel de Fase D
+    if (this._profile.role === 'superadmin') return false;
     // Admin siempre tiene acceso total
     if (this._profile.role === 'admin') return true;
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
@@ -416,6 +479,8 @@ class Auth {
 
   canEdit(module) {
     if (!this._profile || !this._profile.is_active) return false;
+    if (module === 'superadmin') return this._profile.role === 'superadmin';
+    if (this._profile.role === 'superadmin') return false;
     // Admin siempre puede editar
     if (this._profile.role === 'admin') return true;
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol

@@ -1,52 +1,35 @@
-import { createClient } from '@supabase/supabase-js';
-
-// ── Credenciales por defecto (anon key - segura para cliente) ──────────────────
-const DEFAULT_SUPA_URL = 'https://vygfsqdveudpzytnnhiq.supabase.co';
-const DEFAULT_SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTk2NjMsImV4cCI6MjA5MDYzNTY2M30.ZfkBk625C6X1Hgs51MRIB5TbRLYoztD1YS-QESL2x9M';
+import { auth } from './auth.js';
 
 class Database {
   constructor() {
-    // Prioridad: 1) Vite env vars (build de Netlify)
-    //            2) localStorage (override manual)
-    //            3) Credenciales hardcoded (fallback siempre disponible)
-    this.supabaseUrl = import.meta.env?.VITE_SUPABASE_URL
-      || localStorage.getItem('JARAPO_SUPA_URL')
-      || DEFAULT_SUPA_URL;
-    this.supabaseKey = import.meta.env?.VITE_SUPABASE_KEY
-      || localStorage.getItem('JARAPO_SUPA_KEY')
-      || DEFAULT_SUPA_KEY;
-    this.client = null;
-    
-    if (this.supabaseUrl && this.supabaseKey) {
-      try {
-        this.client = createClient(this.supabaseUrl, this.supabaseKey, {
-          realtime: { params: { eventsPerSecond: -1 } },
-        });
-      } catch (e) {
-        console.error('Error init Supabase', e);
-      }
-    }
+    // Solo informativo (se usa en un log de scraperService.js) — la
+    // conexión real vive en auth.js.
+    this.supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL');
+    this.supabaseKey = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY');
   }
 
+  // db.client siempre delega al único cliente de Supabase de la app
+  // (auth.getClient()). Antes esta clase creaba su propia instancia de
+  // createClient(), con su propio GoTrueClient en memoria: un login/logout
+  // posterior actualizaba el cliente de Auth pero esta instancia se
+  // quedaba con el JWT de la sesión con la que se había creado, filtrando
+  // datos de esa sesión vieja a cualquier usuario que iniciara sesión
+  // después en la misma pestaña (la causa del bug de fuga de datos entre
+  // empresas). Con un getter no hay una segunda instancia que se pueda
+  // desincronizar.
+  get client() { return auth.getClient(); }
 
   setCredentials(url, key) {
     this.supabaseUrl = url;
     this.supabaseKey = key;
     localStorage.setItem('JARAPO_SUPA_URL', url);
     localStorage.setItem('JARAPO_SUPA_KEY', key);
-    
-    try {
-      this.client = createClient(url, key, {
-        realtime: { params: { eventsPerSecond: -1 } },
-      });
-    } catch(e) {
-      console.error(e);
-    }
+    auth.reconnect();
   }
 
   async fetchData(table) {
     if (!this.client) return { error: 'Conexión a Supabase no configurada. Ve a Ajustes.' };
-    
+
     try {
       // .order('id') attempts to return stable sorts (newer ones first typically or by string if id is Date.now)
       const { data, error } = await this.client.from(table).select('*').order('id', { ascending: true });
@@ -83,7 +66,7 @@ class Database {
   // Ayudante para KPIs del Dashboard
   async getDashboardStats() {
     if (!this.client) return { error: 'Sin conexión a Supabase' };
-    
+
     try {
       const ventas = await this.fetchData('Ventas') || [];
       const productos = await this.fetchData('Productos') || [];

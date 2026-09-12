@@ -688,7 +688,7 @@ function _tabScraping() {
       </div>
       <div style="background:#10B98115;border:1px solid #10B98133;border-radius:10px;padding:12px 14px;font-size:0.82rem;color:#10B981;">
         ✅ Scraping automático activo vía Supabase Edge Functions —
-        corre todos los días entre 7:00 y 7:10 AM aunque JARAPP esté cerrado.
+        corre todos los días entre 7:00 y 7:10 AM aunque EncargosPro esté cerrado.
       </div>
     </div>`;
 
@@ -1214,6 +1214,7 @@ window._trGuardarPost = async (cuentaId) => {
         hook_texto: hook, caption_completo: caption, es_viral: viral,
         categoria_contenido: cat, nivel_amenaza: amenaza,
         fecha_publicacion: fecha ? new Date(fecha).toISOString() : null,
+        empresa_id: auth.getEmpresaId(),
       }])
       .select().single();
     if (error) throw error;
@@ -1234,6 +1235,7 @@ window._trGuardarPost = async (cuentaId) => {
           musica_sugerida: ia.musica_sugerida,
           checklist_produccion: ia.checklist_produccion,
           estado: 'pendiente',
+          empresa_id: auth.getEmpresaId(),
         }]),
       ]);
       _toast('✅ Análisis IA generado y guardado.', 'success');
@@ -1348,6 +1350,7 @@ window._trGuardarCuenta = async () => {
       usuario_ig: usr, nombre_display: nom, tipo_cuenta: tipo,
       tier: tier ? parseInt(tier) : null,
       categoria: cat, pais, notas, activo: true,
+      empresa_id: auth.getEmpresaId(),
     }]);
     if (error) throw error;
 
@@ -1404,6 +1407,7 @@ window._trActualizarEstado = async (recId, nuevoEstado, postId) => {
       const { error } = await client().from('recreaciones_tracker').insert([{
         post_id: postId,
         estado:  nuevoEstado,
+        empresa_id: auth.getEmpresaId(),
       }]);
       if (error) throw error;
     }
@@ -1493,7 +1497,7 @@ async function _eliminarRecreacionesYPosts(recIds, postIds) {
 
     const listaNegraItems = (postsAEliminar || [])
       .filter(p => p.apify_post_id)
-      .map(p => ({ apify_post_id: p.apify_post_id }));
+      .map(p => ({ apify_post_id: p.apify_post_id, empresa_id: auth.getEmpresaId() }));
 
     if (listaNegraItems.length > 0) {
       const { error: errBlacklist } = await client()

@@ -112,19 +112,34 @@ export const showToast = (message, type = 'success') => {
 
 window.showToast = showToast;
 
-export const uploadImageToSupabase = async (file) => {
+/**
+ * Sube un archivo al bucket correcto según su categoría, bajo la carpeta de
+ * la empresa del usuario actual (aislamiento por tenant vía RLS de
+ * storage.objects, ver 015_multitenant_storage.sql).
+ * @param {File} file
+ * @param {'productos'|'logos'|'comprobantes'} categoria - 'productos'/'logos' van al
+ *   bucket público (fotos de producto, fotos de bodega, logos); 'comprobantes' va al
+ *   bucket privado (comprobantes de pago — dato financiero sensible).
+ */
+export const uploadImageToSupabase = async (file, categoria = 'productos') => {
     return new Promise(async (resolve, reject) => {
         if (!db.client) {
             return reject(new Error("Falta la configuración de Supabase. Ve a 'Configuración', pega tu URL y llave y activa la conexión."));
         }
-        
+
         try {
+            const { auth } = await import('./auth.js');
+            const empresaId = auth.getEmpresaId();
+            if (!empresaId) throw new Error('No se pudo determinar la empresa del usuario actual.');
+
+            const esPrivado = categoria === 'comprobantes';
+            const bucket = esPrivado ? 'comprobantes-privado' : 'productos-publico';
             const fileExt = file.name.split('.').pop() || 'jpg';
             const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-            const filePath = `${fileName}`;
+            const filePath = `${categoria}/${empresaId}/${fileName}`;
 
-            const { data, error } = await db.client.storage
-                .from('jarapo-images')
+            const { error } = await db.client.storage
+                .from(bucket)
                 .upload(filePath, file, {
                     cacheControl: '3600',
                     upsert: false
@@ -132,16 +147,21 @@ export const uploadImageToSupabase = async (file) => {
 
             if (error) throw error;
 
-            // Obtener la URL pública inmediatamente
-            const { data: urlData } = db.client.storage
-                .from('jarapo-images')
-                .getPublicUrl(filePath);
-
-            if (urlData && urlData.publicUrl) {
-                resolve(urlData.publicUrl);
-            } else {
-                resolve("");
+            if (!esPrivado) {
+                const { data: urlData } = db.client.storage.from(bucket).getPublicUrl(filePath);
+                return resolve(urlData?.publicUrl || "");
             }
+
+            // Bucket privado: sin URL pública fija. Se firma una URL de vigencia
+            // muy larga (10 años) para que el comprobante siga siendo consultable
+            // desde Finanzas/Ventas sin tener que regenerar el link cada vez que
+            // se muestra — a cambio de no ser adivinable ni listable como en un
+            // bucket público.
+            const { data: signedData, error: signError } = await db.client.storage
+                .from(bucket)
+                .createSignedUrl(filePath, 60 * 60 * 24 * 365 * 10);
+            if (signError) throw signError;
+            resolve(signedData?.signedUrl || "");
         } catch (err) {
             reject(new Error("Supabase Storage Error: " + err.message));
         }

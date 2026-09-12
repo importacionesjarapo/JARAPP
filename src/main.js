@@ -22,6 +22,7 @@ import { renderDocumentacion } from './views/documentacion.js';
 import { renderTracker } from './views/tracker.js';
 import { renderVendedores } from './views/vendedores.js';
 import { renderCalendarioContenido } from './views/calendario.js';
+import { renderSuperadmin } from './views/superadmin.js';
 import { TRMService } from './services/trm.js';
 import { ConfigService } from './services/config.js';
 import { AlertasService } from './services/alertas.js';
@@ -77,7 +78,8 @@ const NAV_GROUPS = [
       { view: 'params',        icon: 'settings-2',        label: 'Parámetros',   module: 'params'        },
       { view: 'documentacion', icon: 'book-open',         label: 'Documentación',module: 'documentacion' },
       { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
-      { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, adminOnly: true },
+      { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, superadminOnly: true },
+      { view: 'superadmin',    icon: 'shield',            label: 'Empresas',     module: 'superadmin' },
     ]
   }
 ];
@@ -146,6 +148,7 @@ export const renderLayout = (contentHTML) => {
   const navHTML = NAV_GROUPS.map(group => {
     const groupItems = group.items.map(item => {
       if (item.adminOnly && profileLoaded && !auth.isAdmin()) return '';
+      if (item.superadminOnly && profileLoaded && !auth.isSuperadmin()) return '';
       if (item.view === 'admin' && profileLoaded && !auth.isAdmin()) return '';
       if (item.roleOnly && profileLoaded && !item.roleOnly.includes(auth.getUserRole())) return '';
       if (profileLoaded && item.module && !auth.canAccess(item.module)) return '';
@@ -179,14 +182,14 @@ export const renderLayout = (contentHTML) => {
          <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Logo Jarapo">
        </div>
        <div class="sidebar-brand">
-         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
+         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
          <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
        </div>`
     : `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">J</span>
+         <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">E</span>
        </div>
        <div class="sidebar-brand">
-         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">JARAPP</div>
+         <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
          <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
        </div>`;
 
@@ -390,7 +393,15 @@ export const renderLayout = (contentHTML) => {
         const ok = await window.customConfirm('Cerrar sesión', '¿Estás seguro de que deseas salir?');
         if (!ok) return;
         await auth.logout();
-        bootApp();
+        // Recarga completa (en vez de solo bootApp()): los módulos de vista
+        // guardan los datos ya cargados en variables de módulo (caché en
+        // memoria) que nunca se limpian solas — sin esto, el siguiente login
+        // en la misma pestaña podía seguir mostrando datos de la sesión
+        // anterior hasta que esas variables se sobrescribieran.
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
+        }
+        window.location.reload();
       };
     }
   }, 100);
@@ -410,7 +421,7 @@ export const navigateTo = (view) => {
   state.currentView = view;
   window._currentView = view;
   localStorage.setItem('JARAPP_VIEW', view);
-  document.title = `${TITULOS[view] ?? view} · JARAPP`;
+  document.title = `${TITULOS[view] ?? view} · EncargosPro`;
 
   // (Credenciales siempre disponibles via fallback en db.js)
 
@@ -420,8 +431,9 @@ export const navigateTo = (view) => {
     return;
   }
 
-  // Guard: configuración solo para admin si ya está logueado
-  if (view === 'settings' && state.isLoggedIn && !auth.isAdmin()) {
+  // Guard: la pantalla de conexión a Supabase (URL/anon key) es exclusiva
+  // del superadmin — ningún admin de tenant debe poder verla ni tocarla.
+  if (view === 'settings' && state.isLoggedIn && !auth.isSuperadmin()) {
     navigateTo('dashboard');
     return;
   }
@@ -431,7 +443,8 @@ export const navigateTo = (view) => {
     clients: 'clients', inventory: 'inventory', sales: 'sales',
     purchases: 'purchases', logistics: 'logistics', finance: 'finance',
     vendedores: 'vendedores',
-    params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver', calendario: 'calendario_ver'
+    params: 'params', calculadora: 'calculadora', cotizador: 'cotizador_ver', calendario: 'calendario_ver',
+    superadmin: 'superadmin',
   };
   
   if (moduleMap[view] && !auth.canAccess(moduleMap[view])) {
@@ -468,6 +481,7 @@ export const navigateTo = (view) => {
     case 'documentacion': renderDocumentacion(renderLayout, navigateTo); break;
     case 'tracker':       renderTracker(renderLayout, navigateTo); break;
     case 'calendario':    renderCalendarioContenido(renderLayout, navigateTo); break;
+    case 'superadmin':    renderSuperadmin(renderLayout); break;
     default: renderPlaceholder(view); break;
   }
   
@@ -617,8 +631,38 @@ async function bootApp() {
     return;
   }
 
+  // Guard: suscripción de la empresa vencida/cancelada → bloquear navegación.
+  // El superadmin no tiene empresa propia (getEmpresa() da null) y no pasa por este guard.
+  const empresa = await auth.getEmpresa();
+  if (empresa && ['vencida', 'cancelada'].includes(empresa.estado_suscripcion)) {
+    renderSuscripcionVencida(empresa);
+    return;
+  }
+
   // Ya autenticado → arrancar directamente
   startApp();
+}
+
+function renderSuscripcionVencida(empresa) {
+  // Configurable vía variable de entorno VITE_WHATSAPP_COMERCIAL (Netlify →
+  // Site settings → Environment variables), sin tocar código. El número de
+  // Jarapo queda solo como fallback de desarrollo si no está configurada.
+  const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
+  const mensaje = encodeURIComponent(`Hola, mi suscripción a EncargosPro (${empresa.nombre}) está ${empresa.estado_suscripcion}. Quiero renovarla.`);
+  document.querySelector('#app').innerHTML = `
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:1rem; text-align:center; padding:2rem;">
+      <div style="font-size:3rem;">⏸️</div>
+      <h2 style="color:var(--text-main);">Suscripción ${empresa.estado_suscripcion === 'cancelada' ? 'cancelada' : 'vencida'}</h2>
+      <p style="color:var(--text-faint); max-width:380px;">
+        El acceso de <strong>${empresa.nombre}</strong> a EncargosPro está pausado.
+        Contáctanos por WhatsApp para reactivar tu suscripción.
+      </p>
+      <a class="btn-primary" href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener">
+        💬 Reactivar por WhatsApp
+      </a>
+      <button class="btn-secondary" onclick="window.location.reload()">Ya renové — Recargar</button>
+    </div>
+  `;
 }
 
 async function startApp() {
@@ -678,13 +722,19 @@ async function startApp() {
     });
   }, 1500);
 
+  // Superadmin no tiene dashboard de negocio — va directo a su panel de empresas
+  if (auth.isSuperadmin()) {
+    navigateTo('superadmin');
+    return;
+  }
+
   // Ir al dashboard si tiene acceso, si no al primer módulo permitido
   if (auth.canAccess('dashboard')) {
     navigateTo('dashboard');
   } else {
     const firstModule = ['clients','inventory','sales','purchases','logistics','finance','params']
       .find(m => auth.canAccess(m));
-    navigateTo(firstModule || 'settings');
+    navigateTo(firstModule || 'dashboard');
   }
 
   // Cargar alertas en background y mostrar badge en sidebar
@@ -781,7 +831,7 @@ function mostrarBannerInstalacioniOS() {
     ">
       <img src="/icon-192.png" style="width:40px;height:40px;border-radius:10px;flex-shrink:0;">
       <div style="flex:1;">
-        <div style="font-size:13px;font-weight:600;color:var(--text-main);">Instalar JARAPP</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-main);">Instalar EncargosPro</div>
         <div style="font-size:12px;color:var(--text-muted);">
           Toca <strong>⬆️ Compartir</strong> → <strong>"Añadir a inicio"</strong>
         </div>

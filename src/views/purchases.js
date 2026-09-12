@@ -1029,7 +1029,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             if (compFile) {
                 btn.textContent = 'Subiendo comprobante...';
             }
-            const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile) : "";
+            const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile, 'comprobantes') : "";
 
             const payload = { 
                 id: Date.now().toString(),
@@ -1041,7 +1041,8 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                 fecha_compra: fechaComp,
                 numero_factura: numFact,
                 codigo_producto_factura: codFact,
-                estado_compra: estado 
+                estado_compra: estado,
+                empresa_id: auth.getEmpresaId()
             };
             if (ventaId) payload.venta_id = ventaId;
 
@@ -1074,7 +1075,8 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                             fecha: new Date().toLocaleString('es-CO'),
                             notas: 'Generado automáticamente desde Registro de Compra.'
                         }]),
-                        fecha_actualizacion: new Date().toISOString()
+                        fecha_actualizacion: new Date().toISOString(),
+                        empresa_id: auth.getEmpresaId()
                     };
                     await db.postData('Logistica', payloadLogistica, 'INSERT');
                 }

@@ -1212,7 +1212,8 @@ export const createLogisticsModal = async (id, navigateTo) => {
                 trm: null,
                 valor_cop: valor,
                 fecha: new Date().toLocaleDateString(),
-                comprobante_url: ''
+                comprobante_url: '',
+                empresa_id: auth.getEmpresaId()
             }, 'INSERT');
             return nuevoId;
         };
@@ -1256,7 +1257,8 @@ export const createLogisticsModal = async (id, navigateTo) => {
                 trm: trmImplicita,
                 valor_cop: vCOP,
                 fecha: new Date().toLocaleDateString(),
-                comprobante_url: ''
+                comprobante_url: '',
+                empresa_id: auth.getEmpresaId()
             }, 'INSERT');
             return nuevoId;
         };
@@ -1425,7 +1427,8 @@ export const createLogisticsModal = async (id, navigateTo) => {
                         valor_cop: parseInt(guiaCOP || 0),
                         courier: fd.get('paq') || payload.paqueteria || '',
                         fecha_creacion: new Date().toISOString(),
-                        gasto_id: gastoFleteId
+                        gasto_id: gastoFleteId,
+                        empresa_id: auth.getEmpresaId()
                     };
                     await db.postData('GuiasInternacionales', guiaPayload, 'INSERT');
                     payload.guia_internacional_id = newGuiaId;
@@ -1438,6 +1441,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
               payload.fase_portal_num = MAPA_FASE_PORTAL[nuevaFase].num
             }
 
+            if (mode === 'INSERT') payload.empresa_id = auth.getEmpresaId();
             btn.innerHTML = '<i class="loader"></i> Guardando Registro Principal...';
             const res = await db.postData('Logistica', payload, mode);
             if(res.error) throw new Error(res.error);

@@ -32,11 +32,11 @@ export const renderLogin = (onSuccess) => {
           <div class="login-logo-ring">
             ${_logoUrl
               ? `<img src="${_logoUrl}" class="app-logo-img" style="width:100%;height:100%;object-fit:contain;" alt="Importaciones Jarapo">`
-              : `<div style="font-size:3rem;font-weight:900;color:var(--primary);display:flex;align-items:center;justify-content:center;width:100%;height:100%;">J</div>`
+              : `<div style="font-size:3rem;font-weight:900;color:var(--primary);display:flex;align-items:center;justify-content:center;width:100%;height:100%;">E</div>`
             }
           </div>
           <div class="login-brand">
-            <h1 class="login-title">JARAPP</h1>
+            <h1 class="login-title">EncargosPro</h1>
             <p class="login-subtitle">Importaciones Jarapo · Medellín</p>
           </div>
         </div>
@@ -107,7 +107,7 @@ export const renderLogin = (onSuccess) => {
         </form>
 
         <div class="login-card-footer">
-          <span>JARAPP v2.0 · ${new Date().getFullYear()}</span>
+          <span>EncargosPro · ${new Date().getFullYear()}</span>
         </div>
       </div>
     </div>

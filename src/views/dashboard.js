@@ -807,7 +807,7 @@ const _renderHeader = () => {
   return `
   <div class="dash360-header">
     <div>
-      <span class="page-eyebrow">Dashboard 360° · JARAPP</span>
+      <span class="page-eyebrow">Dashboard 360° · EncargosPro</span>
       <h2 class="dash360-title">Centro de Analítica y Decisiones</h2>
       <div style="font-size:0.62rem;opacity:0.4;margin-top:2px;">Intelligence Hub · ${new Date().toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' })}</div>
     </div>
@@ -2283,7 +2283,7 @@ const _openExecutiveModal = async () => {
   <div style="background:var(--bg-main);border:1px solid var(--border-base);border-radius:20px;overflow:hidden;">
     <div style="background:linear-gradient(135deg,rgba(76,201,240,0.12),rgba(139,92,246,0.12));border-bottom:1px solid var(--border-base);padding:1.5rem 2rem;display:flex;justify-content:space-between;align-items:center;">
       <div>
-        <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:2px;opacity:0.5;margin-bottom:4px;">Resumen Ejecutivo · Motor IA JARAPP</div>
+        <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:2px;opacity:0.5;margin-bottom:4px;">Resumen Ejecutivo · Motor IA EncargosPro</div>
         <h2 style="margin:0;font-size:1.5rem;font-weight:800;">${new Date().toLocaleDateString('es-CO',{month:'long',year:'numeric'})}</h2>
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
@@ -2356,7 +2356,7 @@ const _openPrioritiesDrawer = async () => {
   <div style="background:var(--bg-main);border:1px solid var(--border-base);border-radius:20px;overflow:hidden;max-width:600px;">
     <div style="padding:1.5rem 1.5rem 1rem;border-bottom:1px solid var(--border-base);display:flex;justify-content:space-between;align-items:center;">
       <div>
-        <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:2px;opacity:0.5;margin-bottom:4px;">Motor IA · JARAPP</div>
+        <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:2px;opacity:0.5;margin-bottom:4px;">Motor IA · EncargosPro</div>
         <h2 style="margin:0;font-size:1.2rem;font-weight:800;">🎯 Prioridades del Día</h2>
       </div>
       <button onclick="document.getElementById('priorities-modal').style.display='none'" style="background:none;border:none;color:var(--text-main);font-size:1.5rem;cursor:pointer;">&times;</button>
@@ -2445,7 +2445,7 @@ const _openBalanceMaestroModal = () => {
     <div style="background:linear-gradient(135deg,rgba(34,197,94,0.1),rgba(59,130,246,0.1));border-bottom:1px solid var(--border-base);padding:1.5rem 2rem;display:flex;justify-content:space-between;align-items:center;">
       <div>
         <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:2px;opacity:0.5;margin-bottom:4px;">Vista consolidada</div>
-        <h2 style="margin:0;font-size:1.4rem;font-weight:800;">⚖️ Balance Maestro JARAPP</h2>
+        <h2 style="margin:0;font-size:1.4rem;font-weight:800;">⚖️ Balance Maestro EncargosPro</h2>
       </div>
       <button onclick="document.getElementById('balance-maestro-modal').style.display='none'" style="background:none;border:none;color:var(--text-main);font-size:1.5rem;cursor:pointer;">&times;</button>
     </div>
