@@ -5,10 +5,14 @@
 // que abrir un hueco especial en las políticas RLS del resto de la app.
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
+// createClient revienta de forma síncrona si la URL no es válida — si
+// SUPABASE_URL/SUPABASE_SERVICE_KEY faltan (ej. no configuradas para el
+// contexto de Deploy Preview en Netlify), eso pasaba ANTES de que el
+// handler pudiera responder, y Netlify devolvía un 502 en blanco. Se
+// guarda para poder devolver un error JSON claro en su lugar.
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY)
+  : null
 
 // Mismo template que ROLE_TEMPLATES.admin en src/auth.js — se duplica acá
 // porque esta función corre en Node/Netlify, fuera del bundle de Vite.
@@ -47,6 +51,7 @@ async function verificarSuperadmin(authHeader) {
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
   if (event.httpMethod !== 'POST') return res(405, { error: 'Method not allowed' })
+  if (!supabase) return res(500, { error: 'Función mal configurada: faltan SUPABASE_URL / SUPABASE_SERVICE_KEY en este entorno de Netlify.' })
 
   const caller = await verificarSuperadmin(event.headers.authorization || event.headers.Authorization)
   if (!caller) return res(403, { error: 'Solo el superadmin puede usar este panel.' })
