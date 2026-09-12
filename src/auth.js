@@ -122,9 +122,26 @@ class Auth {
     const url = import.meta.env?.VITE_SUPABASE_URL || localStorage.getItem('JARAPO_SUPA_URL');
     const key = import.meta.env?.VITE_SUPABASE_KEY || localStorage.getItem('JARAPO_SUPA_KEY');
     if (!url || !key) return null;
-    this._client = createClient(url, key);
+    this._client = createClient(url, key, {
+      realtime: { params: { eventsPerSecond: -1 } },
+    });
     return this._client;
   }
+
+  /**
+   * Único cliente de Supabase de toda la app — db.js y las vistas lo usan
+   * en vez de crear el suyo propio. Antes db.js tenía su propia instancia
+   * de createClient(), con su propio GoTrueClient en memoria: un login/
+   * logout posterior actualizaba el cliente de Auth pero esa segunda
+   * instancia se quedaba con el JWT de la sesión con la que se creó,
+   * filtrando datos de esa sesión vieja a cualquier usuario que iniciara
+   * sesión después en la misma pestaña. Con un solo cliente compartido eso
+   * ya no puede pasar.
+   */
+  getClient() { return this._getClient(); }
+
+  /** Fuerza que la próxima llamada a getClient() reconstruya el cliente con las credenciales actuales de localStorage/env (usado tras cambiar la conexión en Ajustes). */
+  reconnect() { this._client = null; }
 
   /** Inicializa el módulo y verifica sesión activa */
   async init() {
