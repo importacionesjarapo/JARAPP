@@ -66,7 +66,16 @@
   }
   .mockup-bar { display: flex; gap: 6px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
   .mockup-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
-  .mockup-body { padding: 48px 32px; text-align: center; color: var(--ink-soft); font-size: 0.95rem; }
+
+  .mockup-dash { padding: 32px; text-align: left; background: var(--bg); }
+  .mockup-dash-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
+  .mockup-dash-title { font-weight: 700; font-size: 0.95rem; color: var(--ink); }
+  .mockup-dash-demo { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; }
+  .mockup-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .mockup-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; text-align: left; }
+  .mockup-kpi .ico { display: block; font-size: 1.2rem; margin-bottom: 8px; }
+  .mockup-kpi strong { display: block; font-size: 1.3rem; font-weight: 800; color: var(--ink); }
+  .mockup-kpi small { color: var(--ink-soft); font-size: 0.78rem; }
 
   .quien {
     background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
@@ -150,8 +159,17 @@
 
     <div class="mockup">
       <div class="mockup-bar"><span></span><span></span><span></span></div>
-      <div class="mockup-body">
-        [ Vista previa del Dashboard — reemplazar por captura real de la app ]
+      <div class="mockup-dash">
+        <div class="mockup-dash-head">
+          <span class="mockup-dash-title">Dashboard 360° · Kicks Import Co.</span>
+          <span class="mockup-dash-demo">Datos de ejemplo</span>
+        </div>
+        <div class="mockup-kpis">
+          <div class="mockup-kpi"><span class="ico">💰</span><strong>$18.4M</strong><small>Facturación del mes</small></div>
+          <div class="mockup-kpi"><span class="ico">📦</span><strong>142</strong><small>Encargos activos</small></div>
+          <div class="mockup-kpi"><span class="ico">🚚</span><strong>96%</strong><small>Entregas a tiempo</small></div>
+          <div class="mockup-kpi"><span class="ico">👥</span><strong>58</strong><small>Clientes activos</small></div>
+        </div>
       </div>
     </div>
   </div>
@@ -202,11 +220,11 @@
 <section class="planes tight">
   <div class="wrap">
     <h2 class="section-title">Planes</h2>
-    <p class="section-sub">Precios de referencia — te confirmamos el plan exacto para tu negocio por WhatsApp.</p>
+    <p class="section-sub">Elige el plan según el tamaño de tu equipo — si tu operación no encaja exacto, lo ajustamos.</p>
     <div class="planes-grid">
       <div class="plan-card">
         <h3>Starter</h3>
-        <div class="plan-price">$XX.000<span>/mes</span></div>
+        <div class="plan-price">$79.000<span>/mes</span></div>
         <ul>
           <li>Hasta 2 usuarios</li>
           <li>Ventas, Clientes, Inventario</li>
@@ -216,7 +234,7 @@
       <div class="plan-card destacado">
         <span class="plan-badge">MÁS ELEGIDO</span>
         <h3>Pro</h3>
-        <div class="plan-price">$XX.000<span>/mes</span></div>
+        <div class="plan-price">$149.000<span>/mes</span></div>
         <ul>
           <li>Hasta 8 usuarios</li>
           <li>Todos los módulos operativos</li>
@@ -234,7 +252,7 @@
         </ul>
       </div>
     </div>
-    <p class="plan-nota">Precios y planes en definición — escríbenos y te contamos el detalle actualizado.</p>
+    <p class="plan-nota">Precios en pesos colombianos, facturación mensual. Escríbenos y ajustamos el plan a tu operación.</p>
   </div>
 </section>
 
