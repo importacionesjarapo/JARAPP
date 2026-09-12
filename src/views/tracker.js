@@ -1,12 +1,9 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { getEstadoScheduler } from '../services/schedulerService.js';
-import { construirMensajeWhatsApp, testApifyUno, cancelarScraping, generarAnalisisPendientes } from '../services/scraperService.js';
+import { construirMensajeWhatsApp, testApifyUno, cancelarScraping, generarAnalisisPendientes, obtenerPerfilMarca, groqAnalizar, PERFIL_MARCA_CAMPOS } from '../services/scraperService.js';
 
 const client = () => db.client;
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL   = 'openai/gpt-oss-120b';
-const GROQ_KEY     = import.meta.env.VITE_GROQ_API_KEY;
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 let _tab           = 'competidores';
@@ -95,55 +92,9 @@ function _bdg(bg, color, text) {
 }
 
 // ─── Groq ─────────────────────────────────────────────────────────────────────
-const _SYSTEM_PROMPT = `Eres el estratega de contenido de Importaciones Jarapo, una empresa colombiana de personal shopping que importa productos originales desde USA (calzado, ropa, accesorios, vitaminas, perfumes, tecnología). El perfil de Instagram es @importaciones_jarapo con 36.3K seguidores verificados. El viaje es siempre a Orlando, nunca a Miami. El tono de contenido es "copy violento" — impactante, aspiracional, emocional y directo. El CTA siempre dirige a WhatsApp.
-
-Cuando recibas datos de un post viral de la competencia, debes:
-1. ANÁLISIS: Explicar en 3-4 líneas por qué funcionó este post (hook, formato, emoción activada, CTA)
-2. RECREACIÓN JARAPO: Proponer el guion o texto completo adaptado al tono Jarapo
-3. HOOK: Primera frase o primeros 3 segundos del reel para Jarapo
-4. CTA: Call to action final con link a WhatsApp wa.me/573207761097
-5. MÚSICA: Sugerencia de tipo de audio (no nombrar canciones específicas)
-6. CHECKLIST: Lista de 4-5 pasos de producción (qué grabar, duración, formato)
-
-Responde SOLO en JSON con esta estructura exacta:
-{
-  "analisis": "...",
-  "guion_recreacion": "...",
-  "hook_jarapo": "...",
-  "cta_sugerido": "...",
-  "musica_sugerida": "...",
-  "checklist_produccion": ["paso 1", "paso 2", "paso 3", "paso 4", "paso 5"]
-}`;
-
-async function _groqAnalizar(post, cuenta) {
-  const userMsg = `Analiza este post viral de @${cuenta?.usuario_ig || 'competidor'}:
-- Tipo: ${post.tipo_contenido}
-- Vistas: ${(post.vistas || 0).toLocaleString('es-CO')}
-- Hook/primeras palabras: "${post.hook_texto || ''}"
-- Caption: "${post.caption_completo || ''}"
-- Categoría: ${post.categoria_contenido || ''}
-- Nivel de amenaza: ${post.nivel_amenaza || ''}`;
-
-  const res = await fetch(GROQ_API_URL, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: _SYSTEM_PROMPT },
-        { role: 'user',   content: userMsg },
-      ],
-      temperature: 0.7,
-      max_tokens: 1500,
-    }),
-  });
-  if (!res.ok) throw new Error(`Groq ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  const raw  = data.choices[0].message.content;
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Respuesta IA sin JSON válido');
-  return JSON.parse(match[0]);
-}
+// El prompt de IA y la llamada a Groq viven en scraperService.js (groqAnalizar +
+// obtenerPerfilMarca) — antes estaban duplicados acá con el mismo texto
+// hardcodeado para Jarapo. Ver el botón "⚙️ Configurar marca IA" más abajo.
 
 // ─── Alerta WhatsApp (stub) ───────────────────────────────────────────────────
 function _alertaTracker(post, cuenta) {
@@ -511,7 +462,7 @@ function _tabPosts() {
 
         ${rec ? `
           <div id="trrec-${p.id}" style="display:none;margin-top:14px;padding:16px;background:#D9101008;border-radius:12px;border:1px solid #D9101033;">
-            <div style="font-weight:700;margin-bottom:12px;color:#D91010;font-size:0.88rem;">🎬 Propuesta de Recreación para Jarapo</div>
+            <div style="font-weight:700;margin-bottom:12px;color:#D91010;font-size:0.88rem;">🎬 Propuesta de Recreación</div>
             ${rec.hook_jarapo ? `<div style="margin-bottom:10px;"><span style="font-size:0.75rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;">Hook:</span><br><span style="font-size:0.9rem;font-weight:700;color:#D91010;">"${rec.hook_jarapo}"</span></div>` : ''}
             ${rec.guion_recreacion ? `<div style="margin-bottom:10px;"><span style="font-size:0.75rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;">Guión:</span><br><p style="font-size:0.86rem;line-height:1.7;white-space:pre-wrap;margin-top:4px;">${rec.guion_recreacion}</p></div>` : ''}
             ${rec.cta_sugerido ? `<div style="margin-bottom:10px;"><span style="font-size:0.75rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;">CTA:</span><br><span style="font-size:0.86rem;">${rec.cta_sugerido}</span></div>` : ''}
@@ -707,6 +658,9 @@ function _tabScraping() {
           style="display:none;background:#EF444420;color:#EF4444;border:1px solid #EF444455;font-size:0.9rem;"
           onclick="window._trCancelarScraping()">
           ⏹ Cancelar
+        </button>
+        <button class="btn-action" style="margin-left:auto;" onclick="window._trConfigurarMarca()">
+          ⚙️ Configurar marca IA
         </button>
       </div>
       <div id="tr-scraping-log" style="display:none;margin-top:18px;background:var(--surface-2);border-radius:12px;padding:16px;font-family:monospace;font-size:0.82rem;line-height:2;max-height:240px;overflow-y:auto;white-space:pre-wrap;"></div>
@@ -1055,7 +1009,8 @@ function _registerHandlers() {
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando…'; }
     try {
       const cuenta = _cuentas.find(c => c.id === post.cuenta_id);
-      const ia = await _groqAnalizar(post, cuenta);
+      const perfilMarca = await obtenerPerfilMarca();
+      const ia = await groqAnalizar(post, cuenta, perfilMarca);
       await Promise.all([
         client().from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', postId),
         client().from('recreaciones_tracker').upsert({
@@ -1224,7 +1179,8 @@ window._trGuardarPost = async (cuentaId) => {
 
     try {
       const cuenta = _cuentas.find(c => c.id === cuentaId);
-      const ia = await _groqAnalizar(inserted, cuenta);
+      const perfilMarca = await obtenerPerfilMarca();
+      const ia = await groqAnalizar(inserted, cuenta, perfilMarca);
       await Promise.all([
         client().from('posts_tracker').update({ analisis_ia: ia.analisis }).eq('id', inserted.id),
         client().from('recreaciones_tracker').insert([{
@@ -1712,6 +1668,73 @@ window._trCancelarScraping = () => {
   cancelarScraping();
   const btnCan = document.getElementById('tr-cancelar-btn');
   if (btnCan) { btnCan.disabled = true; btnCan.textContent = '⏹ Cancelando...'; }
+};
+
+// ─── Modal: Configurar marca IA ────────────────────────────────────────────────
+// Los prompts de análisis de IA (Groq) usan estos valores en vez de tener el
+// nombre/tono/WhatsApp de una empresa fija hardcodeados — cada tenant edita
+// los suyos acá. Se guardan como filas de Configuracion (igual que GLOBAL_LOGO).
+window._trConfigurarMarca = async () => {
+  const c = document.getElementById('modal-container');
+  const m = document.getElementById('modal-content');
+  if (!c || !m) return;
+
+  m.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">⚙️ Configurar marca IA</h2>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="tr-marca-body">
+        <div class="admin-loading"><div class="loader"></div><p>Cargando...</p></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button type="button" class="btn-primary" id="tr-marca-btn-save" onclick="window._trGuardarMarca()">Guardar</button>
+      </div>
+    </div>`;
+  c.style.display = 'flex';
+
+  const [perfil, { data: filas }] = await Promise.all([
+    obtenerPerfilMarca(),
+    client().from('Configuracion').select('id, clave').eq('empresa_id', auth.getEmpresaId())
+      .in('clave', PERFIL_MARCA_CAMPOS.map(f => f.clave)),
+  ]);
+  window._trMarcaIds = Object.fromEntries((filas || []).map(f => [f.clave, f.id]));
+
+  document.getElementById('tr-marca-body').innerHTML = `
+    <p style="color:var(--text-faint);font-size:0.84rem;margin-bottom:14px;">
+      Esta información se usa para redactar los análisis y recreaciones de IA de los posts virales de la competencia — no afecta el resto de la app.
+    </p>
+    ${PERFIL_MARCA_CAMPOS.map(f => `
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">${f.label}</label>
+        ${f.textarea
+          ? `<textarea id="tr-marca-${f.clave}" class="form-input" rows="2" placeholder="${f.placeholder}">${perfil[f.clave] || ''}</textarea>`
+          : `<input type="text" id="tr-marca-${f.clave}" class="form-input" placeholder="${f.placeholder}" value="${perfil[f.clave] || ''}">`}
+      </div>
+    `).join('')}
+  `;
+};
+
+window._trGuardarMarca = async () => {
+  const btn = document.getElementById('tr-marca-btn-save');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    for (const f of PERFIL_MARCA_CAMPOS) {
+      const valor = document.getElementById(`tr-marca-${f.clave}`)?.value.trim();
+      if (!valor) continue;
+      const idExistente = window._trMarcaIds?.[f.clave];
+      const payload = { id: idExistente || Date.now().toString() + Math.random().toString(36).slice(2, 6), clave: f.clave, valor };
+      if (!idExistente) payload.empresa_id = auth.getEmpresaId();
+      await db.postData('Configuracion', payload, idExistente ? 'UPDATE' : 'INSERT');
+    }
+    window.closeModal();
+    _toast('✅ Configuración de marca guardada', 'success');
+  } catch (err) {
+    _toast(err.message, 'danger');
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
 };
 
 window._trRefrescarLogs = async () => {

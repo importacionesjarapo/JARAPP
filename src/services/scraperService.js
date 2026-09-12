@@ -19,13 +19,57 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL   = 'openai/gpt-oss-120b';
 const GROQ_KEY     = import.meta.env.VITE_GROQ_API_KEY;
 
-const GROQ_SYSTEM = `Eres el estratega de contenido de Importaciones Jarapo, una empresa colombiana de personal shopping que importa productos originales desde USA (calzado, ropa, accesorios, vitaminas, perfumes, tecnología). El perfil de Instagram es @importaciones_jarapo con 36.3K seguidores verificados. El viaje es siempre a Orlando, nunca a Miami. El tono de contenido es "copy violento" — impactante, aspiracional, emocional y directo. El CTA siempre dirige a WhatsApp.
+// Perfil de marca usado en el prompt de IA — configurable por tenant desde
+// Competitor Tracker → "⚙️ Configurar marca IA" (se guarda en Configuracion,
+// igual que GLOBAL_LOGO). Los valores de Jarapo quedan como default para no
+// romper su comportamiento actual si nunca los toca desde ese formulario.
+const PERFIL_MARCA_DEFAULTS = {
+  TRACKER_NOMBRE_EMPRESA: 'Importaciones Jarapo',
+  TRACKER_DESCRIPCION:    'una empresa colombiana de personal shopping que importa productos originales desde USA (calzado, ropa, accesorios, vitaminas, perfumes, tecnología)',
+  TRACKER_IG_HANDLE:      '@importaciones_jarapo',
+  TRACKER_IG_SEGUIDORES:  '36.3K seguidores verificados',
+  TRACKER_DESTINO_VIAJE:  'Orlando',
+  TRACKER_TONO:           '"copy violento" — impactante, aspiracional, emocional y directo',
+  TRACKER_WHATSAPP:       '573207761097',
+};
+
+// Metadata para el formulario de "Configurar marca IA" en tracker.js — evita
+// duplicar la lista de claves/labels en dos archivos.
+export const PERFIL_MARCA_CAMPOS = [
+  { clave: 'TRACKER_NOMBRE_EMPRESA', label: 'Nombre de la empresa',        placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_NOMBRE_EMPRESA },
+  { clave: 'TRACKER_DESCRIPCION',    label: 'Descripción corta del negocio', placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_DESCRIPCION, textarea: true },
+  { clave: 'TRACKER_IG_HANDLE',      label: 'Usuario de Instagram',        placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_IG_HANDLE },
+  { clave: 'TRACKER_IG_SEGUIDORES',  label: 'Seguidores (texto libre)',    placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_IG_SEGUIDORES },
+  { clave: 'TRACKER_DESTINO_VIAJE',  label: 'Destino de viaje/compras',    placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_DESTINO_VIAJE },
+  { clave: 'TRACKER_TONO',           label: 'Tono de contenido',           placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_TONO },
+  { clave: 'TRACKER_WHATSAPP',       label: 'WhatsApp (solo números, sin +)', placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_WHATSAPP },
+];
+
+export async function obtenerPerfilMarca() {
+  try {
+    const sb = await _obtenerCliente();
+    const { data } = await sb.from('Configuracion').select('clave, valor')
+      .eq('empresa_id', auth.getEmpresaId())
+      .in('clave', Object.keys(PERFIL_MARCA_DEFAULTS));
+    const perfil = { ...PERFIL_MARCA_DEFAULTS };
+    for (const fila of data || []) {
+      if (fila.valor) perfil[fila.clave] = fila.valor;
+    }
+    return perfil;
+  } catch (e) {
+    console.warn('[Scraper] No se pudo cargar el perfil de marca, usando valores por defecto:', e.message);
+    return { ...PERFIL_MARCA_DEFAULTS };
+  }
+}
+
+function _construirSystemPrompt(perfil) {
+  return `Eres el estratega de contenido de ${perfil.TRACKER_NOMBRE_EMPRESA}, ${perfil.TRACKER_DESCRIPCION}. El perfil de Instagram es ${perfil.TRACKER_IG_HANDLE} con ${perfil.TRACKER_IG_SEGUIDORES}. El viaje es siempre a ${perfil.TRACKER_DESTINO_VIAJE}. El tono de contenido es ${perfil.TRACKER_TONO}. El CTA siempre dirige a WhatsApp.
 
 Cuando recibas datos de un post viral de la competencia, debes:
 1. ANÁLISIS: Explicar en 3-4 líneas por qué funcionó este post (hook, formato, emoción activada, CTA)
-2. RECREACIÓN JARAPO: Proponer el guion o texto completo adaptado al tono Jarapo
-3. HOOK: Primera frase o primeros 3 segundos del reel para Jarapo
-4. CTA: Call to action final con link a WhatsApp wa.me/573207761097
+2. RECREACIÓN: Proponer el guion o texto completo adaptado al tono de la marca
+3. HOOK: Primera frase o primeros 3 segundos del reel
+4. CTA: Call to action final con link a WhatsApp wa.me/${perfil.TRACKER_WHATSAPP}
 5. MÚSICA: Sugerencia de tipo de audio (no nombrar canciones específicas)
 6. CHECKLIST: Lista de 4-5 pasos de producción (qué grabar, duración, formato)
 
@@ -38,6 +82,7 @@ Responde SOLO en JSON con esta estructura exacta:
   "musica_sugerida": "...",
   "checklist_produccion": ["paso 1", "paso 2", "paso 3", "paso 4", "paso 5"]
 }`;
+}
 
 // Callback de progreso inyectado por el caller (panel de Scraping)
 let _onProgress  = null;
@@ -157,6 +202,9 @@ export async function ejecutarScrapingDiario(onProgress = null) {
       sinDatosAnterior = lastLog?.resumen?.cuentas_sin_datos || [];
     } catch (_) {}
 
+    // Perfil de marca para los prompts de IA (una sola vez por ejecución)
+    const perfilMarca = await obtenerPerfilMarca();
+
     // Obtener cuentas activas
     _log('⏳ Obteniendo cuentas de Supabase...');
     const sbMain = await _obtenerCliente();
@@ -205,7 +253,7 @@ export async function ejecutarScrapingDiario(onProgress = null) {
           stats.cuentas_sin_datos.push(...sinDatos);
         }
 
-        const loteStats = await _procesarResultados(posts, cuentasMap);
+        const loteStats = await _procesarResultados(posts, cuentasMap, perfilMarca);
         stats.cuentas_procesadas += lote.length;
         stats.posts_nuevos       += loteStats.nuevos;
         stats.posts_virales      += loteStats.virales;
@@ -260,6 +308,7 @@ export async function ejecutarScrapingDiario(onProgress = null) {
       cuentas_sin_datos:    stats.cuentas_sin_datos,
       cuentas_desactivadas: stats.cuentas_desactivadas,
       cancelado:            _estadoFinal === 'cancelado',
+      nombreEmpresa:        perfilMarca.TRACKER_NOMBRE_EMPRESA,
       fecha: new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
     };
 
@@ -364,7 +413,7 @@ async function _runApifyActor(usernames) {
 }
 
 // ── PROCESAMIENTO DE RESULTADOS ────────────────────────────────────────────────
-async function _procesarResultados(posts, cuentasMap) {
+async function _procesarResultados(posts, cuentasMap, perfilMarca) {
   // Obtener cliente dinámicamente — garantiza disponibilidad después del polling de Apify
   const sb = await _obtenerCliente();
   const loteStats = { nuevos: 0, virales: 0, detalle: { competencia: [], tiendas: [], inspiracion: [] } };
@@ -506,7 +555,7 @@ async function _procesarResultados(posts, cuentasMap) {
                 tipo_contenido: tipo, vistas, hook_texto: hook,
                 caption_completo: caption, categoria_contenido: cat, nivel_amenaza: amenaza,
               };
-              const ia = await _groqAnalizar(postObj, cuenta);
+              const ia = await groqAnalizar(postObj, cuenta, perfilMarca);
               const { data: recExist } = await sb
                 .from('recreaciones_tracker').select('id')
                 .eq('post_id', postId).maybeSingle();
@@ -591,7 +640,7 @@ async function _calcularCrecimiento(postId, vistasHoy) {
 }
 
 // ── GROQ ───────────────────────────────────────────────────────────────────────
-async function _groqAnalizar(post, cuenta) {
+export async function groqAnalizar(post, cuenta, perfil) {
   const userMsg = `Analiza este post viral de @${cuenta?.usuario_ig || 'competidor'}:
 - Tipo: ${post.tipo_contenido}
 - Vistas: ${(post.vistas || 0).toLocaleString('es-CO')}
@@ -606,7 +655,7 @@ async function _groqAnalizar(post, cuenta) {
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages: [
-        { role: 'system', content: GROQ_SYSTEM },
+        { role: 'system', content: _construirSystemPrompt(perfil || PERFIL_MARCA_DEFAULTS) },
         { role: 'user',   content: userMsg },
       ],
       temperature: 0.7,
@@ -711,8 +760,8 @@ function _categoriaCaption(caption) {
 
 // ── MENSAJE WHATSAPP ───────────────────────────────────────────────────────────
 export function construirMensajeWhatsApp(resumen) {
-  const { virales, fecha } = resumen;
-  let msg = `📊 *JARAPO TRACKER — Reporte diario*\n📅 ${fecha}\n\n`;
+  const { virales, fecha, nombreEmpresa } = resumen;
+  let msg = `📊 *${(nombreEmpresa || 'EncargosPro').toUpperCase()} TRACKER — Reporte diario*\n📅 ${fecha}\n\n`;
 
   if (virales.competencia.length > 0) {
     msg += `🔴 *VIRALES DE COMPETENCIA (${virales.competencia.length})*\n`;
@@ -753,6 +802,7 @@ export function construirMensajeWhatsApp(resumen) {
 export async function generarAnalisisPendientes(onProgress = null) {
   const _prog = (msg) => { console.log('[IA-Pendientes]', msg); onProgress?.(msg); };
   const sb = await _obtenerCliente();
+  const perfilMarca = await obtenerPerfilMarca();
 
   const { data: pendientes, error } = await sb
     .from('posts_tracker')
@@ -789,7 +839,7 @@ export async function generarAnalisisPendientes(onProgress = null) {
         categoria_contenido: post.categoria_contenido || '',
         nivel_amenaza:       post.nivel_amenaza || '',
       };
-      const ia = await _groqAnalizar(postObj, cuenta);
+      const ia = await groqAnalizar(postObj, cuenta, perfilMarca);
 
       const { data: recExist } = await sb
         .from('recreaciones_tracker').select('id').eq('post_id', post.id).maybeSingle();
