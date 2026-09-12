@@ -47,7 +47,10 @@ function buildHTML(empresas, error) {
         <p class="module-tag">SUPERADMIN · ENCARGOSPRO</p>
         <h2 class="module-title">Empresas</h2>
       </div>
-      <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-secondary" id="sa-migrar-imagenes-btn">🗂️ Migrar imágenes antiguas</button>
+        <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
+      </div>
     </div>
 
     ${error ? `<div class="admin-error-banner">⚠ ${error}</div>` : ''}
@@ -88,9 +91,50 @@ function buildHTML(empresas, error) {
 
 function bindEvents(renderLayout) {
   document.getElementById('sa-new-empresa-btn')?.addEventListener('click', () => modalCrearEmpresa(renderLayout));
+  document.getElementById('sa-migrar-imagenes-btn')?.addEventListener('click', () => modalMigrarImagenes());
   document.querySelectorAll('.sa-btn-estado').forEach(btn => {
     btn.addEventListener('click', () => modalCambiarEstado(btn.dataset.id, btn.dataset.nombre, btn.dataset.estado, renderLayout));
   });
+}
+
+async function modalMigrarImagenes() {
+  const ok = await window.customConfirm(
+    'Migrar imágenes antiguas',
+    'Copia las fotos de producto, logo y comprobantes de pago de Importaciones Jarapo desde el bucket viejo "jarapo-images" a los buckets nuevos por empresa, y actualiza las referencias en la base de datos. No borra nada del bucket viejo. ¿Continuar?'
+  );
+  if (!ok) return;
+
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">🗂️ Migrando imágenes…</h2>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="sa-migrar-body">
+        <div class="admin-loading"><div class="loader"></div><p>Esto puede tardar según cuántos archivos haya. No cierres esta ventana.</p></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
+      </div>
+    </div>`;
+  container.style.display = 'flex';
+
+  try {
+    const data = await callAdminEmpresas({ accion: 'migrar_imagenes_jarapo' });
+    document.getElementById('sa-migrar-body').innerHTML = `
+      <p>Total de archivos en el bucket viejo: <strong>${data.totalObjetos}</strong></p>
+      <p style="color:var(--success-green, #059669);">✅ Migrados correctamente: <strong>${data.migrados.length}</strong></p>
+      <p style="color:var(--warning, #DC6803);">⚠️ Sin referencia en la base de datos (huérfanos): <strong>${data.huerfanos.length}</strong></p>
+      <p style="color:var(--danger, #DC2626);">❌ Errores: <strong>${data.errores.length}</strong></p>
+      ${data.errores.length ? `<details style="margin-top:0.75rem;"><summary style="cursor:pointer;">Ver errores</summary><pre style="white-space:pre-wrap;font-size:0.78rem;max-height:200px;overflow:auto;">${data.errores.map(e => `${e.archivo}: ${e.error}`).join('\n')}</pre></details>` : ''}
+      ${data.huerfanos.length ? `<details style="margin-top:0.5rem;"><summary style="cursor:pointer;">Ver huérfanos</summary><pre style="white-space:pre-wrap;font-size:0.78rem;max-height:200px;overflow:auto;">${data.huerfanos.join('\n')}</pre></details>` : ''}
+      <p style="margin-top:1rem;font-size:0.82rem;opacity:0.7;">El bucket viejo "jarapo-images" no se tocó — bórralo manualmente desde el dashboard de Supabase solo después de confirmar que todo se ve bien en la app.</p>
+    `;
+  } catch (err) {
+    document.getElementById('sa-migrar-body').innerHTML = `<div class="admin-error-banner">⚠ ${err.message}</div>`;
+  }
 }
 
 function modalCrearEmpresa(renderLayout) {
