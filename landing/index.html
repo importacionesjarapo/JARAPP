@@ -239,6 +239,42 @@
   @keyframes ring{0%{transform:scale(1); opacity:.7;} 100%{transform:scale(1.9); opacity:0;}}
 
   @media (max-width:640px){ section{padding-block:70px;} .hero{padding-top:130px;} }
+
+  /* ================= AUTH MODAL (Empieza gratis) ================= */
+  .auth-overlay{
+    display:none; position:fixed; inset:0; z-index:100; background:rgba(10,14,26,.68); backdrop-filter:blur(4px);
+    align-items:center; justify-content:center; padding:20px; overflow-y:auto;
+  }
+  .auth-overlay.open{display:flex;}
+  .auth-modal{
+    background:#fff; border-radius:24px; width:100%; max-width:420px; overflow:hidden;
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.4); animation:authIn .35s cubic-bezier(.16,.8,.3,1);
+  }
+  @keyframes authIn{from{opacity:0; transform:translateY(18px) scale(.97);} to{opacity:1; transform:translateY(0) scale(1);}}
+  .auth-head{background:var(--grad-brand); color:#fff; padding:30px 30px 26px; text-align:center; position:relative;}
+  .auth-head .logo-mark{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.18); display:flex;align-items:center;justify-content:center;margin:0 auto 14px; font-family:var(--font-display); font-weight:800;}
+  .auth-head h3{color:#fff; font-size:1.3rem; margin-bottom:6px;}
+  .auth-head p{margin:0; font-size:.85rem; color:rgba(255,255,255,.85);}
+  .auth-close{position:absolute; top:14px; right:14px; width:30px;height:30px; border-radius:50%; background:rgba(255,255,255,.18); border:none; color:#fff; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  .auth-body{padding:28px 30px 30px;}
+  .auth-google{width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:13px; border-radius:999px; border:1px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:700; font-size:.92rem; cursor:pointer; transition:background .2s, border-color .2s;}
+  .auth-google:hover{background:var(--surface-tint); border-color:var(--fog);}
+  .auth-divider{display:flex; align-items:center; gap:12px; margin:18px 0; color:var(--fog-soft); font-size:.78rem; font-weight:700;}
+  .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line);}
+  .auth-field{margin-bottom:16px;}
+  .auth-field label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--fog-soft); margin-bottom:7px;}
+  .auth-field input{width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
+  .auth-field input:focus{border-color:var(--brand);}
+  .auth-submit{width:100%; padding:14px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
+  .auth-submit:hover{transform:translateY(-1px);}
+  .auth-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
+  .auth-foot{text-align:center; margin-top:18px; font-size:.85rem; color:var(--text-soft);}
+  .auth-foot a,.auth-foot button.link{color:var(--brand-dark); font-weight:700; text-decoration:none; background:none; border:none; font-size:inherit; cursor:pointer; padding:0; font-family:inherit;}
+  .auth-error{background:#FCE9EA; color:var(--brand-dark); border:1px solid #F6D0D3; border-radius:12px; padding:11px 14px; font-size:.84rem; margin-bottom:16px;}
+  .auth-icon-circle{width:60px;height:60px;border-radius:50%; background:var(--surface-tint); display:flex; align-items:center; justify-content:center; margin:0 auto 18px;}
+  .auth-icon-circle svg{width:26px;height:26px; color:var(--brand);}
+  .auth-screen{display:none;}
+  .auth-screen.active{display:block;}
 </style>
 </head>
 <body>
@@ -282,15 +318,17 @@
       <h1>Tu operación de importación,<br><span class="hl">de WhatsApp y Excel</span><br>a un solo sistema.</h1>
       <p class="lead">Ventas, inventario, compras en el exterior, logística internacional y finanzas — EncargosPro conecta cada etapa de tu negocio en un solo lugar, con tus datos completamente aislados de cualquier otra empresa.</p>
       <div class="hero-ctas">
-        <a class="btn btn-wa" id="cta-hero" href="#" target="_blank" rel="noopener">
-          <svg width="19" height="19"><use href="#i-wa"/></svg> Quiero una demo
+        <button class="btn btn-brand" id="btn-empezar-gratis" type="button">
+          Empieza gratis →
+        </button>
+        <a class="btn btn-ghost-dark" id="cta-hero" href="#" target="_blank" rel="noopener">
+          <svg width="19" height="19"><use href="#i-wa"/></svg> Hablar por WhatsApp
         </a>
-        <a class="btn btn-ghost-dark" href="#modulos">Ver qué incluye ↓</a>
       </div>
       <div class="trust-row">
+        <div class="trust-item"><svg><use href="#i-check"/></svg> Sin tarjeta de crédito</div>
         <div class="trust-item"><svg><use href="#i-check"/></svg> Aislamiento total por empresa</div>
         <div class="trust-item"><svg><use href="#i-check"/></svg> 100% en español</div>
-        <div class="trust-item"><svg><use href="#i-check"/></svg> Desde el celular o el computador</div>
       </div>
     </div>
 
@@ -554,6 +592,9 @@
       </div>
     </div>
     <p class="plan-nota">Precios en pesos colombianos, facturación mensual.</p>
+    <div class="rv" style="text-align:center;margin-top:28px;">
+      <button class="btn btn-brand" id="btn-empezar-gratis-precios" type="button">Empieza gratis, sin tarjeta →</button>
+    </div>
   </div>
 </section>
 
@@ -615,7 +656,105 @@
   <svg><use href="#i-wa"/></svg>
 </a>
 
+<!-- ============ AUTH MODAL: Empieza gratis ============ -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-modal">
+
+    <!-- Pantalla 1: crear cuenta -->
+    <div class="auth-screen active" id="auth-screen-signup">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">EP</div>
+        <h3>Crea tu cuenta</h3>
+        <p>Empieza tu prueba gratis hoy</p>
+      </div>
+      <div class="auth-body">
+        <div id="auth-signup-error"></div>
+        <button class="auth-google" type="button" onclick="window.EncargosAuth.conGoogle()">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.4 29.4 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.8l5.7-5.7C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 16 18.9 13 24 13c2.8 0 5.3 1 7.3 2.8l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.4 0-13.8 4.2-17 10.2z"/><path fill="#4CAF50" d="M24 43.5c5 0 9.5-1.9 12.9-5.1l-6-5c-1.9 1.4-4.3 2.1-6.9 2.1-5.3 0-9.8-3.6-11.4-8.4l-6.5 5C9.9 39.1 16.4 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1 3-3.2 5.4-6 6.9l6 5c-.4.4 7.2-5.3 7.2-16.4 0-1.2-.1-2.4-.4-3.5z"/></svg>
+          Acceder con Google
+        </button>
+        <div class="auth-divider">o</div>
+        <form id="auth-form-signup">
+          <div class="auth-field">
+            <label>Nombre completo</label>
+            <input type="text" id="auth-nombre" required placeholder="Tu nombre">
+          </div>
+          <div class="auth-field">
+            <label>Correo electrónico</label>
+            <input type="email" id="auth-email" required placeholder="tu@correo.com">
+          </div>
+          <div class="auth-field">
+            <label>Contraseña</label>
+            <input type="password" id="auth-password" required minlength="6" placeholder="Mínimo 6 caracteres">
+          </div>
+          <button type="submit" class="auth-submit" id="auth-submit-btn">Crear cuenta gratis</button>
+        </form>
+        <p class="auth-foot">¿Ya tienes cuenta? <a href="#" id="auth-link-login">Inicia sesión</a></p>
+      </div>
+    </div>
+
+    <!-- Pantalla 2: revisa tu correo -->
+    <div class="auth-screen" id="auth-screen-confirm">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">EP</div>
+        <h3>Ya casi</h3>
+        <p>Solo falta confirmar tu correo</p>
+      </div>
+      <div class="auth-body" style="text-align:center;">
+        <div class="auth-icon-circle"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6l9 7 9-7M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h3 style="font-size:1.05rem;margin-bottom:10px;">Revisa tu correo</h3>
+        <p style="color:var(--text-soft);font-size:.9rem;margin-bottom:6px;">Te enviamos un enlace a <strong id="auth-confirm-email"></strong>. Ábrelo para activar tu cuenta y entrar.</p>
+        <p style="color:var(--fog-soft);font-size:.82rem;margin-bottom:22px;">¿No lo ves? Mira en spam o en "Promociones" — suele esconderse ahí.</p>
+        <button class="auth-google" type="button" id="auth-reenviar-btn" onclick="window.EncargosAuth.reenviarCorreo()">↻ Reenviar el correo</button>
+        <p class="auth-foot"><button type="button" class="link" onclick="window.EncargosAuth.volverASignup()">← Me equivoqué de correo</button></p>
+      </div>
+    </div>
+
+    <!-- Pantalla 3: onboarding (ya autenticado, falta crear la empresa) -->
+    <div class="auth-screen" id="auth-screen-onboarding">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">✨</div>
+        <h3>¡Bienvenido a EncargosPro!</h3>
+        <p>Vamos a personalizar tu cuenta</p>
+      </div>
+      <div class="auth-body">
+        <div id="auth-onboarding-error"></div>
+        <form id="auth-form-onboarding">
+          <div class="auth-field">
+            <label>Tu nombre</label>
+            <input type="text" id="auth-onb-nombre" required placeholder="Tu nombre">
+          </div>
+          <div class="auth-field">
+            <label>Nombre de tu empresa</label>
+            <input type="text" id="auth-onb-empresa" required placeholder="Ej: Importaciones XYZ">
+          </div>
+          <button type="submit" class="auth-submit" id="auth-onb-btn">Comenzar prueba gratis →</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Pantalla 4: éxito -->
+    <div class="auth-screen" id="auth-screen-exito">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">🎉</div>
+        <h3>¡Tu cuenta está lista!</h3>
+        <p>Tu prueba gratis ya está activa</p>
+      </div>
+      <div class="auth-body" style="text-align:center;">
+        <p style="color:var(--text-soft);font-size:.92rem;margin-bottom:24px;">Inicia sesión con el mismo correo para entrar a tu cuenta de EncargosPro.</p>
+        <a class="auth-submit" style="display:block;text-decoration:none;" id="auth-entrar-app" href="#">Entrar a EncargosPro →</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
   // WhatsApp links
   var cfg = window.ENCARGOSPRO_CONFIG || {};
@@ -693,6 +832,173 @@
       }
     });
   });
+</script>
+
+<!-- ============ EMPIEZA GRATIS: registro self-serve ============ -->
+<script>
+(function(){
+  var supa = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+  var FUNC_URL = cfg.appUrl.replace(/\/$/, '') + '/.netlify/functions/admin-empresas';
+  var overlay = document.getElementById('auth-overlay');
+  var lastSignupEmail = '';
+
+  function mostrarPantalla(id){
+    document.querySelectorAll('.auth-screen').forEach(function(s){ s.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+  function abrir(pantalla){
+    mostrarPantalla(pantalla || 'auth-screen-signup');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function cerrar(){
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  function setError(elId, msg){
+    var el = document.getElementById(elId);
+    el.innerHTML = msg ? '<div class="auth-error">' + msg + '</div>' : '';
+  }
+
+  // Errores comunes de Supabase Auth traducidos — el resto se muestra tal cual.
+  function traducirError(msg){
+    if (!msg) return 'Ocurrió un error inesperado. Intenta de nuevo.';
+    if (/already registered|already exists/i.test(msg)) return 'Ese correo ya tiene una cuenta. Inicia sesión en vez de crear una nueva.';
+    if (/invalid login credentials/i.test(msg)) return 'Correo o contraseña incorrectos.';
+    if (/password should be/i.test(msg)) return 'La contraseña debe tener al menos 6 caracteres.';
+    return msg;
+  }
+
+  async function conGoogle(){
+    setError('auth-signup-error', '');
+    var { error } = await supa.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + window.location.pathname + '?auth=onboarding' }
+    });
+    if (error) setError('auth-signup-error', traducirError(error.message));
+  }
+
+  async function volverASignup(){
+    mostrarPantalla('auth-screen-signup');
+  }
+
+  async function reenviarCorreo(){
+    var btn = document.getElementById('auth-reenviar-btn');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try {
+      var { error } = await supa.auth.resend({ type: 'signup', email: lastSignupEmail });
+      if (error) throw error;
+      btn.textContent = '✓ Enviado de nuevo';
+    } catch (e) {
+      btn.textContent = '↻ Reenviar el correo';
+      alert(traducirError(e.message));
+    } finally {
+      setTimeout(function(){ btn.disabled = false; }, 2500);
+    }
+  }
+
+  async function crearEmpresaTrial(nombreCompleto, nombreEmpresa){
+    var { data: sessionData } = await supa.auth.getSession();
+    var token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Tu sesión expiró. Cierra este cuadro e inicia el registro de nuevo.');
+
+    var resp = await fetch(FUNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ accion: 'crear_empresa_trial', nombreCompleto: nombreCompleto, nombreEmpresa: nombreEmpresa }),
+    });
+    var data = await resp.json().catch(function(){ return {}; });
+    if (!resp.ok) throw new Error(data.error || ('Error ' + resp.status));
+    return data;
+  }
+
+  // Al cargar: si venimos de un link de confirmación de correo o de un
+  // regreso de Google OAuth, supabase-js ya habrá levantado la sesión
+  // (detectSessionInUrl, default true). Si hay sesión y el perfil todavía
+  // no tiene empresa_id, es un registro a medias -> pedir onboarding.
+  async function revisarSesionAlCargar(){
+    var { data } = await supa.auth.getSession();
+    var session = data?.session;
+    if (!session) return;
+
+    var { data: perfil } = await supa
+      .from('user_profiles').select('id, empresa_id, full_name')
+      .eq('id', session.user.id).maybeSingle();
+
+    if (perfil && perfil.empresa_id) return; // ya tiene empresa — nada que hacer acá
+
+    document.getElementById('auth-onb-nombre').value =
+      perfil?.full_name || session.user.user_metadata?.full_name || '';
+    abrir('auth-screen-onboarding');
+  }
+
+  document.getElementById('btn-empezar-gratis')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
+  document.getElementById('btn-empezar-gratis-precios')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) cerrar(); });
+  document.getElementById('auth-link-login').addEventListener('click', function(e){
+    e.preventDefault();
+    window.open(cfg.appUrl, '_blank');
+  });
+
+  document.getElementById('auth-form-signup').addEventListener('submit', async function(e){
+    e.preventDefault();
+    setError('auth-signup-error', '');
+    var nombre = document.getElementById('auth-nombre').value.trim();
+    var email = document.getElementById('auth-email').value.trim();
+    var password = document.getElementById('auth-password').value;
+    var btn = document.getElementById('auth-submit-btn');
+    btn.disabled = true; btn.textContent = 'Creando cuenta...';
+
+    try {
+      var { data, error } = await supa.auth.signUp({
+        email: email, password: password,
+        options: {
+          data: { full_name: nombre },
+          emailRedirectTo: window.location.origin + window.location.pathname + '?auth=onboarding',
+        },
+      });
+      if (error) throw error;
+
+      lastSignupEmail = email;
+
+      if (data.session) {
+        // Confirmación de correo desactivada en el proyecto -> ya hay sesión, directo a onboarding.
+        document.getElementById('auth-onb-nombre').value = nombre;
+        abrir('auth-screen-onboarding');
+      } else {
+        document.getElementById('auth-confirm-email').textContent = email;
+        mostrarPantalla('auth-screen-confirm');
+      }
+    } catch (err) {
+      setError('auth-signup-error', traducirError(err.message));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear cuenta gratis';
+    }
+  });
+
+  document.getElementById('auth-form-onboarding').addEventListener('submit', async function(e){
+    e.preventDefault();
+    setError('auth-onboarding-error', '');
+    var nombreCompleto = document.getElementById('auth-onb-nombre').value.trim();
+    var nombreEmpresa = document.getElementById('auth-onb-empresa').value.trim();
+    var btn = document.getElementById('auth-onb-btn');
+    btn.disabled = true; btn.textContent = 'Creando tu espacio...';
+
+    try {
+      await crearEmpresaTrial(nombreCompleto, nombreEmpresa);
+      document.getElementById('auth-entrar-app').href = cfg.appUrl;
+      mostrarPantalla('auth-screen-exito');
+    } catch (err) {
+      setError('auth-onboarding-error', err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Comenzar prueba gratis →';
+    }
+  });
+
+  window.EncargosAuth = { abrir: abrir, cerrar: cerrar, conGoogle: conGoogle, volverASignup: volverASignup, reenviarCorreo: reenviarCorreo };
+
+  revisarSesionAlCargar();
+})();
 </script>
 
 </body>

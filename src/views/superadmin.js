@@ -11,6 +11,51 @@ const ESTADOS = ['trial', 'activa', 'vencida', 'cancelada'];
 const ESTADO_LABELS = { trial: 'Trial', activa: 'Activa', vencida: 'Vencida', cancelada: 'Cancelada' };
 const ESTADO_COLORS = { trial: '#7C3AED', activa: '#059669', vencida: '#DC6803', cancelada: '#DC2626' };
 
+// Módulos que el superadmin puede prender/apagar para la prueba gratis
+// self-serve (landing → "Empieza gratis"). 'dashboard' no se lista porque
+// lo tiene todo el mundo siempre — es la base de cualquier rol.
+const MODULOS_TRIAL_TOGGLES = [
+  { key: 'clients', label: 'Clientes' },
+  { key: 'inventory', label: 'Inventario' },
+  { key: 'sales', label: 'Ventas' },
+  { key: 'purchases', label: 'Compras USA' },
+  { key: 'logistics', label: 'Seguimientos' },
+  { key: 'finance', label: 'Gastos y Finanzas' },
+  { key: 'vendedores', label: 'Vendedores' },
+  { key: 'params', label: 'Parametrización' },
+  { key: 'documentacion', label: 'Documentación' },
+  { key: 'calculadora', label: 'Calculadora de Precios' },
+  { key: 'calendario_ver', label: 'Calendario de Contenido' },
+  { key: 'cotizador_ver', label: 'Cotizador' },
+];
+
+/** Construye el objeto "permissions" completo (mismo shape que ROLE_TEMPLATES.admin en auth.js) a partir de los toggles simples que ve el superadmin. */
+function construirModulosDesdeSeleccion(seleccionados) {
+  const m = { dashboard: true };
+  ['clients', 'inventory', 'sales', 'purchases', 'logistics', 'finance', 'vendedores', 'params', 'documentacion', 'calculadora']
+    .forEach(k => { m[k] = seleccionados.has(k) ? 'edit' : false; });
+  m.feat_money = seleccionados.has('finance');
+  m.feat_usa = seleccionados.has('purchases');
+  m.feat_calc_desglose = seleccionados.has('calculadora');
+  const calOn = seleccionados.has('calendario_ver');
+  Object.assign(m, {
+    calendario_ver: calOn, calendario_crear: calOn, calendario_editar: calOn,
+    calendario_eliminar: calOn, calendario_plantilla_editar: calOn, calendario_fechas_editar: calOn,
+  });
+  const cotOn = seleccionados.has('cotizador_ver');
+  Object.assign(m, {
+    cotizador_ver: cotOn, cotizador_desglose: cotOn, cotizador_pdf_cliente: cotOn, cotizador_pdf_interno: cotOn,
+  });
+  return m;
+}
+
+/** Inverso: qué toggles deberían venir marcados según un objeto "permissions" ya guardado. */
+function seleccionDesdeModulos(modulos) {
+  const sel = new Set();
+  MODULOS_TRIAL_TOGGLES.forEach(({ key }) => { if (modulos?.[key]) sel.add(key); });
+  return sel;
+}
+
 async function callAdminEmpresas(payload) {
   const token = auth.getSession()?.access_token;
   if (!token) throw new Error('Sesión no válida.');
@@ -47,7 +92,8 @@ function buildHTML(empresas, error) {
         <p class="module-tag">SUPERADMIN · ENCARGOSPRO</p>
         <h2 class="module-title">Empresas</h2>
       </div>
-      <div style="display:flex;gap:10px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-secondary" id="sa-trial-config-btn">🎁 Configurar prueba gratis</button>
         <button class="btn-secondary" id="sa-migrar-imagenes-btn">🗂️ Migrar imágenes antiguas</button>
         <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
       </div>
@@ -92,10 +138,79 @@ function buildHTML(empresas, error) {
 function bindEvents(renderLayout) {
   document.getElementById('sa-new-empresa-btn')?.addEventListener('click', () => modalCrearEmpresa(renderLayout));
   document.getElementById('sa-migrar-imagenes-btn')?.addEventListener('click', () => modalMigrarImagenes());
+  document.getElementById('sa-trial-config-btn')?.addEventListener('click', () => modalConfigurarTrial());
   document.querySelectorAll('.sa-btn-estado').forEach(btn => {
     btn.addEventListener('click', () => modalCambiarEstado(btn.dataset.id, btn.dataset.nombre, btn.dataset.estado, renderLayout));
   });
 }
+
+async function modalConfigurarTrial() {
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">🎁 Prueba gratis (self-serve)</h2>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="sa-trial-body">
+        <div class="admin-loading"><div class="loader"></div><p>Cargando configuración actual...</p></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button type="button" class="btn-primary" id="sa-trial-btn-save" onclick="window._saGuardarTrial()">Guardar</button>
+      </div>
+    </div>`;
+  container.style.display = 'flex';
+
+  try {
+    const data = await callAdminEmpresas({ accion: 'obtener_politica_trial' });
+    const politica = data.politica || { dias_prueba: 7, modulos_habilitados: { dashboard: true } };
+    const sel = seleccionDesdeModulos(politica.modulos_habilitados);
+
+    document.getElementById('sa-trial-body').innerHTML = `
+      <p style="color:var(--text-faint);font-size:0.85rem;margin-bottom:1.2rem;">
+        Así se configura la cuenta de cualquiera que se registre solo desde el botón "Empieza gratis" de la landing — sin que tú intervengas.
+      </p>
+      <div class="form-group" style="margin-bottom:1.2rem;">
+        <label class="form-label">Días de prueba</label>
+        <input type="number" id="sa-trial-dias" class="form-input" min="1" value="${politica.dias_prueba}" style="max-width:160px;">
+      </div>
+      <label class="form-label" style="display:block;margin-bottom:0.6rem;">Módulos habilitados</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">
+        ${MODULOS_TRIAL_TOGGLES.map(({ key, label }) => `
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;cursor:pointer;">
+            <input type="checkbox" class="sa-trial-modulo" value="${key}" ${sel.has(key) ? 'checked' : ''}>
+            ${label}
+          </label>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    document.getElementById('sa-trial-body').innerHTML = `<div class="admin-error-banner">⚠ ${err.message}</div>`;
+  }
+}
+
+window._saGuardarTrial = async () => {
+  const btn = document.getElementById('sa-trial-btn-save');
+  const dias = parseInt(document.getElementById('sa-trial-dias')?.value, 10);
+  if (!dias || dias < 1) return showToast('Ingresa un número de días válido.', 'error');
+
+  const seleccionados = new Set(
+    [...document.querySelectorAll('.sa-trial-modulo:checked')].map(el => el.value)
+  );
+  const modulos_habilitados = construirModulosDesdeSeleccion(seleccionados);
+
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    await callAdminEmpresas({ accion: 'guardar_politica_trial', dias_prueba: dias, modulos_habilitados });
+    window.closeModal();
+    showToast('✅ Configuración de prueba gratis guardada', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+};
 
 const LOTE_MIGRACION = 8;
 
