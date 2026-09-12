@@ -48,6 +48,21 @@ async function verificarSuperadmin(authHeader) {
   return userData.user
 }
 
+/** Lista TODOS los objetos de un bucket plano, con páginas grandes para minimizar viajes de red. */
+async function listarBucketCompleto(bucket) {
+  const objetos = []
+  let offset = 0
+  const LIMITE = 1000
+  while (true) {
+    const { data: pagina, error } = await supabase.storage.from(bucket).list('', { limit: LIMITE, offset })
+    if (error) throw new Error(`Listando ${bucket}: ${error.message}`)
+    objetos.push(...(pagina || []))
+    if (!pagina || pagina.length < LIMITE) break
+    offset += LIMITE
+  }
+  return objetos
+}
+
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
   if (event.httpMethod !== 'POST') return res(405, { error: 'Method not allowed' })
@@ -155,37 +170,37 @@ export const handler = async (event) => {
     try {
       const empresaId = await empresaIdJarapo()
 
+      // Todas las consultas de referencias (6 tablas + Configuracion) y el
+      // listado del bucket corren en paralelo, no en cadena — con varios
+      // años de datos, hacerlo secuencial fue lo que agotó los ~10s de la
+      // función síncrona en el intento anterior.
+      const [resultadosRefs, logoResult, objetos] = await Promise.all([
+        Promise.all(REFERENCIAS_IMAGENES.map(ref =>
+          supabase.from(ref.tabla).select(`id, ${ref.columna}`)
+            .eq('empresa_id', empresaId).not(ref.columna, 'is', null)
+            .then(({ data, error }) => {
+              if (error) throw new Error(`Leyendo ${ref.tabla}.${ref.columna}: ${error.message}`)
+              return { ref, filas: data || [] }
+            })
+        )),
+        supabase.from('Configuracion').select('id, valor').eq('empresa_id', empresaId).eq('clave', 'GLOBAL_LOGO')
+          .then(({ data, error }) => {
+            if (error) throw new Error(`Leyendo Configuracion: ${error.message}`)
+            return data || []
+          }),
+        listarBucketCompleto('jarapo-images'),
+      ])
+
       // Mapa oldUrl -> { tabla, columna, id, categoria }
       const referenciasPorUrl = new Map()
-      for (const ref of REFERENCIAS_IMAGENES) {
-        const { data: filas, error: errFilas } = await supabase
-          .from(ref.tabla).select(`id, ${ref.columna}`)
-          .eq('empresa_id', empresaId)
-          .not(ref.columna, 'is', null)
-        if (errFilas) throw new Error(`Leyendo ${ref.tabla}.${ref.columna}: ${errFilas.message}`)
-        for (const fila of filas || []) {
+      for (const { ref, filas } of resultadosRefs) {
+        for (const fila of filas) {
           const url = fila[ref.columna]
           if (url) referenciasPorUrl.set(url, { tabla: ref.tabla, columna: ref.columna, id: fila.id, categoria: ref.categoria })
         }
       }
-      const { data: logoRows, error: errLogo } = await supabase
-        .from('Configuracion').select('id, valor').eq('empresa_id', empresaId).eq('clave', 'GLOBAL_LOGO')
-      if (errLogo) throw new Error(`Leyendo Configuracion: ${errLogo.message}`)
-      for (const fila of logoRows || []) {
+      for (const fila of logoResult) {
         if (fila.valor) referenciasPorUrl.set(fila.valor, { tabla: 'Configuracion', columna: 'valor', id: fila.id, categoria: 'logos' })
-      }
-
-      // Listar el bucket viejo (paginado — es plano, sin carpetas).
-      const objetos = []
-      let offset = 0
-      const LIMITE = 100
-      while (true) {
-        const { data: pagina, error: errList } = await supabase.storage
-          .from('jarapo-images').list('', { limit: LIMITE, offset })
-        if (errList) throw new Error(`Listando jarapo-images: ${errList.message}`)
-        objetos.push(...(pagina || []))
-        if (!pagina || pagina.length < LIMITE) break
-        offset += LIMITE
       }
 
       const oldBase = `${process.env.SUPABASE_URL}/storage/v1/object/public/jarapo-images/`
