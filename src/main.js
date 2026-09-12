@@ -78,7 +78,7 @@ const NAV_GROUPS = [
       { view: 'params',        icon: 'settings-2',        label: 'Parámetros',   module: 'params'        },
       { view: 'documentacion', icon: 'book-open',         label: 'Documentación',module: 'documentacion' },
       { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
-      { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, adminOnly: true },
+      { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, superadminOnly: true },
       { view: 'superadmin',    icon: 'shield',            label: 'Empresas',     module: 'superadmin' },
     ]
   }
@@ -148,6 +148,7 @@ export const renderLayout = (contentHTML) => {
   const navHTML = NAV_GROUPS.map(group => {
     const groupItems = group.items.map(item => {
       if (item.adminOnly && profileLoaded && !auth.isAdmin()) return '';
+      if (item.superadminOnly && profileLoaded && !auth.isSuperadmin()) return '';
       if (item.view === 'admin' && profileLoaded && !auth.isAdmin()) return '';
       if (item.roleOnly && profileLoaded && !item.roleOnly.includes(auth.getUserRole())) return '';
       if (profileLoaded && item.module && !auth.canAccess(item.module)) return '';
@@ -430,8 +431,9 @@ export const navigateTo = (view) => {
     return;
   }
 
-  // Guard: configuración solo para admin si ya está logueado
-  if (view === 'settings' && state.isLoggedIn && !auth.isAdmin()) {
+  // Guard: la pantalla de conexión a Supabase (URL/anon key) es exclusiva
+  // del superadmin — ningún admin de tenant debe poder verla ni tocarla.
+  if (view === 'settings' && state.isLoggedIn && !auth.isSuperadmin()) {
     navigateTo('dashboard');
     return;
   }
@@ -732,7 +734,7 @@ async function startApp() {
   } else {
     const firstModule = ['clients','inventory','sales','purchases','logistics','finance','params']
       .find(m => auth.canAccess(m));
-    navigateTo(firstModule || 'settings');
+    navigateTo(firstModule || 'dashboard');
   }
 
   // Cargar alertas en background y mostrar badge en sidebar
