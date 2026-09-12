@@ -79,7 +79,9 @@
   nav.hnav .hlinks{display:flex; gap:28px; align-items:center;}
   nav.hnav a{font-size:.88rem; font-weight:600; color:rgba(255,255,255,.75); text-decoration:none; transition:color .2s;}
   nav.hnav a:hover{color:#fff;}
+  .hnav-ctas{display:flex; gap:10px; align-items:center;}
   @media (max-width:820px){ nav.hnav .hlinks{display:none!important;} }
+  @media (max-width:560px){ .hnav-wa{display:none!important;} }
 
   section{padding-block:110px; position:relative;}
   section.tight{padding-block:72px;}
@@ -302,7 +304,10 @@
         <a href="#precios">Precios</a>
         <a href="#faq">Preguntas</a>
       </span>
-      <a class="btn btn-brand btn-sm" id="cta-header" href="#" target="_blank" rel="noopener">Hablar por WhatsApp</a>
+      <span class="hnav-ctas">
+        <a class="btn btn-ghost-dark btn-sm hnav-wa" id="cta-header" href="#" target="_blank" rel="noopener">Hablar por WhatsApp</a>
+        <button class="btn btn-brand btn-sm" id="btn-empezar-gratis-header" type="button">Probar ahora →</button>
+      </span>
     </nav>
   </div>
 </header>
@@ -933,6 +938,7 @@
   }
 
   document.getElementById('btn-empezar-gratis')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
+  document.getElementById('btn-empezar-gratis-header')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-precios')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   overlay.addEventListener('click', function(e){ if (e.target === overlay) cerrar(); });
   document.getElementById('auth-link-login').addEventListener('click', function(e){
