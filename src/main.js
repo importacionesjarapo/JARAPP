@@ -392,7 +392,15 @@ export const renderLayout = (contentHTML) => {
         const ok = await window.customConfirm('Cerrar sesión', '¿Estás seguro de que deseas salir?');
         if (!ok) return;
         await auth.logout();
-        bootApp();
+        // Recarga completa (en vez de solo bootApp()): los módulos de vista
+        // guardan los datos ya cargados en variables de módulo (caché en
+        // memoria) que nunca se limpian solas — sin esto, el siguiente login
+        // en la misma pestaña podía seguir mostrando datos de la sesión
+        // anterior hasta que esas variables se sobrescribieran.
+        if (navigator.serviceWorker?.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_CACHE' });
+        }
+        window.location.reload();
       };
     }
   }, 100);
