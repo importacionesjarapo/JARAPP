@@ -17,7 +17,7 @@
     --text:#181B22; --text-soft:#5B6172; --fog:#9AA3B8; --fog-soft:#6B7386;
     --brand:#DB3A6B; --brand-dark:#A61E4D; --brand-2:#FFB648; --cool:#2FD9C7; --cool-dark:#12A594;
     --success:#22C55E; --warn:#F59E0B;
-    --grad-brand:linear-gradient(135deg,var(--brand) 0%,var(--brand-2) 100%);
+    --grad-brand:linear-gradient(135deg,#8B5CF6 0%,#EC4899 100%);
     --grad-cool:linear-gradient(135deg,var(--cool) 0%,#3B82F6 100%);
     --shadow-sm:0 2px 10px -4px rgba(10,14,26,.08);
     --shadow-md:0 16px 40px -12px rgba(10,14,26,.16);
@@ -295,6 +295,21 @@
   <symbol id="i-cal" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 9.5h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
   <symbol id="i-wa" viewBox="0 0 32 32" fill="currentColor"><path d="M16.02 3C9.4 3 4 8.4 4 15.02c0 2.4.7 4.6 1.9 6.5L4 29l7.6-2c1.8 1 3.9 1.5 6.3 1.5 6.6 0 12-5.4 12-12.02C29.9 8.4 24.6 3 16.02 3zm0 22c-2 0-3.9-.5-5.5-1.5l-.4-.2-4.5 1.2 1.2-4.4-.3-.4C5.4 18 4.9 16.5 4.9 15c0-6.1 5-11.1 11.1-11.1S27.1 8.9 27.1 15 22.1 25 16 25zm6.1-8.3c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2s-.9 1.1-1.1 1.3-.4.2-.7 0c-.3-.1-1.4-.5-2.6-1.6-1-.9-1.6-2-1.8-2.3-.2-.3 0-.5.1-.7.1-.1.3-.4.4-.5.2-.2.2-.3.3-.5.1-.2 0-.4 0-.5s-.8-1.9-1-2.6c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.3 1.4 3.6c.2.3 2.4 3.7 5.9 5 .8.3 1.5.5 2 .7.8.2 1.6.2 2.2.1.7-.1 2-.8 2.3-1.6.3-.8.3-1.4.2-1.6-.1-.1-.3-.2-.6-.4z"/></symbol>
+  <!-- banderas con colores fijos (no currentColor): los emoji de bandera 🇺🇸/🇨🇴 no
+       se renderizan como banderas en varios navegadores de escritorio en Windows
+       (muestran el código de país en texto), aunque sí funcionan en iOS/Android. -->
+  <symbol id="i-flag-us" viewBox="0 0 60 40">
+    <rect width="60" height="40" fill="#fff"/>
+    <rect y="0" width="60" height="8" fill="#B22234"/>
+    <rect y="16" width="60" height="8" fill="#B22234"/>
+    <rect y="32" width="60" height="8" fill="#B22234"/>
+    <rect width="26" height="24" fill="#3C3B6E"/>
+  </symbol>
+  <symbol id="i-flag-co" viewBox="0 0 60 40">
+    <rect y="0" width="60" height="20" fill="#FCD116"/>
+    <rect y="20" width="60" height="10" fill="#003893"/>
+    <rect y="30" width="60" height="10" fill="#CE1126"/>
+  </symbol>
 </svg>
 
 <header id="hdr">
@@ -355,10 +370,10 @@
             </circle>
           </svg>
           <div class="route-pin origin">
-            <div class="ico">🇺🇸</div>Estados Unidos<small>Compra</small>
+            <div class="ico"><svg width="26" height="18" viewBox="0 0 60 40" style="border-radius:3px;"><use href="#i-flag-us"/></svg></div>Estados Unidos<small>Compra</small>
           </div>
           <div class="route-pin dest">
-            <div class="ico">🇨🇴</div>Colombia<small>Entrega</small>
+            <div class="ico"><svg width="26" height="18" viewBox="0 0 60 40" style="border-radius:3px;"><use href="#i-flag-co"/></svg></div>Colombia<small>Entrega</small>
           </div>
         </div>
         <div class="kpi-row">
