@@ -270,6 +270,11 @@
   .auth-field label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--fog-soft); margin-bottom:7px;}
   .auth-field input{width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
   .auth-field input:focus{border-color:var(--brand);}
+  .auth-logo-picker{display:flex; align-items:center; gap:12px; padding:10px 14px; border:1px dashed var(--line); border-radius:12px; background:var(--surface-tint); cursor:pointer; transition:border-color .2s;}
+  .auth-logo-picker:hover{border-color:var(--brand);}
+  .auth-logo-preview{width:36px;height:36px;border-radius:9px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--fog-soft);flex-shrink:0;overflow:hidden;}
+  .auth-logo-preview img{width:100%;height:100%;object-fit:contain;}
+  .auth-logo-txt{font-size:.88rem;color:var(--text-soft);font-weight:600;}
   .auth-submit{width:100%; padding:14px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
   .auth-submit:hover{transform:translateY(-1px);}
   .auth-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
@@ -764,6 +769,16 @@
             <label>Nombre de tu empresa</label>
             <input type="text" id="auth-onb-empresa" required placeholder="Ej: Importaciones XYZ">
           </div>
+          <div class="auth-field">
+            <label>Logo de tu empresa (opcional)</label>
+            <label for="auth-onb-logo" class="auth-logo-picker">
+              <span class="auth-logo-preview" id="auth-onb-logo-preview">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </span>
+              <span class="auth-logo-txt" id="auth-onb-logo-txt">Subir logo (opcional)</span>
+            </label>
+            <input type="file" id="auth-onb-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none;">
+          </div>
           <button type="submit" class="auth-submit" id="auth-onb-btn">Comenzar prueba gratis →</button>
         </form>
       </div>
@@ -945,6 +960,41 @@
     return data;
   }
 
+  // Logo opcional del onboarding: mismo bucket/ruta ("productos-publico",
+  // logos/<empresaId>/...) y misma tabla Configuracion (clave GLOBAL_LOGO)
+  // que usa la app en Parámetros (src/views/params.js) — así, apenas el
+  // usuario entra por primera vez, la app ya lo lee y lo muestra solo.
+  async function subirLogoEmpresa(empresaId, file){
+    var fileExt = (file.name.split('.').pop() || 'png').toLowerCase();
+    var fileName = Date.now() + '-' + Math.random().toString(36).slice(2) + '.' + fileExt;
+    var filePath = 'logos/' + empresaId + '/' + fileName;
+
+    var up = await supa.storage.from('productos-publico').upload(filePath, file, { cacheControl: '3600', upsert: false });
+    if (up.error) throw up.error;
+
+    var urlData = supa.storage.from('productos-publico').getPublicUrl(filePath).data;
+    var url = urlData && urlData.publicUrl;
+    if (!url) throw new Error('No se pudo obtener la URL del logo.');
+
+    var ins = await supa.from('Configuracion').insert([{ id: Date.now().toString(), clave: 'GLOBAL_LOGO', valor: url, empresa_id: empresaId }]);
+    if (ins.error) throw ins.error;
+    return url;
+  }
+
+  var onbLogoFile = null;
+  var onbLogoInput = document.getElementById('auth-onb-logo');
+  onbLogoInput.addEventListener('change', function(){
+    var f = this.files && this.files[0];
+    onbLogoFile = f || null;
+    var txt = document.getElementById('auth-onb-logo-txt');
+    var preview = document.getElementById('auth-onb-logo-preview');
+    if (!f) { txt.textContent = 'Subir logo (opcional)'; return; }
+    txt.textContent = f.name;
+    var reader = new FileReader();
+    reader.onload = function(ev){ preview.innerHTML = '<img src="' + ev.target.result + '" alt="Logo">'; };
+    reader.readAsDataURL(f);
+  });
+
   // Al cargar: si venimos de un link de confirmación de correo o de un
   // regreso de Google OAuth, supabase-js ya habrá levantado la sesión
   // (detectSessionInUrl, default true). Si hay sesión y el perfil todavía
@@ -1019,7 +1069,17 @@
     btn.disabled = true; btn.textContent = 'Creando tu espacio...';
 
     try {
-      await crearEmpresaTrial(nombreCompleto, nombreEmpresa);
+      var resultado = await crearEmpresaTrial(nombreCompleto, nombreEmpresa);
+      if (onbLogoFile && resultado && resultado.empresa) {
+        btn.textContent = 'Subiendo tu logo...';
+        try { await subirLogoEmpresa(resultado.empresa.id, onbLogoFile); }
+        catch (logoErr) {
+          // El logo es opcional: si falla la subida no se bloquea la
+          // creación de la cuenta, que ya fue exitosa. El usuario puede
+          // subirlo después desde Parámetros dentro de la app.
+          console.error('No se pudo subir el logo del onboarding:', logoErr);
+        }
+      }
       document.getElementById('auth-entrar-app').href = cfg.appUrl;
       mostrarPantalla('auth-screen-exito');
     } catch (err) {
