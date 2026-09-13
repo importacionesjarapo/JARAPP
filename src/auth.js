@@ -171,10 +171,26 @@ class Auth {
         this._session = null;
         this._profile = null;
       } else if (session) {
-        this._session = session;
-        // Solo recargar perfil si no lo tenemos ya, o si el usuario cambió
         const currentUserId = this._profile?.id;
         const newUserId = session.user?.id;
+
+        // Cambio real de identidad en esta pestaña: ya había un perfil
+        // cargado (no es el primer login) y el usuario de la sesión nueva
+        // es otro distinto. Pasa, por ejemplo, cuando en OTRA pestaña del
+        // mismo sitio se inicia sesión con otra cuenta — Supabase comparte
+        // la sesión vía localStorage entre pestañas y esta pestaña recibe
+        // el cambio. Los módulos de vista cachean datos ya cargados en
+        // variables de módulo que nunca se limpian solas (mismo motivo por
+        // el que "Cerrar sesión" fuerza un reload) — sin esto, la pestaña
+        // podía seguir mostrando datos reales de la empresa anterior
+        // mezclados con los del usuario nuevo.
+        if (this._profile && currentUserId && currentUserId !== newUserId) {
+          window.location.reload();
+          return;
+        }
+
+        this._session = session;
+        // Solo recargar perfil si no lo tenemos ya, o si el usuario cambió
         if (!this._profile || currentUserId !== newUserId) {
           const loaded = await this._loadProfile();
           // Si falla la carga pero ya teníamos perfil previo, conservarlo
