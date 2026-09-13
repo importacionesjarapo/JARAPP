@@ -267,14 +267,17 @@
   .auth-divider{display:flex; align-items:center; gap:12px; margin:18px 0; color:var(--fog-soft); font-size:.78rem; font-weight:700;}
   .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line);}
   .auth-field{margin-bottom:16px;}
-  .auth-field label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--fog-soft); margin-bottom:7px;}
-  .auth-field input{width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--line); background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
+  .auth-field label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--fog-soft); margin-bottom:8px;}
+  .auth-field-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px;}
+  .auth-field-head label{margin-bottom:0;}
+  .auth-hint{font-size:.74rem; font-weight:600; color:var(--fog-soft); text-transform:none; letter-spacing:0; white-space:nowrap;}
+  .auth-field input{width:100%; padding:15px 22px; border-radius:999px; border:1.5px solid transparent; background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
   .auth-field input:focus{border-color:var(--brand);}
-  .auth-logo-picker{display:flex; align-items:center; gap:12px; padding:10px 14px; border:1px dashed var(--line); border-radius:12px; background:var(--surface-tint); cursor:pointer; transition:border-color .2s;}
-  .auth-logo-picker:hover{border-color:var(--brand);}
-  .auth-logo-preview{width:36px;height:36px;border-radius:9px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--fog-soft);flex-shrink:0;overflow:hidden;}
+  .auth-logo-picker{display:flex; align-items:center; justify-content:center; gap:10px; padding:15px 22px; border:1.5px dashed var(--line); border-radius:999px; background:var(--surface-tint); cursor:pointer; transition:border-color .2s, background .2s;}
+  .auth-logo-picker:hover{border-color:var(--brand); background:#fff;}
+  .auth-logo-preview{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--fog-soft);flex-shrink:0;overflow:hidden;}
   .auth-logo-preview img{width:100%;height:100%;object-fit:contain;}
-  .auth-logo-txt{font-size:.88rem;color:var(--text-soft);font-weight:600;}
+  .auth-logo-txt{font-size:.9rem;color:var(--text-soft);font-weight:700;}
   .auth-submit{width:100%; padding:14px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
   .auth-submit:hover{transform:translateY(-1px);}
   .auth-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
@@ -770,12 +773,15 @@
             <input type="text" id="auth-onb-empresa" required placeholder="Ej: Importaciones XYZ">
           </div>
           <div class="auth-field">
-            <label>Logo de tu empresa (opcional)</label>
+            <div class="auth-field-head">
+              <label>Logo de tu empresa</label>
+              <span class="auth-hint">Opcional · PNG sin fondo</span>
+            </div>
             <label for="auth-onb-logo" class="auth-logo-picker">
               <span class="auth-logo-preview" id="auth-onb-logo-preview">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 16l4.6-4.6a2 2 0 012.8 0L16 16M14 14l1.6-1.6a2 2 0 012.8 0L20 14M4 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
               </span>
-              <span class="auth-logo-txt" id="auth-onb-logo-txt">Subir logo (opcional)</span>
+              <span class="auth-logo-txt" id="auth-onb-logo-txt">Subir imagen</span>
             </label>
             <input type="file" id="auth-onb-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none;">
           </div>
@@ -988,7 +994,7 @@
     onbLogoFile = f || null;
     var txt = document.getElementById('auth-onb-logo-txt');
     var preview = document.getElementById('auth-onb-logo-preview');
-    if (!f) { txt.textContent = 'Subir logo (opcional)'; return; }
+    if (!f) { txt.textContent = 'Subir imagen'; return; }
     txt.textContent = f.name;
     var reader = new FileReader();
     reader.onload = function(ev){ preview.innerHTML = '<img src="' + ev.target.result + '" alt="Logo">'; };
