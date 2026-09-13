@@ -6,192 +6,435 @@
 <title>EncargosPro — Software de gestión para importadores y personal shoppers</title>
 <meta name="description" content="EncargosPro es el sistema todo-en-uno para gestionar ventas, inventario, compras en el exterior, logística y finanzas de tu negocio de importación o personal shopping.">
 <link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --primary: #E63946;
-    --primary-dark: #C1121F;
-    --ink: #0E1420;
-    --ink-soft: #3A4150;
-    --bg: #F8F8F6;
-    --surface: #FFFFFF;
-    --border: #E7E7E3;
-    --whatsapp: #25D366;
+  :root{
+    --ink:#0A0E1A; --ink-2:#131A2C; --ink-3:#1C2540;
+    --paper:#FBF9F5; --surface:#FFFFFF; --surface-tint:#FDF3EC;
+    --line:#ECE7DD; --line-dark:rgba(255,255,255,.10);
+    --text:#181B22; --text-soft:#5B6172; --fog:#9AA3B8; --fog-soft:#6B7386;
+    --brand:#DB3A6B; --brand-dark:#A61E4D; --brand-2:#FFB648; --cool:#2FD9C7; --cool-dark:#12A594;
+    --success:#22C55E; --warn:#F59E0B;
+    --grad-brand:linear-gradient(135deg,#8B5CF6 0%,#EC4899 100%);
+    --grad-cool:linear-gradient(135deg,var(--cool) 0%,#3B82F6 100%);
+    --shadow-sm:0 2px 10px -4px rgba(10,14,26,.08);
+    --shadow-md:0 16px 40px -12px rgba(10,14,26,.16);
+    --shadow-glow:0 0 0 1px rgba(219,58,107,.15), 0 20px 45px -18px rgba(219,58,107,.35);
+    --radius:20px;
+    --font-display:'Sora',system-ui,sans-serif;
+    --font-body:'Manrope',-apple-system,BlinkMacSystemFont,sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,monospace;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--ink);
-    line-height: 1.5;
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; background:var(--paper); color:var(--text);
+    font-family:var(--font-body); line-height:1.55; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
   }
-  a { color: inherit; }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  img{max-width:100%;}
+  a{color:inherit;}
+  h1,h2,h3{font-family:var(--font-display); text-wrap:balance; letter-spacing:-0.02em; margin:0;}
+  .wrap{max-width:1180px; margin:0 auto; padding-inline:24px;}
+  .mono{font-family:var(--font-mono);}
+  ::selection{background:var(--brand); color:#fff;}
 
-  header {
-    position: sticky; top: 0; z-index: 20;
-    background: rgba(248,248,246,0.9);
-    backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--border);
-  }
-  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-  .logo { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.02em; }
-  .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 12px 22px; border-radius: 999px; font-weight: 700; font-size: 0.95rem;
-    text-decoration: none; border: none; cursor: pointer; transition: transform 0.15s, opacity 0.15s;
-  }
-  .btn:hover { transform: translateY(-1px); opacity: 0.92; }
-  .btn-whatsapp { background: var(--whatsapp); color: #fff; }
-  .btn-primary { background: var(--ink); color: #fff; }
-  .btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--border); }
-
-  section { padding: 88px 0; }
-  section.tight { padding: 56px 0; }
-
-  .hero { text-align: center; padding-top: 96px; }
-  .eyebrow {
-    display: inline-block; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--primary-dark); background: #FCE9EA;
-    padding: 6px 14px; border-radius: 999px; margin-bottom: 20px;
-  }
-  h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em; margin: 0 0 20px; }
-  .hero p.sub { font-size: 1.15rem; color: var(--ink-soft); max-width: 640px; margin: 0 auto 36px; }
-  .hero-ctas { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
-
-  .mockup {
-    margin: 64px auto 0; max-width: 920px; border-radius: 20px; overflow: hidden;
-    border: 1px solid var(--border); box-shadow: 0 30px 60px -20px rgba(14,20,32,0.18);
-    background: var(--surface);
-  }
-  .mockup-bar { display: flex; gap: 6px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
-  .mockup-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
-
-  .mockup-dash { padding: 32px; text-align: left; background: var(--bg); }
-  .mockup-dash-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 8px; }
-  .mockup-dash-title { font-weight: 700; font-size: 0.95rem; color: var(--ink); }
-  .mockup-dash-demo { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); background: var(--surface); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; }
-  .mockup-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-  .mockup-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; text-align: left; }
-  .mockup-kpi .ico { display: block; font-size: 1.2rem; margin-bottom: 8px; }
-  .mockup-kpi strong { display: block; font-size: 1.3rem; font-weight: 800; color: var(--ink); }
-  .mockup-kpi small { color: var(--ink-soft); font-size: 0.78rem; }
-
-  .quien {
-    background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  }
-  .quien-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 28px; margin-top: 40px; }
-  .quien-card { padding: 28px; border-radius: 16px; background: var(--bg); border: 1px solid var(--border); }
-  .quien-card .ico { font-size: 1.8rem; margin-bottom: 12px; }
-  .quien-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
-  .quien-card p { margin: 0; color: var(--ink-soft); font-size: 0.92rem; }
-
-  h2.section-title { font-size: clamp(1.6rem, 3.5vw, 2.2rem); font-weight: 800; letter-spacing: -0.02em; text-align: center; margin: 0 0 12px; }
-  p.section-sub { text-align: center; color: var(--ink-soft); max-width: 560px; margin: 0 auto 48px; }
-
-  .modulos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
-  .modulo-card { padding: 26px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); }
-  .modulo-card .ico { font-size: 1.6rem; margin-bottom: 10px; }
-  .modulo-card h3 { margin: 0 0 6px; font-size: 1rem; }
-  .modulo-card p { margin: 0; color: var(--ink-soft); font-size: 0.88rem; }
-
-  .planes {
-    background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  }
-  .planes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-top: 44px; }
-  .plan-card {
-    padding: 32px 28px; border-radius: 20px; background: var(--bg); border: 1px solid var(--border);
-    display: flex; flex-direction: column; gap: 18px;
-  }
-  .plan-card.destacado { border: 2px solid var(--primary); background: var(--surface); position: relative; }
-  .plan-badge {
-    position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
-    background: var(--primary); color: #fff; font-size: 0.72rem; font-weight: 700;
-    padding: 4px 14px; border-radius: 999px; letter-spacing: 0.03em;
-  }
-  .plan-card h3 { margin: 0; font-size: 1.1rem; }
-  .plan-price { font-size: 2rem; font-weight: 800; }
-  .plan-price span { font-size: 0.95rem; font-weight: 500; color: var(--ink-soft); }
-  .plan-card ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem; color: var(--ink-soft); }
-  .plan-card ul li::before { content: "✓ "; color: var(--primary-dark); font-weight: 800; }
-  .plan-nota { text-align: center; color: var(--ink-soft); font-size: 0.85rem; margin-top: 28px; }
-
-  .cta-final { text-align: center; }
-  .cta-final h2 { font-size: clamp(1.6rem, 3.5vw, 2.4rem); font-weight: 800; margin: 0 0 16px; letter-spacing: -0.02em; }
-  .cta-final p { color: var(--ink-soft); max-width: 480px; margin: 0 auto 32px; }
-
-  footer { border-top: 1px solid var(--border); padding: 32px 0; }
-  footer .wrap { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 0.82rem; color: var(--ink-soft); }
-
-  .wa-float {
-    position: fixed; bottom: 22px; right: 22px; z-index: 30;
-    width: 58px; height: 58px; border-radius: 50%; background: var(--whatsapp);
-    display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
-    box-shadow: 0 10px 24px -6px rgba(37,211,102,0.55); text-decoration: none;
+  /* ---- scroll reveal ---- */
+  .rv{opacity:0; transform:translateY(28px); transition:opacity .7s cubic-bezier(.16,.8,.3,1), transform .7s cubic-bezier(.16,.8,.3,1);}
+  .rv.in{opacity:1; transform:translateY(0);}
+  .rv-stag > *{opacity:0; transform:translateY(24px); transition:opacity .6s ease, transform .6s ease;}
+  .rv-stag.in > *{opacity:1; transform:translateY(0);}
+  .rv-stag.in > *:nth-child(1){transition-delay:.05s;}
+  .rv-stag.in > *:nth-child(2){transition-delay:.12s;}
+  .rv-stag.in > *:nth-child(3){transition-delay:.19s;}
+  .rv-stag.in > *:nth-child(4){transition-delay:.26s;}
+  .rv-stag.in > *:nth-child(5){transition-delay:.33s;}
+  .rv-stag.in > *:nth-child(6){transition-delay:.40s;}
+  @media (prefers-reduced-motion: reduce){
+    .rv,.rv-stag>*{opacity:1!important; transform:none!important; transition:none!important;}
+    *{animation:none!important;}
   }
 
-  @media (max-width: 640px) {
-    section { padding: 56px 0; }
-    .hero { padding-top: 56px; }
+  /* ---- buttons ---- */
+  .btn{display:inline-flex; align-items:center; gap:9px; padding:14px 26px; border-radius:999px; font-family:var(--font-body); font-weight:700; font-size:.95rem; text-decoration:none; border:none; cursor:pointer; transition:transform .2s cubic-bezier(.34,1.56,.64,1), box-shadow .25s, opacity .2s; white-space:nowrap;}
+  .btn:hover{transform:translateY(-2px) scale(1.015);}
+  .btn:active{transform:translateY(0) scale(.99);}
+  .btn-wa{background:#20BD5C; color:#fff; box-shadow:0 10px 24px -8px rgba(32,189,92,.55);}
+  .btn-brand{background:var(--grad-brand); color:#fff; box-shadow:var(--shadow-glow);}
+  .btn-ghost-dark{background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.18); backdrop-filter:blur(6px);}
+  .btn-ghost-dark:hover{background:rgba(255,255,255,.14);}
+  .btn-ghost-light{background:#fff; color:var(--text); border:1px solid var(--line);}
+  .btn-ghost-light:hover{border-color:var(--brand);}
+  .btn-sm{padding:9px 16px; font-size:.82rem;}
+
+  /* ---- header ---- */
+  header{position:fixed; top:0; left:0; right:0; z-index:50; padding-block:18px; transition:padding .3s, background .3s, box-shadow .3s; background:rgba(255,252,253,.6); backdrop-filter:blur(10px);}
+  header.scrolled{padding-block:12px; background:rgba(255,255,255,.92); box-shadow:0 8px 28px -18px rgba(166,30,77,.28);}
+  header .wrap{display:flex; align-items:center; justify-content:space-between; gap:20px;}
+  .logo{display:flex; align-items:center; gap:9px; font-family:var(--font-display); font-weight:800; font-size:1.15rem; color:var(--text);}
+  .logo .dot{width:9px;height:9px;border-radius:50%;background:var(--grad-brand); box-shadow:0 0 12px var(--brand);}
+  nav.hnav{display:flex; gap:28px; align-items:center;}
+  nav.hnav .hlinks{display:flex; gap:28px; align-items:center;}
+  nav.hnav a{font-size:.88rem; font-weight:600; color:var(--text-soft); text-decoration:none; transition:color .2s;}
+  nav.hnav a:hover{color:var(--brand-dark);}
+  .hnav-ctas{display:flex; gap:10px; align-items:center;}
+  @media (max-width:820px){ nav.hnav .hlinks{display:none!important;} }
+  @media (max-width:560px){ .hnav-wa{display:none!important;} }
+
+  section{padding-block:110px; position:relative;}
+  section.tight{padding-block:72px;}
+  .eyebrow{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:.72rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:7px 16px 7px 10px; border-radius:999px;}
+  .eyebrow .pip{width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .eyebrow.on-dark{color:#FFD3E6; background:rgba(219,58,107,.18); border:1px solid rgba(219,58,107,.32);}
+  .eyebrow.on-light{color:var(--brand-dark); background:#FCE7EF; border:1px solid #F6D0DE;}
+
+  h2.h-title{font-size:clamp(1.9rem,3.6vw,2.7rem); font-weight:800; margin-bottom:14px;}
+  p.h-sub{color:var(--text-soft); font-size:1.05rem; max-width:600px; margin:0 auto;}
+  .section-head{text-align:center; margin-bottom:56px;}
+
+  /* ================= HERO ================= */
+  .hero{
+    background:linear-gradient(180deg,#FFF6FA 0%,#FDEDF3 45%,var(--paper) 100%);
+    color:var(--text); padding-top:170px; padding-bottom:120px;
+    position:relative; overflow:hidden; isolation:isolate;
   }
+  .hero-blob{position:absolute; border-radius:50%; filter:blur(80px); opacity:.32; z-index:-1; animation:drift 18s ease-in-out infinite;}
+  .hero-blob.b1{width:520px;height:520px; background:radial-gradient(circle,var(--brand) 0%,transparent 70%); top:-180px; left:-140px;}
+  .hero-blob.b2{width:460px;height:460px; background:radial-gradient(circle,var(--cool) 0%,transparent 70%); bottom:-220px; right:-120px; animation-delay:-9s;}
+  .hero-grid{position:absolute; inset:0; z-index:-1;
+    background-image:linear-gradient(rgba(166,30,77,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(166,30,77,.05) 1px,transparent 1px);
+    background-size:64px 64px; mask-image:radial-gradient(ellipse 70% 60% at 50% 20%, black 40%, transparent 100%);}
+  @keyframes drift{0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(40px,-30px) scale(1.08);}}
+
+  .hero-inner{display:grid; grid-template-columns:1.05fr .95fr; gap:56px; align-items:center;}
+  @media (max-width:960px){ .hero-inner{grid-template-columns:1fr;} }
+  .hero h1{font-size:clamp(2.3rem,4.6vw,3.5rem); font-weight:800; margin:20px 0 18px; color:var(--text);}
+  .hero h1 .hl{background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .hero p.lead{color:var(--text-soft); font-size:1.1rem; max-width:520px; margin:0 0 32px;}
+  .hero-ctas{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:40px;}
+  .trust-row{display:flex; gap:26px; flex-wrap:wrap;}
+  .trust-item{display:flex; align-items:center; gap:8px; font-size:.82rem; color:var(--text-soft); font-weight:600;}
+  .trust-item svg{width:16px;height:16px; color:var(--cool-dark); flex-shrink:0;}
+  .hero .eyebrow.on-light{background:#fff; box-shadow:var(--shadow-sm);}
+
+  /* route visual */
+  .route-card{
+    background:linear-gradient(180deg,var(--ink-2),var(--ink-3)); border:1px solid var(--line-dark); border-radius:24px;
+    padding:28px 24px 24px; box-shadow:0 30px 70px -25px rgba(166,30,77,.35), 0 14px 34px -16px rgba(10,14,26,.22);
+  }
+  .route-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:22px;}
+  .route-head .lbl{font-family:var(--font-mono); font-size:.68rem; letter-spacing:.08em; color:var(--fog); text-transform:uppercase;}
+  .route-head .code{font-family:var(--font-mono); font-size:.72rem; color:var(--cool); background:rgba(47,217,199,.12); padding:4px 10px; border-radius:8px;}
+  .route-svg-wrap{position:relative; height:150px;}
+  .route-pin{position:absolute; top:50%; transform:translateY(-50%); text-align:center; font-size:.72rem; color:#fff; font-weight:700;}
+  .route-pin .ico{width:42px;height:28px;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin:0 auto 6px; box-shadow:0 3px 10px -2px rgba(0,0,0,.4);}
+  .route-pin .ico svg{width:100%;height:100%;display:block;}
+  .route-pin.origin{left:0;} .route-pin.origin .ico{border:1px solid rgba(47,217,199,.55);}
+  .route-pin.dest{right:0;} .route-pin.dest .ico{border:1px solid rgba(219,58,107,.55);}
+  .route-pin small{display:block; color:var(--fog); font-weight:500; font-size:.65rem; margin-top:2px;}
+  .kpi-row{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:22px;}
+  .kpi-chip{background:rgba(255,255,255,.04); border:1px solid var(--line-dark); border-radius:14px; padding:12px 10px; text-align:center;}
+  .kpi-chip strong{display:block; font-family:var(--font-display); font-size:1.15rem; color:#fff;}
+  .kpi-chip span{font-size:.66rem; color:var(--fog); font-weight:600;}
+
+  /* ================= LOGO / BADGE STRIP ================= */
+  .badge-strip{background:var(--surface-tint); border-block:1px solid var(--line);}
+  .badge-strip .wrap{display:flex; flex-wrap:wrap; gap:14px; justify-content:center; padding-block:22px;}
+  .badge-pill{display:flex; align-items:center; gap:9px; background:#fff; border:1px solid var(--line); padding:9px 16px; border-radius:999px; font-size:.82rem; font-weight:700; color:var(--text-soft); box-shadow:var(--shadow-sm);}
+  .badge-pill svg{width:16px;height:16px; color:var(--brand);}
+
+  /* ================= FOR YOU CARDS ================= */
+  .foryou-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:22px;}
+  @media (max-width:860px){ .foryou-grid{grid-template-columns:1fr;} }
+  .foryou-card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:30px 26px; transition:transform .3s cubic-bezier(.16,.8,.3,1), box-shadow .3s, border-color .3s;}
+  .foryou-card:hover{transform:translateY(-6px); box-shadow:var(--shadow-md); border-color:transparent;}
+  .foryou-card .ico-wrap{width:52px;height:52px;border-radius:14px; display:flex; align-items:center; justify-content:center; margin-bottom:18px; background:var(--grad-brand);}
+  .foryou-card:nth-child(2) .ico-wrap{background:var(--grad-cool);}
+  .foryou-card:nth-child(3) .ico-wrap{background:linear-gradient(135deg,#8B5CF6,#EC4899);}
+  .foryou-card .ico-wrap svg{width:26px;height:26px;color:#fff;}
+  .foryou-card h3{font-size:1.05rem; margin-bottom:8px;}
+  .foryou-card p{color:var(--text-soft); font-size:.9rem; margin:0;}
+
+  /* ================= MODULE SPOTLIGHTS ================= */
+  .spotlight-section{background:var(--surface);}
+  .spotlight-section.tinted{background:var(--surface-tint);}
+  .spotlight{display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; padding-block:64px;}
+  .spotlight.rev{grid-template-columns:1fr 1fr;}
+  .spotlight.rev .sp-visual{order:2;} .spotlight.rev .sp-text{order:1;}
+  @media (max-width:900px){ .spotlight,.spotlight.rev{grid-template-columns:1fr;} .spotlight.rev .sp-visual,.spotlight.rev .sp-text{order:initial;} }
+  .sp-text .tag{display:inline-flex; align-items:center; gap:7px; font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--brand-dark); margin-bottom:14px;}
+  .sp-text h3{font-size:clamp(1.4rem,2.4vw,1.9rem); margin-bottom:14px;}
+  .sp-text p.desc{color:var(--text-soft); margin-bottom:22px; font-size:1rem;}
+  .sp-list{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px;}
+  .sp-list li{display:flex; gap:10px; align-items:flex-start; font-size:.92rem; color:var(--text);}
+  .sp-list svg{width:19px;height:19px; color:var(--success); flex-shrink:0; margin-top:1px;}
+
+  .sp-visual{background:linear-gradient(160deg,#fff,var(--surface-tint)); border:1px solid var(--line); border-radius:22px; padding:22px; box-shadow:var(--shadow-md); position:relative;}
+  .sp-visual .win-bar{display:flex; gap:6px; margin-bottom:16px;}
+  .sp-visual .win-bar span{width:9px;height:9px;border-radius:50%;background:var(--line);}
+  .sp-stat-row{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:14px;}
+  .sp-stat{background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px;}
+  .sp-stat b{display:block; font-family:var(--font-display); font-size:1.2rem;}
+  .sp-stat span{font-size:.68rem; color:var(--fog-soft); font-weight:700; text-transform:uppercase; letter-spacing:.04em;}
+  .sp-bar-track{height:8px; background:var(--line); border-radius:99px; overflow:hidden; margin-top:8px;}
+  .sp-bar-fill{height:100%; border-radius:99px; background:var(--grad-brand); width:0%; transition:width 1.1s cubic-bezier(.16,.8,.3,1);}
+  .sp-rows{display:flex; flex-direction:column; gap:9px; margin-top:14px;}
+  .sp-row{display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:.78rem;}
+  .sp-row .dotc{width:8px;height:8px;border-radius:50%; flex-shrink:0;}
+  .sp-row .grow{flex:1; color:var(--text-soft); font-weight:600;}
+  .sp-row .val{font-family:var(--font-mono); font-weight:700; color:var(--text);}
+  .sp-badge{position:absolute; top:-14px; right:22px; background:var(--grad-cool); color:#fff; font-size:.68rem; font-weight:800; padding:7px 14px; border-radius:999px; box-shadow:0 8px 20px -8px rgba(47,217,199,.6);}
+
+  /* ================= HOW IT WORKS ================= */
+  .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:0; position:relative;}
+  @media (max-width:860px){ .steps{grid-template-columns:1fr; gap:36px;} .step-line{display:none;} }
+  .step-line{position:absolute; top:34px; left:16.6%; right:16.6%; height:2px; background:repeating-linear-gradient(90deg,var(--line) 0 10px,transparent 10px 18px);}
+  .step{text-align:center; padding-inline:20px; position:relative;}
+  .step .num{width:68px;height:68px; border-radius:50%; background:var(--surface); border:2px solid var(--line); display:flex; align-items:center; justify-content:center; margin:0 auto 20px; font-family:var(--font-display); font-weight:800; font-size:1.3rem; color:var(--brand); position:relative; z-index:2; transition:all .3s;}
+  .step:hover .num{background:var(--grad-brand); color:#fff; border-color:transparent; transform:scale(1.08);}
+  .step h4{font-size:1.05rem; margin-bottom:10px;}
+  .step p{color:var(--text-soft); font-size:.88rem; max-width:260px; margin:0 auto;}
+
+  /* ================= STATS BAND ================= */
+  .stats-band{background:var(--ink); color:#fff; overflow:hidden; position:relative;}
+  .stats-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:24px; text-align:center;}
+  @media (max-width:760px){ .stats-grid{grid-template-columns:repeat(2,1fr);} }
+  .stat-num{font-family:var(--font-display); font-weight:800; font-size:clamp(2rem,4vw,2.8rem); background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .stat-lbl{font-size:.82rem; color:var(--fog); font-weight:600; margin-top:6px;}
+
+  /* ================= PRICING ================= */
+  .planes-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:24px;}
+  @media (max-width:900px){ .planes-grid{grid-template-columns:1fr; max-width:420px; margin-inline:auto;} }
+  .plan-card{background:#fff; border:1px solid var(--line); border-radius:24px; padding:34px 28px; display:flex; flex-direction:column; gap:20px; position:relative; transition:transform .3s cubic-bezier(.16,.8,.3,1), box-shadow .3s;}
+  .plan-card:hover{transform:translateY(-6px); box-shadow:var(--shadow-md);}
+  .plan-card.feat{border:2px solid var(--brand); box-shadow:var(--shadow-glow);}
+  .plan-badge{position:absolute; top:-14px; left:50%; transform:translateX(-50%); background:var(--grad-brand); color:#fff; font-size:.68rem; font-weight:800; letter-spacing:.04em; padding:6px 16px; border-radius:999px;}
+  .plan-name{font-size:1.05rem; font-weight:700; color:var(--text-soft);}
+  .plan-price{font-family:var(--font-display); font-size:2.2rem; font-weight:800;}
+  .plan-price span{font-size:.95rem; font-weight:600; color:var(--fog-soft);}
+  .plan-card ul{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px; font-size:.9rem;}
+  .plan-card ul li{display:flex; gap:9px; align-items:flex-start;}
+  .plan-card ul svg{width:18px;height:18px;color:var(--success); flex-shrink:0; margin-top:1px;}
+  .plan-nota{text-align:center; color:var(--fog-soft); font-size:.85rem; margin-top:36px;}
+
+  /* ================= FAQ ================= */
+  .faq-wrap{max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px;}
+  .faq-item{background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden;}
+  .faq-q{width:100%; text-align:left; background:none; border:none; padding:20px 24px; font-family:var(--font-body); font-size:.98rem; font-weight:700; color:var(--text); cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:16px;}
+  .faq-q .plus{width:22px;height:22px; flex-shrink:0; border-radius:50%; background:var(--surface-tint); display:flex; align-items:center; justify-content:center; transition:transform .3s;}
+  .faq-item.open .faq-q .plus{transform:rotate(135deg); background:var(--grad-brand);}
+  .faq-item.open .faq-q .plus svg{color:#fff;}
+  .faq-a{max-height:0; overflow:hidden; transition:max-height .35s cubic-bezier(.16,.8,.3,1);}
+  .faq-a p{padding:0 24px 20px; color:var(--text-soft); font-size:.9rem; margin:0;}
+
+  /* ================= FINAL CTA ================= */
+  .cta-final{background:var(--ink); color:#fff; text-align:center; overflow:hidden; position:relative;}
+  .cta-final h2{font-size:clamp(1.9rem,4vw,2.8rem); color:#fff; margin-bottom:16px;}
+  .cta-final p{color:var(--fog); max-width:480px; margin:0 auto 34px; font-size:1.05rem;}
+
+  footer{background:var(--ink-2); border-top:1px solid var(--line-dark); padding-block:40px; color:var(--fog);}
+  footer .wrap{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; font-size:.82rem;}
+  footer .flogo{display:flex; align-items:center; gap:8px; font-family:var(--font-display); font-weight:800; color:#fff;}
+
+  .wa-float{position:fixed; bottom:24px; right:24px; z-index:60; width:60px;height:60px; border-radius:50%; background:#20BD5C; display:flex; align-items:center; justify-content:center; text-decoration:none; box-shadow:0 12px 28px -8px rgba(32,189,92,.6);}
+  .wa-float svg{width:28px;height:28px; color:#fff;}
+  .wa-ring{position:absolute; inset:0; border-radius:50%; border:2px solid #20BD5C; animation:ring 2.2s ease-out infinite;}
+  @keyframes ring{0%{transform:scale(1); opacity:.7;} 100%{transform:scale(1.9); opacity:0;}}
+
+  @media (max-width:640px){ section{padding-block:70px;} .hero{padding-top:130px;} }
+
+  /* ================= AUTH MODAL (Empieza gratis) ================= */
+  .auth-overlay{
+    display:none; position:fixed; inset:0; z-index:100; background:rgba(10,14,26,.68); backdrop-filter:blur(4px);
+    align-items:center; justify-content:center; padding:20px; overflow-y:auto;
+  }
+  .auth-overlay.open{display:flex;}
+  .auth-modal{
+    background:#fff; border-radius:24px; width:100%; max-width:420px; overflow:hidden;
+    box-shadow:0 40px 80px -20px rgba(0,0,0,.4); animation:authIn .35s cubic-bezier(.16,.8,.3,1);
+  }
+  @keyframes authIn{from{opacity:0; transform:translateY(18px) scale(.97);} to{opacity:1; transform:translateY(0) scale(1);}}
+  .auth-head{background:var(--grad-brand); color:#fff; padding:30px 30px 26px; text-align:center; position:relative;}
+  .auth-head .logo-mark{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.18); display:flex;align-items:center;justify-content:center;margin:0 auto 14px; font-family:var(--font-display); font-weight:800;}
+  .auth-head h3{color:#fff; font-size:1.3rem; margin-bottom:6px;}
+  .auth-head p{margin:0; font-size:.85rem; color:rgba(255,255,255,.85);}
+  .auth-close{position:absolute; top:14px; right:14px; width:30px;height:30px; border-radius:50%; background:rgba(255,255,255,.18); border:none; color:#fff; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
+  .auth-body{padding:28px 30px 30px;}
+  .auth-google{width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:13px; border-radius:999px; border:1px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:700; font-size:.92rem; cursor:pointer; transition:background .2s, border-color .2s;}
+  .auth-google:hover{background:var(--surface-tint); border-color:var(--fog);}
+  .auth-divider{display:flex; align-items:center; gap:12px; margin:18px 0; color:var(--fog-soft); font-size:.78rem; font-weight:700;}
+  .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line);}
+  .auth-field{margin-bottom:16px;}
+  .auth-field label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--fog-soft); margin-bottom:8px;}
+  .auth-field-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px;}
+  .auth-field-head label{margin-bottom:0;}
+  .auth-hint{font-size:.74rem; font-weight:600; color:var(--fog-soft); text-transform:none; letter-spacing:0; white-space:nowrap;}
+  .auth-field input{width:100%; padding:15px 22px; border-radius:999px; border:1.5px solid transparent; background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
+  .auth-field input:focus{border-color:var(--brand);}
+  .auth-logo-picker{display:flex; align-items:center; justify-content:center; gap:10px; padding:15px 22px; border:1.5px dashed var(--line); border-radius:999px; background:var(--surface-tint); cursor:pointer; transition:border-color .2s, background .2s;}
+  .auth-logo-picker:hover{border-color:var(--brand); background:#fff;}
+  .auth-logo-preview{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--fog-soft);flex-shrink:0;overflow:hidden;}
+  .auth-logo-preview img{width:100%;height:100%;object-fit:contain;}
+  .auth-logo-txt{font-size:.9rem;color:var(--text-soft);font-weight:700;}
+  .auth-submit{width:100%; padding:14px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
+  .auth-submit:hover{transform:translateY(-1px);}
+  .auth-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
+  .auth-foot{text-align:center; margin-top:18px; font-size:.85rem; color:var(--text-soft);}
+  .auth-foot a,.auth-foot button.link{color:var(--brand-dark); font-weight:700; text-decoration:none; background:none; border:none; font-size:inherit; cursor:pointer; padding:0; font-family:inherit;}
+  .auth-error{background:#FCE7EF; color:var(--brand-dark); border:1px solid #F6D0DE; border-radius:12px; padding:11px 14px; font-size:.84rem; margin-bottom:16px;}
+  .auth-icon-circle{width:60px;height:60px;border-radius:50%; background:var(--surface-tint); display:flex; align-items:center; justify-content:center; margin:0 auto 18px;}
+  .auth-icon-circle svg{width:26px;height:26px; color:var(--brand);}
+  .auth-screen{display:none;}
+  .auth-screen.active{display:block;}
 </style>
 </head>
 <body>
 
-<header>
+<svg style="display:none">
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24" fill="none"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none"><path d="M4 20V10M12 20V4M20 20v-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.4" fill="currentColor"/><circle cx="18" cy="20" r="1.4" fill="currentColor"/><path d="M2 3h3l2.6 12.6a1.6 1.6 0 001.6 1.4h8.2a1.6 1.6 0 001.6-1.3L21 7H6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3a14 14 0 010 18 14 14 0 010-18z" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-coin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v10M9.5 9.3c0-1.2 1.1-2 2.5-2s2.5.8 2.5 2c0 2.6-5 1.6-5 4.2 0 1.2 1.1 2 2.5 2s2.5-.8 2.5-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 9.5h18M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-wa" viewBox="0 0 32 32" fill="currentColor"><path d="M16.02 3C9.4 3 4 8.4 4 15.02c0 2.4.7 4.6 1.9 6.5L4 29l7.6-2c1.8 1 3.9 1.5 6.3 1.5 6.6 0 12-5.4 12-12.02C29.9 8.4 24.6 3 16.02 3zm0 22c-2 0-3.9-.5-5.5-1.5l-.4-.2-4.5 1.2 1.2-4.4-.3-.4C5.4 18 4.9 16.5 4.9 15c0-6.1 5-11.1 11.1-11.1S27.1 8.9 27.1 15 22.1 25 16 25zm6.1-8.3c-.3-.2-2-1-2.3-1.1-.3-.1-.5-.2-.8.2s-.9 1.1-1.1 1.3-.4.2-.7 0c-.3-.1-1.4-.5-2.6-1.6-1-.9-1.6-2-1.8-2.3-.2-.3 0-.5.1-.7.1-.1.3-.4.4-.5.2-.2.2-.3.3-.5.1-.2 0-.4 0-.5s-.8-1.9-1-2.6c-.3-.7-.6-.6-.8-.6h-.7c-.2 0-.6.1-.9.4-.3.3-1.2 1.2-1.2 2.9s1.2 3.3 1.4 3.6c.2.3 2.4 3.7 5.9 5 .8.3 1.5.5 2 .7.8.2 1.6.2 2.2.1.7-.1 2-.8 2.3-1.6.3-.8.3-1.4.2-1.6-.1-.1-.3-.2-.6-.4z"/></symbol>
+  <!-- banderas con colores fijos (no currentColor): los emoji de bandera 🇺🇸/🇨🇴 no
+       se renderizan como banderas en varios navegadores de escritorio en Windows
+       (muestran el código de país en texto), aunque sí funcionan en iOS/Android. -->
+  <symbol id="i-flag-us" viewBox="0 0 60 40">
+    <rect width="60" height="40" fill="#B22234"/>
+    <rect y="3.08" width="60" height="3.08" fill="#fff"/>
+    <rect y="9.23" width="60" height="3.08" fill="#fff"/>
+    <rect y="15.38" width="60" height="3.08" fill="#fff"/>
+    <rect y="21.54" width="60" height="3.08" fill="#fff"/>
+    <rect y="27.69" width="60" height="3.08" fill="#fff"/>
+    <rect y="33.85" width="60" height="3.08" fill="#fff"/>
+    <rect width="24" height="21.5" fill="#3C3B6E"/>
+    <g fill="#fff">
+      <circle cx="4" cy="4" r="1"/><circle cx="9" cy="4" r="1"/><circle cx="14" cy="4" r="1"/><circle cx="19" cy="4" r="1"/>
+      <circle cx="6.5" cy="7.5" r="1"/><circle cx="11.5" cy="7.5" r="1"/><circle cx="16.5" cy="7.5" r="1"/>
+      <circle cx="4" cy="11" r="1"/><circle cx="9" cy="11" r="1"/><circle cx="14" cy="11" r="1"/><circle cx="19" cy="11" r="1"/>
+      <circle cx="6.5" cy="14.5" r="1"/><circle cx="11.5" cy="14.5" r="1"/><circle cx="16.5" cy="14.5" r="1"/>
+      <circle cx="4" cy="18" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="14" cy="18" r="1"/><circle cx="19" cy="18" r="1"/>
+    </g>
+  </symbol>
+  <symbol id="i-flag-co" viewBox="0 0 60 40">
+    <rect y="0" width="60" height="20" fill="#FCD116"/>
+    <rect y="20" width="60" height="10" fill="#003893"/>
+    <rect y="30" width="60" height="10" fill="#CE1126"/>
+  </symbol>
+</svg>
+
+<header id="hdr">
   <div class="wrap">
-    <div class="logo">📦 EncargosPro</div>
-    <a class="btn btn-whatsapp" id="cta-header" href="#" target="_blank" rel="noopener">💬 Hablar por WhatsApp</a>
+    <div class="logo"><span class="dot"></span> EncargosPro</div>
+    <nav class="hnav">
+      <span class="hlinks">
+        <a href="#modulos">Producto</a>
+        <a href="#precios">Precios</a>
+        <a href="#faq">Preguntas</a>
+      </span>
+      <span class="hnav-ctas">
+        <a class="btn btn-ghost-light btn-sm hnav-wa" id="cta-header" href="#" target="_blank" rel="noopener">Hablar por WhatsApp</a>
+        <button class="btn btn-brand btn-sm" id="btn-empezar-gratis-header" type="button">Probar ahora →</button>
+      </span>
+    </nav>
   </div>
 </header>
 
+<!-- ============ HERO ============ -->
 <section class="hero">
-  <div class="wrap">
-    <span class="eyebrow">Para importadores y personal shoppers</span>
-    <h1>Gestiona todo tu negocio de importación<br>en un solo lugar</h1>
-    <p class="sub">Ventas, inventario, compras en el exterior, logística internacional y finanzas —
-      EncargosPro reemplaza tus hojas de Excel y grupos de WhatsApp desordenados por un
-      sistema hecho a la medida de tu operación.</p>
-    <div class="hero-ctas">
-      <a class="btn btn-whatsapp" id="cta-hero" href="#" target="_blank" rel="noopener">💬 Quiero una demo</a>
-      <a class="btn btn-ghost" href="#modulos">Ver qué incluye ↓</a>
+  <div class="hero-blob b1"></div>
+  <div class="hero-blob b2"></div>
+  <div class="hero-grid"></div>
+  <div class="wrap hero-inner">
+    <div class="rv in">
+      <span class="eyebrow on-light"><span class="pip"></span> Para importadores y personal shoppers</span>
+      <h1>Tu operación de importación,<br><span class="hl">de WhatsApp y Excel</span><br>a un solo sistema.</h1>
+      <p class="lead">Ventas, inventario, compras en el exterior, logística internacional y finanzas — EncargosPro conecta cada etapa de tu negocio en un solo lugar, con tus datos completamente aislados de cualquier otra empresa.</p>
+      <div class="hero-ctas">
+        <button class="btn btn-brand" id="btn-empezar-gratis" type="button">
+          Empieza gratis →
+        </button>
+        <a class="btn btn-ghost-light" id="cta-hero" href="#" target="_blank" rel="noopener">
+          <svg width="19" height="19"><use href="#i-wa"/></svg> Hablar por WhatsApp
+        </a>
+      </div>
+      <div class="trust-row">
+        <div class="trust-item"><svg><use href="#i-check"/></svg> Sin tarjeta de crédito</div>
+        <div class="trust-item"><svg><use href="#i-check"/></svg> Aislamiento total por empresa</div>
+        <div class="trust-item"><svg><use href="#i-check"/></svg> 100% en español</div>
+      </div>
     </div>
 
-    <div class="mockup">
-      <div class="mockup-bar"><span></span><span></span><span></span></div>
-      <div class="mockup-dash">
-        <div class="mockup-dash-head">
-          <span class="mockup-dash-title">Dashboard 360° · Kicks Import Co.</span>
-          <span class="mockup-dash-demo">Datos de ejemplo</span>
+    <div class="rv in" style="transition-delay:.15s;">
+      <div class="route-card">
+        <div class="route-head">
+          <span class="lbl">Seguimiento en vivo</span>
+          <span class="code">#ENC-7841</span>
         </div>
-        <div class="mockup-kpis">
-          <div class="mockup-kpi"><span class="ico">💰</span><strong>$18.4M</strong><small>Facturación del mes</small></div>
-          <div class="mockup-kpi"><span class="ico">📦</span><strong>142</strong><small>Encargos activos</small></div>
-          <div class="mockup-kpi"><span class="ico">🚚</span><strong>96%</strong><small>Entregas a tiempo</small></div>
-          <div class="mockup-kpi"><span class="ico">👥</span><strong>58</strong><small>Clientes activos</small></div>
+        <div class="route-svg-wrap">
+          <svg viewBox="0 0 320 150" width="100%" height="150" style="overflow:visible;">
+            <path id="routePath" d="M40,110 C110,10 210,10 280,40" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="2" stroke-dasharray="2 8" stroke-linecap="round"/>
+            <circle r="6" fill="#2FD9C7">
+              <animateMotion dur="3.4s" repeatCount="indefinite" rotate="auto">
+                <mpath href="#routePath"/>
+              </animateMotion>
+            </circle>
+          </svg>
+          <div class="route-pin origin">
+            <div class="ico"><svg viewBox="0 0 60 40"><use href="#i-flag-us"/></svg></div>Estados Unidos<small>Compra</small>
+          </div>
+          <div class="route-pin dest">
+            <div class="ico"><svg viewBox="0 0 60 40"><use href="#i-flag-co"/></svg></div>Colombia<small>Entrega</small>
+          </div>
+        </div>
+        <div class="kpi-row">
+          <div class="kpi-chip"><strong>6</strong><span>MÓDULOS</span></div>
+          <div class="kpi-chip"><strong>&lt;48h</strong><span>ACTIVACIÓN</span></div>
+          <div class="kpi-chip"><strong>1</strong><span>PANEL ÚNICO</span></div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="quien tight">
+<!-- ============ BADGES ============ -->
+<div class="badge-strip">
   <div class="wrap">
-    <h2 class="section-title">¿Es para tu negocio?</h2>
-    <p class="section-sub">Si tu día a día se parece a esto, EncargosPro fue construido para ti.</p>
-    <div class="quien-grid">
-      <div class="quien-card">
-        <div class="ico">✈️</div>
+    <span class="badge-pill"><svg><use href="#i-shield"/></svg> Datos aislados por empresa (RLS)</span>
+    <span class="badge-pill"><svg><use href="#i-bolt"/></svg> Configuración en 24–48h</span>
+    <span class="badge-pill"><svg><use href="#i-globe"/></svg> Pensado para el mercado LatAm</span>
+    <span class="badge-pill"><svg><use href="#i-wa"/></svg> Soporte directo por WhatsApp</span>
+  </div>
+</div>
+
+<!-- ============ ¿ES PARA TI? ============ -->
+<section class="tight">
+  <div class="wrap">
+    <div class="section-head rv">
+      <span class="eyebrow on-light">¿Es para tu negocio?</span>
+      <h2 class="h-title" style="margin-top:14px;">Si tu día a día se parece a esto,<br>EncargosPro fue construido para ti</h2>
+    </div>
+    <div class="foryou-grid rv-stag">
+      <div class="foryou-card">
+        <div class="ico-wrap"><svg><use href="#i-plane"/></svg></div>
         <h3>Viajas a comprar</h3>
         <p>Viajas al exterior (o tienes quien lo haga) a comprar producto para traer y revender localmente.</p>
       </div>
-      <div class="quien-card">
-        <div class="ico">🛍️</div>
+      <div class="foryou-card">
+        <div class="ico-wrap"><svg><use href="#i-cart"/></svg></div>
         <h3>Eres personal shopper</h3>
         <p>Compras por encargo de tus clientes en tiendas del exterior y gestionas el envío hasta su ciudad.</p>
       </div>
-      <div class="quien-card">
-        <div class="ico">📦</div>
+      <div class="foryou-card">
+        <div class="ico-wrap"><svg><use href="#i-box"/></svg></div>
         <h3>Importas para revender</h3>
         <p>Traes mercancía en volumen para distribuirla o venderla al detal, y necesitas controlar costos reales.</p>
       </div>
@@ -199,89 +442,663 @@
   </div>
 </section>
 
-<section id="modulos">
+<!-- ============ MODULE SPOTLIGHTS ============ -->
+<section id="modulos" class="spotlight-section">
   <div class="wrap">
-    <h2 class="section-title">Todo lo que necesitas, en un solo sistema</h2>
-    <p class="section-sub">Los mismos módulos que usa un negocio de importación real, todos los días.</p>
-    <div class="modulos-grid">
-      <div class="modulo-card"><div class="ico">📊</div><h3>Dashboard 360°</h3><p>Ventas, margen, cartera y alertas en tiempo real, en un solo panel.</p></div>
-      <div class="modulo-card"><div class="ico">🛒</div><h3>Ventas y Clientes</h3><p>Registra ventas, abonos y el historial completo de cada cliente.</p></div>
-      <div class="modulo-card"><div class="ico">📦</div><h3>Inventario</h3><p>Stock por bodega (origen, tránsito y destino) siempre actualizado.</p></div>
-      <div class="modulo-card"><div class="ico">🌎</div><h3>Compras en el exterior</h3><p>Registra cada compra con su costo real y su viaje asociado.</p></div>
-      <div class="modulo-card"><div class="ico">🚚</div><h3>Seguimiento logístico</h3><p>Rastrea cada pedido desde la compra hasta la entrega final, fase por fase.</p></div>
-      <div class="modulo-card"><div class="ico">💰</div><h3>Finanzas</h3><p>Gastos, egresos, TRM del día y rentabilidad real por venta.</p></div>
-      <div class="modulo-card"><div class="ico">🧮</div><h3>Cotizador y Calculadora</h3><p>Cotiza a tus clientes en segundos con tus márgenes ya calculados.</p></div>
-      <div class="modulo-card"><div class="ico">🗓️</div><h3>Calendario de Contenido</h3><p>Planifica y da seguimiento a tu contenido de redes sociales.</p></div>
-      <div class="modulo-card"><div class="ico">👥</div><h3>Roles y permisos</h3><p>Da acceso a tu equipo con el rol exacto que necesita cada quien.</p></div>
+    <div class="section-head rv">
+      <span class="eyebrow on-light">El producto</span>
+      <h2 class="h-title" style="margin-top:14px;">Todo lo que necesitas,<br>en un solo sistema</h2>
+      <p class="h-sub">Los mismos módulos que usa un negocio de importación real, todos los días.</p>
+    </div>
+
+    <div class="spotlight rv">
+      <div class="sp-text">
+        <span class="tag">📊 Dashboard 360°</span>
+        <h3>Toda tu operación, en un solo vistazo</h3>
+        <p class="desc">Ventas, margen, cartera pendiente y alertas de inventario en tiempo real — sin tener que abrir cinco hojas de Excel para saber cómo va tu negocio hoy.</p>
+        <ul class="sp-list">
+          <li><svg><use href="#i-check"/></svg> KPIs de facturación, cartera y margen en vivo</li>
+          <li><svg><use href="#i-check"/></svg> Alertas automáticas de stock bajo y saldos vencidos</li>
+          <li><svg><use href="#i-check"/></svg> Un panel por empresa — nunca mezclado con otro negocio</li>
+        </ul>
+      </div>
+      <div class="sp-visual">
+        <div class="win-bar"><span></span><span></span><span></span></div>
+        <div class="sp-stat-row">
+          <div class="sp-stat"><b class="cnum" data-to="18.4" data-suffix="M" data-prefix="$">$0M</b><span>Facturación</span></div>
+          <div class="sp-stat"><b class="cnum" data-to="96" data-suffix="%">0%</b><span>Entregas a tiempo</span></div>
+        </div>
+        <div class="sp-bar-track"><div class="sp-bar-fill" data-w="72"></div></div>
+        <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">META MENSUAL — 72%</div>
+      </div>
+    </div>
+
+    <div class="spotlight rev rv">
+      <div class="sp-text">
+        <span class="tag">🚚 Logística internacional</span>
+        <h3>Rastrea cada pedido, fase por fase</h3>
+        <p class="desc">Desde que se compra en el exterior hasta que se entrega en la puerta del cliente — cada encargo tiene su propia línea de tiempo, visible para ti y consultable por tu cliente.</p>
+        <ul class="sp-list">
+          <li><svg><use href="#i-check"/></svg> Fases claras: comprado, en bodega, en tránsito, entregado</li>
+          <li><svg><use href="#i-check"/></svg> Portal de seguimiento para que tu cliente vea su pedido</li>
+          <li><svg><use href="#i-check"/></svg> Historial completo por guía y por cliente</li>
+        </ul>
+      </div>
+      <div class="sp-visual">
+        <span class="sp-badge">EN VIVO</span>
+        <div class="win-bar"><span></span><span></span><span></span></div>
+        <div class="sp-rows">
+          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">#ENC-7841 · Entregado</span><span class="val mono">Colombia</span></div>
+          <div class="sp-row"><span class="dotc" style="background:var(--brand-2);"></span><span class="grow">#ENC-7839 · En tránsito</span><span class="val mono">Colombia</span></div>
+          <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">#ENC-7836 · En bodega</span><span class="val mono">Estados Unidos</span></div>
+          <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">#ENC-7830 · Comprado</span><span class="val mono">Estados Unidos</span></div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="planes tight">
+<section class="spotlight-section tinted">
   <div class="wrap">
-    <h2 class="section-title">Planes</h2>
-    <p class="section-sub">Elige el plan según el tamaño de tu equipo — si tu operación no encaja exacto, lo ajustamos.</p>
-    <div class="planes-grid">
+    <div class="spotlight rv">
+      <div class="sp-text">
+        <span class="tag">💰 Finanzas & Compras</span>
+        <h3>Sabe cuánto ganas de verdad, en cada venta</h3>
+        <p class="desc">TRM del día, costos reales de compra en el exterior y gastos operativos — todo cruzado automáticamente para mostrarte la rentabilidad real, no la que crees que tienes.</p>
+        <ul class="sp-list">
+          <li><svg><use href="#i-check"/></svg> TRM actualizada automáticamente cada día</li>
+          <li><svg><use href="#i-check"/></svg> Costeo real por compra: producto + envío + comisiones</li>
+          <li><svg><use href="#i-check"/></svg> Reporte de gastos operativos y balance de caja</li>
+        </ul>
+      </div>
+      <div class="sp-visual">
+        <div class="win-bar"><span></span><span></span><span></span></div>
+        <div class="sp-stat-row">
+          <div class="sp-stat"><b class="cnum" data-to="3106" data-prefix="$">$0</b><span>TRM hoy</span></div>
+          <div class="sp-stat"><b class="cnum" data-to="34" data-suffix="%">0%</b><span>Margen prom.</span></div>
+        </div>
+        <div class="sp-rows">
+          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Compra USA — Nike Air Force</span><span class="val mono">-$224K</span></div>
+          <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Gasto operativo — Bodega</span><span class="val mono">-$95K</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="spotlight-section">
+  <div class="wrap">
+    <div class="spotlight rev rv">
+      <div class="sp-text">
+        <span class="tag">🛒 Ventas, Clientes & Cotizador</span>
+        <h3>Cotiza, vende y cobra sin salir del sistema</h3>
+        <p class="desc">Registra ventas y abonos, guarda el historial completo de cada cliente y genera cotizaciones profesionales en segundos con tus márgenes ya calculados.</p>
+        <ul class="sp-list">
+          <li><svg><use href="#i-check"/></svg> Ficha de cliente con historial de compras y abonos</li>
+          <li><svg><use href="#i-check"/></svg> Cotizador con PDF listo para enviar por WhatsApp</li>
+          <li><svg><use href="#i-check"/></svg> Comprobantes de pago archivados por venta</li>
+        </ul>
+      </div>
+      <div class="sp-visual">
+        <div class="win-bar"><span></span><span></span><span></span></div>
+        <div class="sp-rows">
+          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Beatriz E. — Nike Air Force '07</span><span class="val mono">$240K</span></div>
+          <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Omaira I. — Tommy Hilfiger</span><span class="val mono">Saldo</span></div>
+          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Héctor R. — Disney Adult</span><span class="val mono">$415K</span></div>
+        </div>
+        <div class="sp-bar-track"><div class="sp-bar-fill" data-w="58" style="background:var(--grad-cool);"></div></div>
+        <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CARTERA COBRADA — 58%</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="tinted tight">
+  <div class="wrap">
+    <div class="section-head rv">
+      <span class="eyebrow on-light">Cómo empezar</span>
+      <h2 class="h-title" style="margin-top:14px;">De tu primer mensaje a operando, en 3 pasos</h2>
+    </div>
+    <div class="steps rv-stag">
+      <div class="step-line"></div>
+      <div class="step">
+        <div class="num">1</div>
+        <h4>Cuéntanos tu operación</h4>
+        <p>Nos escribes por WhatsApp y nos cuentas cómo trabajas hoy — módulos, número de personas, volumen.</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h4>Activamos tu empresa</h4>
+        <p>Creamos tu cuenta aislada dentro de EncargosPro, con tu primer usuario administrador listo para entrar.</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h4>Empiezas a operar</h4>
+        <p>Cargas tus productos y clientes, y desde el primer día tienes Dashboard, Ventas y Logística funcionando.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATS BAND ============ -->
+<section class="stats-band tight">
+  <div class="wrap">
+    <div class="stats-grid rv-stag">
+      <div><div class="stat-num cnum" data-to="6">0</div><div class="stat-lbl">Módulos operativos</div></div>
+      <div><div class="stat-num cnum" data-to="100" data-suffix="%">0%</div><div class="stat-lbl">Datos aislados por empresa</div></div>
+      <div><div class="stat-num cnum" data-to="48" data-suffix="h">0h</div><div class="stat-lbl">Activación de tu cuenta</div></div>
+      <div><div class="stat-num cnum" data-to="1">0</div><div class="stat-lbl">Panel para todo tu equipo</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRICING ============ -->
+<section id="precios">
+  <div class="wrap">
+    <div class="section-head rv">
+      <span class="eyebrow on-light">Planes</span>
+      <h2 class="h-title" style="margin-top:14px;">Elige según el tamaño de tu equipo</h2>
+      <p class="h-sub">Si tu operación no encaja exacto, lo ajustamos — todo se cierra por WhatsApp.</p>
+    </div>
+    <div class="planes-grid rv-stag">
       <div class="plan-card">
-        <h3>Starter</h3>
+        <div class="plan-name">Starter</div>
         <div class="plan-price">$79.000<span>/mes</span></div>
         <ul>
-          <li>Hasta 2 usuarios</li>
-          <li>Ventas, Clientes, Inventario</li>
-          <li>Soporte por WhatsApp</li>
+          <li><svg><use href="#i-check"/></svg> Hasta 2 usuarios</li>
+          <li><svg><use href="#i-check"/></svg> Ventas, Clientes, Inventario</li>
+          <li><svg><use href="#i-check"/></svg> Soporte por WhatsApp</li>
         </ul>
       </div>
-      <div class="plan-card destacado">
+      <div class="plan-card feat">
         <span class="plan-badge">MÁS ELEGIDO</span>
-        <h3>Pro</h3>
+        <div class="plan-name">Pro</div>
         <div class="plan-price">$149.000<span>/mes</span></div>
         <ul>
-          <li>Hasta 8 usuarios</li>
-          <li>Todos los módulos operativos</li>
-          <li>Finanzas y Dashboard 360°</li>
-          <li>Soporte prioritario</li>
+          <li><svg><use href="#i-check"/></svg> Hasta 8 usuarios</li>
+          <li><svg><use href="#i-check"/></svg> Todos los módulos operativos</li>
+          <li><svg><use href="#i-check"/></svg> Finanzas y Dashboard 360°</li>
+          <li><svg><use href="#i-check"/></svg> Soporte prioritario</li>
         </ul>
       </div>
       <div class="plan-card">
-        <h3>Empresarial</h3>
-        <div class="plan-price">A la medida</div>
+        <div class="plan-name">Empresarial</div>
+        <div class="plan-price" style="font-size:1.5rem;">A la medida</div>
         <ul>
-          <li>Usuarios ilimitados</li>
-          <li>Todos los módulos + Calendario de Contenido</li>
-          <li>Onboarding acompañado</li>
+          <li><svg><use href="#i-check"/></svg> Usuarios ilimitados</li>
+          <li><svg><use href="#i-check"/></svg> Todos los módulos + Calendario de Contenido</li>
+          <li><svg><use href="#i-check"/></svg> Onboarding acompañado</li>
         </ul>
       </div>
     </div>
-    <p class="plan-nota">Precios en pesos colombianos, facturación mensual. Escríbenos y ajustamos el plan a tu operación.</p>
+    <p class="plan-nota">Precios en pesos colombianos, facturación mensual.</p>
+    <div class="rv" style="text-align:center;margin-top:28px;">
+      <button class="btn btn-brand" id="btn-empezar-gratis-precios" type="button">Empieza gratis, sin tarjeta →</button>
+    </div>
   </div>
 </section>
 
-<section class="cta-final">
+<!-- ============ FAQ ============ -->
+<section id="faq" class="tinted">
   <div class="wrap">
+    <div class="section-head rv">
+      <span class="eyebrow on-light">Preguntas frecuentes</span>
+      <h2 class="h-title" style="margin-top:14px;">Todo lo que quieres saber antes de empezar</h2>
+    </div>
+    <div class="faq-wrap rv">
+      <div class="faq-item open">
+        <button class="faq-q">¿Mis datos se mezclan con los de otras empresas?<span class="plus">+</span></button>
+        <div class="faq-a" style="max-height:200px;"><p>No. Cada empresa que usa EncargosPro tiene sus datos completamente aislados a nivel de base de datos (Row Level Security) — ni tú puedes ver los de otro negocio, ni otro negocio puede ver los tuyos, aunque compartan el mismo sistema.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿Necesito instalar algo?<span class="plus">+</span></button>
+        <div class="faq-a"><p>No. EncargosPro funciona desde el navegador, en el computador o el celular. También puedes "instalarlo" como acceso directo en tu teléfono para que se sienta como una app.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿Puedo migrar la información que ya tengo en Excel?<span class="plus">+</span></button>
+        <div class="faq-a"><p>Sí — al activar tu cuenta te ayudamos a cargar tu inventario, clientes y ventas iniciales para que no empieces desde cero.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿Qué pasa si mi negocio crece y necesito más usuarios?<span class="plus">+</span></button>
+        <div class="faq-a"><p>Cambias de plan cuando lo necesites, sin perder historial ni configuración. Si tu operación no encaja en ninguno de los 3 planes, armamos uno a la medida.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿Cómo se paga la suscripción?<span class="plus">+</span></button>
+        <div class="faq-a"><p>La activación y renovación se coordinan directamente por WhatsApp con nuestro equipo — sin letra pequeña ni cobros automáticos sorpresa.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="cta-final">
+  <div class="hero-blob b1" style="opacity:.35;"></div>
+  <div class="wrap rv">
+    <span class="eyebrow on-dark" style="margin-bottom:20px;"><span class="pip"></span> Empieza hoy</span>
     <h2>¿Listo para ordenar tu negocio?</h2>
-    <p>Cuéntanos cómo trabajas hoy y te mostramos cómo se vería con EncargosPro.</p>
-    <a class="btn btn-whatsapp" id="cta-final" href="#" target="_blank" rel="noopener">💬 Escríbenos por WhatsApp</a>
+    <p>Cuéntanos cómo trabajas hoy y te mostramos cómo se vería con EncargosPro — la respuesta es por WhatsApp, sin formularios largos.</p>
+    <a class="btn btn-wa" id="cta-final" href="#" target="_blank" rel="noopener">
+      <svg width="19" height="19"><use href="#i-wa"/></svg> Escríbenos por WhatsApp
+    </a>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <div>EncargosPro © <span id="year"></span></div>
+    <div class="flogo"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--brand);display:inline-block;"></span> EncargosPro</div>
     <div>Software de gestión para importadores y personal shoppers</div>
+    <div>© <span id="year"></span> EncargosPro</div>
   </div>
 </footer>
 
-<a class="wa-float" id="cta-float" href="#" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">💬</a>
+<a class="wa-float" id="cta-float" href="#" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp">
+  <span class="wa-ring"></span>
+  <svg><use href="#i-wa"/></svg>
+</a>
+
+<!-- ============ AUTH MODAL: Empieza gratis ============ -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-modal">
+
+    <!-- Pantalla 1: crear cuenta -->
+    <div class="auth-screen active" id="auth-screen-signup">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">EP</div>
+        <h3>Crea tu cuenta</h3>
+        <p>Empieza tu prueba gratis hoy</p>
+      </div>
+      <div class="auth-body">
+        <div id="auth-signup-error"></div>
+        <button class="auth-google" type="button" onclick="window.EncargosAuth.conGoogle()">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 32.4 29.4 35 24 35c-6.1 0-11-4.9-11-11s4.9-11 11-11c2.8 0 5.3 1 7.3 2.8l5.7-5.7C33.6 6.5 29 4.5 24 4.5 13.2 4.5 4.5 13.2 4.5 24S13.2 43.5 24 43.5 43.5 34.8 43.5 24c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 16 18.9 13 24 13c2.8 0 5.3 1 7.3 2.8l5.7-5.7C33.6 6.5 29 4.5 24 4.5c-7.4 0-13.8 4.2-17 10.2z"/><path fill="#4CAF50" d="M24 43.5c5 0 9.5-1.9 12.9-5.1l-6-5c-1.9 1.4-4.3 2.1-6.9 2.1-5.3 0-9.8-3.6-11.4-8.4l-6.5 5C9.9 39.1 16.4 43.5 24 43.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1 3-3.2 5.4-6 6.9l6 5c-.4.4 7.2-5.3 7.2-16.4 0-1.2-.1-2.4-.4-3.5z"/></svg>
+          Acceder con Google
+        </button>
+        <div class="auth-divider">o</div>
+        <form id="auth-form-signup">
+          <div class="auth-field">
+            <label>Nombre completo</label>
+            <input type="text" id="auth-nombre" required placeholder="Tu nombre">
+          </div>
+          <div class="auth-field">
+            <label>Correo electrónico</label>
+            <input type="email" id="auth-email" required placeholder="tu@correo.com">
+          </div>
+          <div class="auth-field">
+            <label>Contraseña</label>
+            <input type="password" id="auth-password" required minlength="6" placeholder="Mínimo 6 caracteres">
+          </div>
+          <button type="submit" class="auth-submit" id="auth-submit-btn">Crear cuenta gratis</button>
+        </form>
+        <p class="auth-foot">¿Ya tienes cuenta? <a href="#" id="auth-link-login">Inicia sesión</a></p>
+      </div>
+    </div>
+
+    <!-- Pantalla 2: revisa tu correo -->
+    <div class="auth-screen" id="auth-screen-confirm">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">EP</div>
+        <h3>Ya casi</h3>
+        <p>Solo falta confirmar tu correo</p>
+      </div>
+      <div class="auth-body" style="text-align:center;">
+        <div class="auth-icon-circle"><svg viewBox="0 0 24 24" fill="none"><path d="M3 6l9 7 9-7M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h3 style="font-size:1.05rem;margin-bottom:10px;">Revisa tu correo</h3>
+        <p style="color:var(--text-soft);font-size:.9rem;margin-bottom:6px;">Te enviamos un enlace a <strong id="auth-confirm-email"></strong>. Ábrelo para activar tu cuenta y entrar.</p>
+        <p style="color:var(--fog-soft);font-size:.82rem;margin-bottom:22px;">¿No lo ves? Mira en spam o en "Promociones" — suele esconderse ahí.</p>
+        <button class="auth-google" type="button" id="auth-reenviar-btn" onclick="window.EncargosAuth.reenviarCorreo()">↻ Reenviar el correo</button>
+        <p class="auth-foot"><button type="button" class="link" onclick="window.EncargosAuth.volverASignup()">← Me equivoqué de correo</button></p>
+      </div>
+    </div>
+
+    <!-- Pantalla 3: onboarding (ya autenticado, falta crear la empresa) -->
+    <div class="auth-screen" id="auth-screen-onboarding">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">✨</div>
+        <h3>¡Bienvenido a EncargosPro!</h3>
+        <p>Vamos a personalizar tu cuenta</p>
+      </div>
+      <div class="auth-body">
+        <div id="auth-onboarding-error"></div>
+        <form id="auth-form-onboarding">
+          <div class="auth-field">
+            <label>Tu nombre</label>
+            <input type="text" id="auth-onb-nombre" required placeholder="Tu nombre">
+          </div>
+          <div class="auth-field">
+            <label>Nombre de tu empresa</label>
+            <input type="text" id="auth-onb-empresa" required placeholder="Ej: Importaciones XYZ">
+          </div>
+          <div class="auth-field">
+            <div class="auth-field-head">
+              <label>Logo de tu empresa</label>
+              <span class="auth-hint">Opcional · PNG sin fondo</span>
+            </div>
+            <label for="auth-onb-logo" class="auth-logo-picker">
+              <span class="auth-logo-preview" id="auth-onb-logo-preview">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 16l4.6-4.6a2 2 0 012.8 0L16 16M14 14l1.6-1.6a2 2 0 012.8 0L20 14M4 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <span class="auth-logo-txt" id="auth-onb-logo-txt">Subir imagen</span>
+            </label>
+            <input type="file" id="auth-onb-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none;">
+          </div>
+          <button type="submit" class="auth-submit" id="auth-onb-btn">Comenzar prueba gratis →</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Pantalla 4: éxito -->
+    <div class="auth-screen" id="auth-screen-exito">
+      <div class="auth-head">
+        <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
+        <div class="logo-mark">🎉</div>
+        <h3>¡Tu cuenta está lista!</h3>
+        <p>Tu prueba gratis ya está activa</p>
+      </div>
+      <div class="auth-body" style="text-align:center;">
+        <p style="color:var(--text-soft);font-size:.92rem;margin-bottom:24px;">Inicia sesión con el mismo correo para entrar a tu cuenta de EncargosPro.</p>
+        <a class="auth-submit" style="display:block;text-decoration:none;" id="auth-entrar-app" href="#">Entrar a EncargosPro →</a>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-  const cfg = window.ENCARGOSPRO_CONFIG || {};
-  const waUrl = `https://wa.me/${cfg.whatsapp}?text=${encodeURIComponent(cfg.mensajeWhatsapp || '')}`;
-  ['cta-header', 'cta-hero', 'cta-final', 'cta-float'].forEach(id => {
-    const el = document.getElementById(id);
+  // WhatsApp links
+  var cfg = window.ENCARGOSPRO_CONFIG || {};
+  var waUrl = 'https://wa.me/' + cfg.whatsapp + '?text=' + encodeURIComponent(cfg.mensajeWhatsapp || '');
+  ['cta-header','cta-hero','cta-final','cta-float'].forEach(function(id){
+    var el = document.getElementById(id);
     if (el) el.href = waUrl;
   });
   document.getElementById('year').textContent = new Date().getFullYear();
+
+  // Sticky header state
+  var hdr = document.getElementById('hdr');
+  window.addEventListener('scroll', function(){
+    hdr.classList.toggle('scrolled', window.scrollY > 30);
+  }, { passive: true });
+
+  // Scroll reveal
+  var revEls = document.querySelectorAll('.rv, .rv-stag');
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.15 });
+    revEls.forEach(function(el){ io.observe(el); });
+  } else {
+    revEls.forEach(function(el){ el.classList.add('in'); });
+  }
+
+  // Animated counters + bar fills (trigger once visible)
+  function animateCount(el){
+    var to = parseFloat(el.dataset.to);
+    var suffix = el.dataset.suffix || '';
+    var prefix = el.dataset.prefix || '';
+    var decimals = (el.dataset.to.indexOf('.') > -1) ? 1 : 0;
+    var start = null, dur = 1400;
+    function step(ts){
+      if (!start) start = ts;
+      var p = Math.min((ts - start) / dur, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      var val = to * eased;
+      el.textContent = prefix + val.toFixed(decimals) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  var counted = new WeakSet();
+  var barred = new WeakSet();
+  var io2 = ('IntersectionObserver' in window) ? new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (!e.isIntersecting) return;
+      e.target.querySelectorAll('.cnum').forEach(function(n){ if(!counted.has(n)){ counted.add(n); animateCount(n);} });
+      e.target.querySelectorAll('.sp-bar-fill').forEach(function(b){ if(!barred.has(b)){ barred.add(b); requestAnimationFrame(function(){ b.style.width = b.dataset.w + '%'; }); } });
+    });
+  }, { threshold: 0.3 }) : null;
+  document.querySelectorAll('.sp-visual, .stats-grid').forEach(function(el){
+    if (io2) io2.observe(el);
+    else { el.querySelectorAll('.cnum').forEach(animateCount); el.querySelectorAll('.sp-bar-fill').forEach(function(b){ b.style.width = b.dataset.w + '%'; }); }
+  });
+
+  // FAQ accordion
+  document.querySelectorAll('.faq-item').forEach(function(item){
+    var q = item.querySelector('.faq-q');
+    var a = item.querySelector('.faq-a');
+    if (item.classList.contains('open')) a.style.maxHeight = a.scrollHeight + 'px';
+    q.addEventListener('click', function(){
+      var isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(function(o){
+        o.classList.remove('open');
+        o.querySelector('.faq-a').style.maxHeight = 0;
+      });
+      if (!isOpen) {
+        item.classList.add('open');
+        a.style.maxHeight = a.scrollHeight + 'px';
+      }
+    });
+  });
+</script>
+
+<!-- ============ EMPIEZA GRATIS: registro self-serve ============ -->
+<script>
+(function(){
+  var supa = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+  var FUNC_URL = cfg.appUrl.replace(/\/$/, '') + '/.netlify/functions/admin-empresas';
+  var overlay = document.getElementById('auth-overlay');
+  var lastSignupEmail = '';
+
+  function mostrarPantalla(id){
+    document.querySelectorAll('.auth-screen').forEach(function(s){ s.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+  function abrir(pantalla){
+    mostrarPantalla(pantalla || 'auth-screen-signup');
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function cerrar(){
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  function setError(elId, msg){
+    var el = document.getElementById(elId);
+    el.innerHTML = msg ? '<div class="auth-error">' + msg + '</div>' : '';
+  }
+
+  // Errores comunes de Supabase Auth traducidos — el resto se muestra tal cual.
+  function traducirError(msg){
+    if (!msg) return 'Ocurrió un error inesperado. Intenta de nuevo.';
+    if (/already registered|already exists/i.test(msg)) return 'Ese correo ya tiene una cuenta. Inicia sesión en vez de crear una nueva.';
+    if (/invalid login credentials/i.test(msg)) return 'Correo o contraseña incorrectos.';
+    if (/password should be/i.test(msg)) return 'La contraseña debe tener al menos 6 caracteres.';
+    return msg;
+  }
+
+  async function conGoogle(){
+    setError('auth-signup-error', '');
+    var { error } = await supa.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + window.location.pathname + '?auth=onboarding' }
+    });
+    if (error) setError('auth-signup-error', traducirError(error.message));
+  }
+
+  async function volverASignup(){
+    mostrarPantalla('auth-screen-signup');
+  }
+
+  async function reenviarCorreo(){
+    var btn = document.getElementById('auth-reenviar-btn');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try {
+      var { error } = await supa.auth.resend({ type: 'signup', email: lastSignupEmail });
+      if (error) throw error;
+      btn.textContent = '✓ Enviado de nuevo';
+    } catch (e) {
+      btn.textContent = '↻ Reenviar el correo';
+      alert(traducirError(e.message));
+    } finally {
+      setTimeout(function(){ btn.disabled = false; }, 2500);
+    }
+  }
+
+  async function crearEmpresaTrial(nombreCompleto, nombreEmpresa){
+    var { data: sessionData } = await supa.auth.getSession();
+    var token = sessionData?.session?.access_token;
+    if (!token) throw new Error('Tu sesión expiró. Cierra este cuadro e inicia el registro de nuevo.');
+
+    var resp = await fetch(FUNC_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ accion: 'crear_empresa_trial', nombreCompleto: nombreCompleto, nombreEmpresa: nombreEmpresa }),
+    });
+    var data = await resp.json().catch(function(){ return {}; });
+    if (!resp.ok) throw new Error(data.error || ('Error ' + resp.status));
+    return data;
+  }
+
+  // Logo opcional del onboarding: mismo bucket/ruta ("productos-publico",
+  // logos/<empresaId>/...) y misma tabla Configuracion (clave GLOBAL_LOGO)
+  // que usa la app en Parámetros (src/views/params.js) — así, apenas el
+  // usuario entra por primera vez, la app ya lo lee y lo muestra solo.
+  async function subirLogoEmpresa(empresaId, file){
+    var fileExt = (file.name.split('.').pop() || 'png').toLowerCase();
+    var fileName = Date.now() + '-' + Math.random().toString(36).slice(2) + '.' + fileExt;
+    var filePath = 'logos/' + empresaId + '/' + fileName;
+
+    var up = await supa.storage.from('productos-publico').upload(filePath, file, { cacheControl: '3600', upsert: false });
+    if (up.error) throw up.error;
+
+    var urlData = supa.storage.from('productos-publico').getPublicUrl(filePath).data;
+    var url = urlData && urlData.publicUrl;
+    if (!url) throw new Error('No se pudo obtener la URL del logo.');
+
+    var ins = await supa.from('Configuracion').insert([{ id: Date.now().toString(), clave: 'GLOBAL_LOGO', valor: url, empresa_id: empresaId }]);
+    if (ins.error) throw ins.error;
+    return url;
+  }
+
+  var onbLogoFile = null;
+  var onbLogoInput = document.getElementById('auth-onb-logo');
+  onbLogoInput.addEventListener('change', function(){
+    var f = this.files && this.files[0];
+    onbLogoFile = f || null;
+    var txt = document.getElementById('auth-onb-logo-txt');
+    var preview = document.getElementById('auth-onb-logo-preview');
+    if (!f) { txt.textContent = 'Subir imagen'; return; }
+    txt.textContent = f.name;
+    var reader = new FileReader();
+    reader.onload = function(ev){ preview.innerHTML = '<img src="' + ev.target.result + '" alt="Logo">'; };
+    reader.readAsDataURL(f);
+  });
+
+  // Al cargar: si venimos de un link de confirmación de correo o de un
+  // regreso de Google OAuth, supabase-js ya habrá levantado la sesión
+  // (detectSessionInUrl, default true). Si hay sesión y el perfil todavía
+  // no tiene empresa_id, es un registro a medias -> pedir onboarding.
+  async function revisarSesionAlCargar(){
+    var { data } = await supa.auth.getSession();
+    var session = data?.session;
+    if (!session) return;
+
+    var { data: perfil } = await supa
+      .from('user_profiles').select('id, empresa_id, full_name')
+      .eq('id', session.user.id).maybeSingle();
+
+    if (perfil && perfil.empresa_id) return; // ya tiene empresa — nada que hacer acá
+
+    document.getElementById('auth-onb-nombre').value =
+      perfil?.full_name || session.user.user_metadata?.full_name || '';
+    abrir('auth-screen-onboarding');
+  }
+
+  document.getElementById('btn-empezar-gratis')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
+  document.getElementById('btn-empezar-gratis-header')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
+  document.getElementById('btn-empezar-gratis-precios')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) cerrar(); });
+  document.getElementById('auth-link-login').addEventListener('click', function(e){
+    e.preventDefault();
+    window.open(cfg.appUrl, '_blank');
+  });
+
+  document.getElementById('auth-form-signup').addEventListener('submit', async function(e){
+    e.preventDefault();
+    setError('auth-signup-error', '');
+    var nombre = document.getElementById('auth-nombre').value.trim();
+    var email = document.getElementById('auth-email').value.trim();
+    var password = document.getElementById('auth-password').value;
+    var btn = document.getElementById('auth-submit-btn');
+    btn.disabled = true; btn.textContent = 'Creando cuenta...';
+
+    try {
+      var { data, error } = await supa.auth.signUp({
+        email: email, password: password,
+        options: {
+          data: { full_name: nombre },
+          emailRedirectTo: window.location.origin + window.location.pathname + '?auth=onboarding',
+        },
+      });
+      if (error) throw error;
+
+      lastSignupEmail = email;
+
+      if (data.session) {
+        // Confirmación de correo desactivada en el proyecto -> ya hay sesión, directo a onboarding.
+        document.getElementById('auth-onb-nombre').value = nombre;
+        abrir('auth-screen-onboarding');
+      } else {
+        document.getElementById('auth-confirm-email').textContent = email;
+        mostrarPantalla('auth-screen-confirm');
+      }
+    } catch (err) {
+      setError('auth-signup-error', traducirError(err.message));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Crear cuenta gratis';
+    }
+  });
+
+  document.getElementById('auth-form-onboarding').addEventListener('submit', async function(e){
+    e.preventDefault();
+    setError('auth-onboarding-error', '');
+    var nombreCompleto = document.getElementById('auth-onb-nombre').value.trim();
+    var nombreEmpresa = document.getElementById('auth-onb-empresa').value.trim();
+    var btn = document.getElementById('auth-onb-btn');
+    btn.disabled = true; btn.textContent = 'Creando tu espacio...';
+
+    try {
+      var resultado = await crearEmpresaTrial(nombreCompleto, nombreEmpresa);
+      if (onbLogoFile && resultado && resultado.empresa) {
+        btn.textContent = 'Subiendo tu logo...';
+        try { await subirLogoEmpresa(resultado.empresa.id, onbLogoFile); }
+        catch (logoErr) {
+          // El logo es opcional: si falla la subida no se bloquea la
+          // creación de la cuenta, que ya fue exitosa. El usuario puede
+          // subirlo después desde Parámetros dentro de la app.
+          console.error('No se pudo subir el logo del onboarding:', logoErr);
+        }
+      }
+      document.getElementById('auth-entrar-app').href = cfg.appUrl;
+      mostrarPantalla('auth-screen-exito');
+    } catch (err) {
+      setError('auth-onboarding-error', err.message);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Comenzar prueba gratis →';
+    }
+  });
+
+  window.EncargosAuth = { abrir: abrir, cerrar: cerrar, conGoogle: conGoogle, volverASignup: volverASignup, reenviarCorreo: reenviarCorreo };
+
+  revisarSesionAlCargar();
+})();
 </script>
 
 </body>

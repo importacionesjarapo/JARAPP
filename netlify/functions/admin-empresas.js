@@ -48,6 +48,17 @@ async function verificarSuperadmin(authHeader) {
   return userData.user
 }
 
+/** Verifica el JWT del caller sin exigir ningún rol — usado por la acción de
+ * autoservicio (crear_empresa_trial), que cualquier usuario recién
+ * registrado desde la landing puede llamar sobre su propia cuenta. */
+async function verificarUsuarioAutenticado(authHeader) {
+  const token = (authHeader || '').replace(/^Bearer\s+/i, '')
+  if (!token) return null
+  const { data: userData, error } = await supabase.auth.getUser(token)
+  if (error || !userData?.user) return null
+  return userData.user
+}
+
 /** Lista TODOS los objetos de un bucket plano, con páginas grandes para minimizar viajes de red. */
 async function listarBucketCompleto(bucket) {
   const objetos = []
@@ -68,12 +79,22 @@ export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return res(405, { error: 'Method not allowed' })
   if (!supabase) return res(500, { error: 'Función mal configurada: faltan SUPABASE_URL / SUPABASE_SERVICE_KEY en este entorno de Netlify.' })
 
-  const caller = await verificarSuperadmin(event.headers.authorization || event.headers.Authorization)
-  if (!caller) return res(403, { error: 'Solo el superadmin puede usar este panel.' })
-
   let body
   try { body = JSON.parse(event.body || '{}') } catch { return res(400, { error: 'JSON inválido' }) }
   const { accion } = body
+  const authHeader = event.headers.authorization || event.headers.Authorization
+
+  // crear_empresa_trial es autoservicio: la llama cualquier usuario recién
+  // registrado desde la landing sobre SU PROPIA cuenta, no un superadmin.
+  // Todo lo demás en este archivo sigue exigiendo role='superadmin'.
+  let caller
+  if (accion === 'crear_empresa_trial') {
+    caller = await verificarUsuarioAutenticado(authHeader)
+    if (!caller) return res(401, { error: 'Sesión no válida. Inicia sesión de nuevo e intenta otra vez.' })
+  } else {
+    caller = await verificarSuperadmin(authHeader)
+    if (!caller) return res(403, { error: 'Solo el superadmin puede usar este panel.' })
+  }
 
   // ── LISTAR EMPRESAS ──
   if (accion === 'listar_empresas') {
@@ -261,6 +282,85 @@ export const handler = async (event) => {
     }
 
     return res(200, { ok: true, ...resultado })
+  }
+
+  // ── PRUEBA GRATIS (self-serve) ──
+
+  // Config global de la prueba gratis (superadmin) — cuántos días dura y
+  // qué módulos vienen habilitados para quien se registre solo.
+  if (accion === 'obtener_politica_trial') {
+    const { data, error } = await supabase.from('PoliticaTrial').select('*').eq('id', 1).maybeSingle()
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true, politica: data })
+  }
+
+  if (accion === 'guardar_politica_trial') {
+    const { dias_prueba, modulos_habilitados } = body
+    if (!dias_prueba || dias_prueba < 1) return res(400, { error: 'dias_prueba debe ser mayor a 0.' })
+    if (!modulos_habilitados || typeof modulos_habilitados !== 'object') {
+      return res(400, { error: 'modulos_habilitados es obligatorio.' })
+    }
+    const { data, error } = await supabase.from('PoliticaTrial')
+      .update({ dias_prueba, modulos_habilitados, updated_at: new Date().toISOString() })
+      .eq('id', 1).select().single()
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true, politica: data })
+  }
+
+  // Crea la empresa + perfil admin del usuario que se acaba de registrar
+  // solo desde la landing (self-serve) — nunca desde un superadmin. El
+  // caller ya viene verificado como "cualquier usuario autenticado" más
+  // arriba; acá solo falta que no tenga ya una empresa asociada.
+  if (accion === 'crear_empresa_trial') {
+    const { nombreCompleto, nombreEmpresa } = body
+    if (!nombreCompleto || !nombreEmpresa) {
+      return res(400, { error: 'nombreCompleto y nombreEmpresa son obligatorios.' })
+    }
+
+    const { data: perfilExistente, error: errPerfil } = await supabase
+      .from('user_profiles').select('id, empresa_id').eq('id', caller.id).maybeSingle()
+    if (errPerfil) return res(500, { error: errPerfil.message })
+    if (perfilExistente?.empresa_id) {
+      return res(400, { error: 'Esta cuenta ya tiene una empresa activa. Inicia sesión en la app en vez de crear una nueva.' })
+    }
+
+    const { data: politica, error: errPolitica } = await supabase
+      .from('PoliticaTrial').select('*').eq('id', 1).maybeSingle()
+    if (errPolitica) return res(500, { error: errPolitica.message })
+    const diasPrueba = politica?.dias_prueba ?? 7
+    const modulos = politica?.modulos_habilitados ?? { dashboard: true }
+
+    // Slug único a partir del nombre — no puede depender de que el usuario
+    // elija uno bueno (a diferencia de crear_empresa, que sí lo pide).
+    const slugBase = nombreEmpresa.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-').replace(/(^-+|-+$)/g, '') || 'empresa'
+    const slug = `${slugBase}-${Math.random().toString(36).slice(2, 7)}`
+
+    const fechaVencimiento = new Date()
+    fechaVencimiento.setDate(fechaVencimiento.getDate() + diasPrueba)
+
+    const { data: empresa, error: errEmpresa } = await supabase
+      .from('Empresas')
+      .insert({
+        nombre: nombreEmpresa, slug, plan: 'trial', estado_suscripcion: 'trial',
+        fecha_vencimiento: fechaVencimiento.toISOString().split('T')[0],
+      })
+      .select().single()
+    if (errEmpresa) return res(400, { error: errEmpresa.message })
+
+    const { error: errProfile } = await supabase.from('user_profiles').upsert({
+      id: caller.id, full_name: nombreCompleto, email: caller.email,
+      role: 'admin', permissions: { ...modulos, admin: true }, is_active: true,
+      empresa_id: empresa.id,
+    }, { onConflict: 'id' })
+    if (errProfile) {
+      // No dejar una Empresa huérfana si el perfil falla.
+      await supabase.from('Empresas').delete().eq('id', empresa.id)
+      return res(500, { error: errProfile.message })
+    }
+
+    return res(200, { ok: true, empresa })
   }
 
   return res(400, { error: 'Acción no reconocida' })
