@@ -129,9 +129,10 @@
   .route-head .code{font-family:var(--font-mono); font-size:.72rem; color:var(--cool); background:rgba(47,217,199,.12); padding:4px 10px; border-radius:8px;}
   .route-svg-wrap{position:relative; height:150px;}
   .route-pin{position:absolute; top:50%; transform:translateY(-50%); text-align:center; font-size:.72rem; color:#fff; font-weight:700;}
-  .route-pin .ico{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin:0 auto 6px;}
-  .route-pin.origin{left:0;} .route-pin.origin .ico{background:rgba(47,217,199,.18); border:1px solid rgba(47,217,199,.4);}
-  .route-pin.dest{right:0;} .route-pin.dest .ico{background:rgba(219,58,107,.18); border:1px solid rgba(219,58,107,.4);}
+  .route-pin .ico{width:42px;height:28px;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin:0 auto 6px; box-shadow:0 3px 10px -2px rgba(0,0,0,.4);}
+  .route-pin .ico svg{width:100%;height:100%;display:block;}
+  .route-pin.origin{left:0;} .route-pin.origin .ico{border:1px solid rgba(47,217,199,.55);}
+  .route-pin.dest{right:0;} .route-pin.dest .ico{border:1px solid rgba(219,58,107,.55);}
   .route-pin small{display:block; color:var(--fog); font-weight:500; font-size:.65rem; margin-top:2px;}
   .kpi-row{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:22px;}
   .kpi-chip{background:rgba(255,255,255,.04); border:1px solid var(--line-dark); border-radius:14px; padding:12px 10px; text-align:center;}
@@ -299,11 +300,21 @@
        se renderizan como banderas en varios navegadores de escritorio en Windows
        (muestran el código de país en texto), aunque sí funcionan en iOS/Android. -->
   <symbol id="i-flag-us" viewBox="0 0 60 40">
-    <rect width="60" height="40" fill="#fff"/>
-    <rect y="0" width="60" height="8" fill="#B22234"/>
-    <rect y="16" width="60" height="8" fill="#B22234"/>
-    <rect y="32" width="60" height="8" fill="#B22234"/>
-    <rect width="26" height="24" fill="#3C3B6E"/>
+    <rect width="60" height="40" fill="#B22234"/>
+    <rect y="3.08" width="60" height="3.08" fill="#fff"/>
+    <rect y="9.23" width="60" height="3.08" fill="#fff"/>
+    <rect y="15.38" width="60" height="3.08" fill="#fff"/>
+    <rect y="21.54" width="60" height="3.08" fill="#fff"/>
+    <rect y="27.69" width="60" height="3.08" fill="#fff"/>
+    <rect y="33.85" width="60" height="3.08" fill="#fff"/>
+    <rect width="24" height="21.5" fill="#3C3B6E"/>
+    <g fill="#fff">
+      <circle cx="4" cy="4" r="1"/><circle cx="9" cy="4" r="1"/><circle cx="14" cy="4" r="1"/><circle cx="19" cy="4" r="1"/>
+      <circle cx="6.5" cy="7.5" r="1"/><circle cx="11.5" cy="7.5" r="1"/><circle cx="16.5" cy="7.5" r="1"/>
+      <circle cx="4" cy="11" r="1"/><circle cx="9" cy="11" r="1"/><circle cx="14" cy="11" r="1"/><circle cx="19" cy="11" r="1"/>
+      <circle cx="6.5" cy="14.5" r="1"/><circle cx="11.5" cy="14.5" r="1"/><circle cx="16.5" cy="14.5" r="1"/>
+      <circle cx="4" cy="18" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="14" cy="18" r="1"/><circle cx="19" cy="18" r="1"/>
+    </g>
   </symbol>
   <symbol id="i-flag-co" viewBox="0 0 60 40">
     <rect y="0" width="60" height="20" fill="#FCD116"/>
@@ -370,10 +381,10 @@
             </circle>
           </svg>
           <div class="route-pin origin">
-            <div class="ico"><svg width="26" height="18" viewBox="0 0 60 40" style="border-radius:3px;"><use href="#i-flag-us"/></svg></div>Estados Unidos<small>Compra</small>
+            <div class="ico"><svg viewBox="0 0 60 40"><use href="#i-flag-us"/></svg></div>Estados Unidos<small>Compra</small>
           </div>
           <div class="route-pin dest">
-            <div class="ico"><svg width="26" height="18" viewBox="0 0 60 40" style="border-radius:3px;"><use href="#i-flag-co"/></svg></div>Colombia<small>Entrega</small>
+            <div class="ico"><svg viewBox="0 0 60 40"><use href="#i-flag-co"/></svg></div>Colombia<small>Entrega</small>
           </div>
         </div>
         <div class="kpi-row">
