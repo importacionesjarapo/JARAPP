@@ -11,17 +11,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#0A0E1A; --ink-2:#131A2C; --ink-3:#1C2540;
+    /* Paleta oficial de marca EncargosPro */
+    --navy:#01063B; --magenta:#EA168F; --violeta:#912EE5; --azul-elec:#524FEE; --coral:#FD9779;
+
+    --ink:#01063B; --ink-2:#131A2C; --ink-3:#1C2540;
     --paper:#FBF9F5; --surface:#FFFFFF; --surface-tint:#FDF3EC;
     --line:#ECE7DD; --line-dark:rgba(255,255,255,.10);
-    --text:#181B22; --text-soft:#5B6172; --fog:#9AA3B8; --fog-soft:#6B7386;
-    --brand:#DB3A6B; --brand-dark:#A61E4D; --brand-2:#FFB648; --cool:#2FD9C7; --cool-dark:#12A594;
+    --text:#01063B; --text-soft:#5B6172; --fog:#9AA3B8; --fog-soft:#6B7386;
+    --brand:#EA168F; --brand-dark:#910E59; --brand-2:#FD9779; --cool:#524FEE; --cool-dark:#3836A2;
     --success:#22C55E; --warn:#F59E0B;
-    --grad-brand:linear-gradient(135deg,#8B5CF6 0%,#EC4899 100%);
-    --grad-cool:linear-gradient(135deg,var(--cool) 0%,#3B82F6 100%);
-    --shadow-sm:0 2px 10px -4px rgba(10,14,26,.08);
-    --shadow-md:0 16px 40px -12px rgba(10,14,26,.16);
-    --shadow-glow:0 0 0 1px rgba(219,58,107,.15), 0 20px 45px -18px rgba(219,58,107,.35);
+    --grad-brand:linear-gradient(135deg,var(--coral) 0%,var(--magenta) 38%,var(--violeta) 68%,var(--azul-elec) 100%);
+    --grad-cool:linear-gradient(135deg,var(--cool) 0%,var(--violeta) 100%);
+    --shadow-sm:0 2px 10px -4px rgba(1,6,59,.08);
+    --shadow-md:0 16px 40px -12px rgba(1,6,59,.16);
+    --shadow-glow:0 0 0 1px rgba(234,22,143,.15), 0 20px 45px -18px rgba(234,22,143,.35);
     --radius:20px;
     --font-display:'Sora',system-ui,sans-serif;
     --font-body:'Manrope',-apple-system,BlinkMacSystemFont,sans-serif;
@@ -71,7 +74,7 @@
 
   /* ---- header ---- */
   header{position:fixed; top:0; left:0; right:0; z-index:50; padding-block:8px; transition:padding .3s, background .3s, box-shadow .3s; background:rgba(255,252,253,.6); backdrop-filter:blur(10px);}
-  header.scrolled{padding-block:5px; background:rgba(255,255,255,.92); box-shadow:0 8px 28px -18px rgba(166,30,77,.28);}
+  header.scrolled{padding-block:5px; background:rgba(255,255,255,.92); box-shadow:0 8px 28px -18px rgba(145,14,89,.28);}
   header .wrap{display:flex; align-items:center; justify-content:space-between; gap:20px;}
   .logo{display:flex; align-items:center; gap:9px; font-family:var(--font-display); font-weight:800; font-size:1.15rem; color:var(--text);}
   .logo-img{height:78px; width:auto; display:block;}
@@ -89,8 +92,8 @@
   section.tight{padding-block:72px;}
   .eyebrow{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:.72rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:7px 16px 7px 10px; border-radius:999px;}
   .eyebrow .pip{width:6px;height:6px;border-radius:50%;background:currentColor;}
-  .eyebrow.on-dark{color:#FFD3E6; background:rgba(219,58,107,.18); border:1px solid rgba(219,58,107,.32);}
-  .eyebrow.on-light{color:var(--brand-dark); background:#FCE7EF; border:1px solid #F6D0DE;}
+  .eyebrow.on-dark{color:#FBD5EB; background:rgba(234,22,143,.18); border:1px solid rgba(234,22,143,.32);}
+  .eyebrow.on-light{color:var(--brand-dark); background:#FDE8F4; border:1px solid #FACCE6;}
 
   h2.h-title{font-size:clamp(1.9rem,3.6vw,2.7rem); font-weight:800; margin-bottom:14px;}
   p.h-sub{color:var(--text-soft); font-size:1.05rem; max-width:600px; margin:0 auto;}
@@ -98,7 +101,7 @@
 
   /* ================= HERO ================= */
   .hero{
-    background:linear-gradient(180deg,#FFF6FA 0%,#FDEDF3 45%,var(--paper) 100%);
+    background:linear-gradient(180deg,#FDEAF5 0%,#F4EAFC 45%,var(--paper) 100%);
     color:var(--text); padding-top:170px; padding-bottom:120px;
     position:relative; overflow:hidden; isolation:isolate;
   }
@@ -106,7 +109,7 @@
   .hero-blob.b1{width:520px;height:520px; background:radial-gradient(circle,var(--brand) 0%,transparent 70%); top:-180px; left:-140px;}
   .hero-blob.b2{width:460px;height:460px; background:radial-gradient(circle,var(--cool) 0%,transparent 70%); bottom:-220px; right:-120px; animation-delay:-9s;}
   .hero-grid{position:absolute; inset:0; z-index:-1;
-    background-image:linear-gradient(rgba(166,30,77,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(166,30,77,.05) 1px,transparent 1px);
+    background-image:linear-gradient(rgba(145,14,89,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(145,14,89,.05) 1px,transparent 1px);
     background-size:64px 64px; mask-image:radial-gradient(ellipse 70% 60% at 50% 20%, black 40%, transparent 100%);}
   @keyframes drift{0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(40px,-30px) scale(1.08);}}
 
@@ -124,17 +127,17 @@
   /* route visual */
   .route-card{
     background:linear-gradient(180deg,var(--ink-2),var(--ink-3)); border:1px solid var(--line-dark); border-radius:24px;
-    padding:28px 24px 24px; box-shadow:0 30px 70px -25px rgba(166,30,77,.35), 0 14px 34px -16px rgba(10,14,26,.22);
+    padding:28px 24px 24px; box-shadow:0 30px 70px -25px rgba(234,22,143,.32), 0 14px 34px -16px rgba(1,6,59,.22);
   }
   .route-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:22px;}
   .route-head .lbl{font-family:var(--font-mono); font-size:.68rem; letter-spacing:.08em; color:var(--fog); text-transform:uppercase;}
-  .route-head .code{font-family:var(--font-mono); font-size:.72rem; color:var(--cool); background:rgba(47,217,199,.12); padding:4px 10px; border-radius:8px;}
+  .route-head .code{font-family:var(--font-mono); font-size:.72rem; color:var(--cool); background:rgba(82,79,238,.15); padding:4px 10px; border-radius:8px;}
   .route-svg-wrap{position:relative; height:150px;}
   .route-pin{position:absolute; top:50%; transform:translateY(-50%); text-align:center; font-size:.72rem; color:#fff; font-weight:700;}
   .route-pin .ico{width:42px;height:28px;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin:0 auto 6px; box-shadow:0 3px 10px -2px rgba(0,0,0,.4);}
   .route-pin .ico svg{width:100%;height:100%;display:block;}
-  .route-pin.origin{left:0;} .route-pin.origin .ico{border:1px solid rgba(47,217,199,.55);}
-  .route-pin.dest{right:0;} .route-pin.dest .ico{border:1px solid rgba(219,58,107,.55);}
+  .route-pin.origin{left:0;} .route-pin.origin .ico{border:1px solid rgba(82,79,238,.55);}
+  .route-pin.dest{right:0;} .route-pin.dest .ico{border:1px solid rgba(234,22,143,.55);}
   .route-pin small{display:block; color:var(--fog); font-weight:500; font-size:.65rem; margin-top:2px;}
   .kpi-row{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:22px;}
   .kpi-chip{background:rgba(255,255,255,.04); border:1px solid var(--line-dark); border-radius:14px; padding:12px 10px; text-align:center;}
@@ -154,7 +157,7 @@
   .foryou-card:hover{transform:translateY(-6px); box-shadow:var(--shadow-md); border-color:transparent;}
   .foryou-card .ico-wrap{width:52px;height:52px;border-radius:14px; display:flex; align-items:center; justify-content:center; margin-bottom:18px; background:var(--grad-brand);}
   .foryou-card:nth-child(2) .ico-wrap{background:var(--grad-cool);}
-  .foryou-card:nth-child(3) .ico-wrap{background:linear-gradient(135deg,#8B5CF6,#EC4899);}
+  .foryou-card:nth-child(3) .ico-wrap{background:linear-gradient(135deg,var(--violeta),var(--magenta));}
   .foryou-card .ico-wrap svg{width:26px;height:26px;color:#fff;}
   .foryou-card h3{font-size:1.05rem; margin-bottom:8px;}
   .foryou-card p{color:var(--text-soft); font-size:.9rem; margin:0;}
@@ -187,7 +190,7 @@
   .sp-row .dotc{width:8px;height:8px;border-radius:50%; flex-shrink:0;}
   .sp-row .grow{flex:1; color:var(--text-soft); font-weight:600;}
   .sp-row .val{font-family:var(--font-mono); font-weight:700; color:var(--text);}
-  .sp-badge{position:absolute; top:-14px; right:22px; background:var(--grad-cool); color:#fff; font-size:.68rem; font-weight:800; padding:7px 14px; border-radius:999px; box-shadow:0 8px 20px -8px rgba(47,217,199,.6);}
+  .sp-badge{position:absolute; top:-14px; right:22px; background:var(--grad-cool); color:#fff; font-size:.68rem; font-weight:800; padding:7px 14px; border-radius:999px; box-shadow:0 8px 20px -8px rgba(82,79,238,.6);}
 
   /* ================= HOW IT WORKS ================= */
   .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:0; position:relative;}
@@ -249,7 +252,7 @@
 
   /* ================= AUTH MODAL (Empieza gratis) ================= */
   .auth-overlay{
-    display:none; position:fixed; inset:0; z-index:100; background:rgba(10,14,26,.68); backdrop-filter:blur(4px);
+    display:none; position:fixed; inset:0; z-index:100; background:rgba(1,6,59,.68); backdrop-filter:blur(4px);
     align-items:center; justify-content:center; padding:20px; overflow-y:auto;
   }
   .auth-overlay.open{display:flex;}
@@ -285,7 +288,7 @@
   .auth-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
   .auth-foot{text-align:center; margin-top:18px; font-size:.85rem; color:var(--text-soft);}
   .auth-foot a,.auth-foot button.link{color:var(--brand-dark); font-weight:700; text-decoration:none; background:none; border:none; font-size:inherit; cursor:pointer; padding:0; font-family:inherit;}
-  .auth-error{background:#FCE7EF; color:var(--brand-dark); border:1px solid #F6D0DE; border-radius:12px; padding:11px 14px; font-size:.84rem; margin-bottom:16px;}
+  .auth-error{background:#FDE8F4; color:var(--brand-dark); border:1px solid #FACCE6; border-radius:12px; padding:11px 14px; font-size:.84rem; margin-bottom:16px;}
   .auth-icon-circle{width:60px;height:60px;border-radius:50%; background:var(--surface-tint); display:flex; align-items:center; justify-content:center; margin:0 auto 18px;}
   .auth-icon-circle svg{width:26px;height:26px; color:var(--brand);}
   .auth-screen{display:none;}
@@ -384,7 +387,7 @@
         <div class="route-svg-wrap">
           <svg viewBox="0 0 320 150" width="100%" height="150" style="overflow:visible;">
             <path id="routePath" d="M40,110 C110,10 210,10 280,40" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="2" stroke-dasharray="2 8" stroke-linecap="round"/>
-            <circle r="6" fill="#2FD9C7">
+            <circle r="6" fill="#524FEE">
               <animateMotion dur="3.4s" repeatCount="indefinite" rotate="auto">
                 <mpath href="#routePath"/>
               </animateMotion>
