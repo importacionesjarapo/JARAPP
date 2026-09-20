@@ -254,7 +254,7 @@
   /* ================= AUTH MODAL (Empieza gratis) ================= */
   .auth-overlay{
     display:none; position:fixed; inset:0; z-index:100; background:rgba(1,6,59,.68); backdrop-filter:blur(4px);
-    align-items:center; justify-content:center; padding:20px; overflow-y:auto;
+    align-items:safe center; justify-content:center; padding:20px; overflow-y:auto;
   }
   .auth-overlay.open{display:flex;}
   .auth-modal{
@@ -262,38 +262,38 @@
     box-shadow:0 40px 80px -20px rgba(0,0,0,.4); animation:authIn .35s cubic-bezier(.16,.8,.3,1);
   }
   @keyframes authIn{from{opacity:0; transform:translateY(18px) scale(.97);} to{opacity:1; transform:translateY(0) scale(1);}}
-  .auth-head{background:var(--grad-brand); color:#fff; padding:30px 30px 26px; text-align:center; position:relative;}
+  .auth-head{background:var(--grad-brand); color:#fff; padding:22px 30px 18px; text-align:center; position:relative;}
   .auth-head.plain{background:#fff; border-bottom:1px solid var(--line);}
   .auth-head.plain h3{color:var(--text);}
   .auth-head.plain p{color:var(--text-soft);}
   .auth-head.plain .auth-close{background:var(--surface-tint); color:var(--text-soft);}
   .auth-head .logo-mark{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.18); display:flex;align-items:center;justify-content:center;margin:0 auto 14px; font-family:var(--font-display); font-weight:800; font-size:1.5rem; overflow:hidden;}
   .auth-head .logo-mark img{width:78%;height:78%;object-fit:contain;}
-  .auth-head .logo-full{height:150px; width:auto; margin:0 auto 10px; display:block;}
+  .auth-head .logo-full{height:110px; width:auto; margin:0 auto 8px; display:block;}
   .auth-head h3{color:#fff; font-size:1.3rem; margin-bottom:6px;}
   .auth-head p{margin:0; font-size:.85rem; color:rgba(255,255,255,.85);}
   .auth-close{position:absolute; top:14px; right:14px; width:30px;height:30px; border-radius:50%; background:rgba(255,255,255,.18); border:none; color:#fff; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
-  .auth-body{padding:28px 30px 30px;}
-  .auth-google{width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:13px; border-radius:999px; border:1px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:700; font-size:.92rem; cursor:pointer; transition:background .2s, border-color .2s;}
+  .auth-body{padding:20px 30px 24px;}
+  .auth-google{width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:12px; border-radius:999px; border:1px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:700; font-size:.92rem; cursor:pointer; transition:background .2s, border-color .2s;}
   .auth-google:hover{background:var(--surface-tint); border-color:var(--fog);}
-  .auth-divider{display:flex; align-items:center; gap:12px; margin:18px 0; color:var(--fog-soft); font-size:.78rem; font-weight:700;}
+  .auth-divider{display:flex; align-items:center; gap:12px; margin:14px 0; color:var(--fog-soft); font-size:.78rem; font-weight:700;}
   .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line);}
-  .auth-field{margin-bottom:16px;}
+  .auth-field{margin-bottom:12px;}
   .auth-field label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--fog-soft); margin-bottom:8px;}
   .auth-field-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px;}
   .auth-field-head label{margin-bottom:0;}
   .auth-hint{font-size:.74rem; font-weight:600; color:var(--fog-soft); text-transform:none; letter-spacing:0; white-space:nowrap;}
-  .auth-field input{width:100%; padding:15px 22px; border-radius:999px; border:1.5px solid transparent; background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
+  .auth-field input{width:100%; padding:12px 22px; border-radius:999px; border:1.5px solid transparent; background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
   .auth-field input:focus{border-color:var(--brand);}
   .auth-logo-picker{display:flex; align-items:center; justify-content:center; gap:10px; padding:15px 22px; border:1.5px dashed var(--line); border-radius:999px; background:var(--surface-tint); cursor:pointer; transition:border-color .2s, background .2s;}
   .auth-logo-picker:hover{border-color:var(--brand); background:#fff;}
   .auth-logo-preview{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--fog-soft);flex-shrink:0;overflow:hidden;}
   .auth-logo-preview img{width:100%;height:100%;object-fit:contain;}
   .auth-logo-txt{font-size:.9rem;color:var(--text-soft);font-weight:700;}
-  .auth-submit{width:100%; padding:14px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
+  .auth-submit{width:100%; padding:13px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
   .auth-submit:hover{transform:translateY(-1px);}
   .auth-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
-  .auth-foot{text-align:center; margin-top:18px; font-size:.85rem; color:var(--text-soft);}
+  .auth-foot{text-align:center; margin-top:14px; font-size:.85rem; color:var(--text-soft);}
   .auth-foot a,.auth-foot button.link{color:var(--brand-dark); font-weight:700; text-decoration:none; background:none; border:none; font-size:inherit; cursor:pointer; padding:0; font-family:inherit;}
   .auth-error{background:#FDE8F4; color:var(--brand-dark); border:1px solid #FACCE6; border-radius:12px; padding:11px 14px; font-size:.84rem; margin-bottom:16px;}
   .auth-icon-circle{width:60px;height:60px;border-radius:50%; background:var(--surface-tint); display:flex; align-items:center; justify-content:center; margin:0 auto 18px;}
