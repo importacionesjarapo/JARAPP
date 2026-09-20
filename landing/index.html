@@ -241,8 +241,8 @@
 
   footer{background:var(--ink-2); border-top:1px solid var(--line-dark); padding-block:40px; color:var(--fog);}
   footer .wrap{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; font-size:.82rem;}
-  footer .flogo{display:flex; align-items:center; gap:8px; font-family:var(--font-display); font-weight:800; color:#fff;}
-  .flogo-img{height:60px; width:auto; display:block;}
+  footer .flogo{display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-weight:800; font-size:1.1rem; color:#fff;}
+  .flogo-img{height:48px; width:auto; display:block;}
 
   .wa-float{position:fixed; bottom:24px; right:24px; z-index:60; width:60px;height:60px; border-radius:50%; background:#20BD5C; display:flex; align-items:center; justify-content:center; text-decoration:none; box-shadow:0 12px 28px -8px rgba(32,189,92,.6);}
   .wa-float svg{width:28px;height:28px; color:#fff;}
@@ -265,7 +265,7 @@
   .auth-head{background:var(--grad-brand); color:#fff; padding:30px 30px 26px; text-align:center; position:relative;}
   .auth-head .logo-mark{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.18); display:flex;align-items:center;justify-content:center;margin:0 auto 14px; font-family:var(--font-display); font-weight:800; font-size:1.5rem; overflow:hidden;}
   .auth-head .logo-mark img{width:78%;height:78%;object-fit:contain;}
-  .auth-head .logo-full{height:64px; width:auto; margin:0 auto 16px; display:block;}
+  .auth-head .logo-full{height:96px; width:auto; margin:0 auto 16px; display:block;}
   .auth-head h3{color:#fff; font-size:1.3rem; margin-bottom:6px;}
   .auth-head p{margin:0; font-size:.85rem; color:rgba(255,255,255,.85);}
   .auth-close{position:absolute; top:14px; right:14px; width:30px;height:30px; border-radius:50%; background:rgba(255,255,255,.18); border:none; color:#fff; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
@@ -694,7 +694,7 @@
 
 <footer>
   <div class="wrap">
-    <div class="flogo"><img src="logo-white.png" alt="EncargosPro" class="flogo-img"></div>
+    <div class="flogo"><img src="logo-icon.png" alt="" class="flogo-img"> EncargosPro</div>
     <div>Software de gestión para importadores y personal shoppers</div>
     <div>© <span id="year"></span> EncargosPro</div>
   </div>
@@ -713,7 +713,7 @@
     <div class="auth-screen active" id="auth-screen-signup">
       <div class="auth-head">
         <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
-        <img src="logo-white.png" alt="EncargosPro" class="logo-full">
+        <img src="logo-icon.png" alt="EncargosPro" class="logo-full">
         <h3>Crea tu cuenta</h3>
         <p>Empieza tu prueba gratis hoy</p>
       </div>
@@ -747,7 +747,7 @@
     <div class="auth-screen" id="auth-screen-confirm">
       <div class="auth-head">
         <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
-        <img src="logo-white.png" alt="EncargosPro" class="logo-full">
+        <img src="logo-icon.png" alt="EncargosPro" class="logo-full">
         <h3>Ya casi</h3>
         <p>Solo falta confirmar tu correo</p>
       </div>
