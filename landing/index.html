@@ -183,17 +183,17 @@
   @keyframes modIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
 
   /* ---- Cotizador & Calculadora: sección destacada ---- */
-  .cotiz-feature{background:var(--grad-brand); padding-block:90px; position:relative; overflow:hidden;}
+  .cotiz-feature{background:linear-gradient(160deg,#FDEAF5 0%,#F4EAFC 55%,var(--paper) 100%); padding-block:90px; position:relative; overflow:hidden;}
   .cotiz-inner{display:grid; grid-template-columns:1.1fr .9fr; gap:60px; align-items:center;}
   @media (max-width:900px){ .cotiz-inner{grid-template-columns:1fr;} }
-  .cotiz-feature .eyebrow{background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.3);}
-  .cotiz-feature h2{color:#fff; margin:16px 0 18px;}
-  .cotiz-feature .lead{color:rgba(255,255,255,.88); font-size:1.05rem; margin:0 0 26px; max-width:480px;}
+  .cotiz-feature .eyebrow{background:#fff; color:var(--brand-dark); border:1px solid var(--line); box-shadow:var(--shadow-sm);}
+  .cotiz-feature h2{color:var(--text); margin:16px 0 18px;}
+  .cotiz-feature .lead{color:var(--text-soft); font-size:1.05rem; margin:0 0 26px; max-width:480px;}
   .cotiz-list{list-style:none; padding:0; margin:0 0 32px; display:flex; flex-direction:column; gap:14px;}
-  .cotiz-list li{display:flex; gap:10px; align-items:flex-start; color:#fff; font-size:.95rem; font-weight:600;}
-  .cotiz-plan-note{color:rgba(255,255,255,.75); font-size:.8rem; margin:14px 0 0;}
-  .cotiz-list svg{width:20px;height:20px; flex-shrink:0; margin-top:1px; color:#fff;}
-  .calc-card{background:#fff; border-radius:22px; padding:28px 26px; box-shadow:0 30px 70px -25px rgba(1,6,59,.5);}
+  .cotiz-list li{display:flex; gap:10px; align-items:flex-start; color:var(--text); font-size:.95rem; font-weight:600;}
+  .cotiz-plan-note{color:var(--fog-soft); font-size:.8rem; margin:14px 0 0;}
+  .cotiz-list svg{width:20px;height:20px; flex-shrink:0; margin-top:1px; color:var(--success);}
+  .calc-card{background:#fff; border-radius:22px; padding:28px 26px; box-shadow:var(--shadow-md);}
   .calc-head{font-family:var(--font-display); font-weight:800; font-size:1.05rem; margin-bottom:18px; color:var(--text);}
   .calc-row{display:flex; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px dashed var(--line); font-size:.92rem; color:var(--text-soft);}
   .calc-row b{color:var(--text); font-family:var(--font-mono); font-weight:700; white-space:nowrap;}
