@@ -173,6 +173,8 @@
 
   /* ---- Selector interactivo de módulos ---- */
   .mod-tabs{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:0 0 12px;}
+  .mod-note{text-align:center; font-size:.8rem; color:var(--fog-soft); margin:0 0 40px;}
+  .mod-note a{color:var(--brand-dark); font-weight:700; text-decoration:underline;}
   .mod-tab{padding:12px 24px; border-radius:999px; border:1.5px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:800; font-size:.92rem; color:var(--text-soft); cursor:pointer; transition:border-color .2s, background .2s, color .2s, box-shadow .2s; white-space:nowrap;}
   .mod-tab:hover{border-color:var(--brand);}
   .mod-tab.active{background:var(--grad-brand); color:#fff; border-color:transparent; box-shadow:var(--shadow-glow);}
@@ -189,6 +191,7 @@
   .cotiz-feature .lead{color:rgba(255,255,255,.88); font-size:1.05rem; margin:0 0 26px; max-width:480px;}
   .cotiz-list{list-style:none; padding:0; margin:0 0 32px; display:flex; flex-direction:column; gap:14px;}
   .cotiz-list li{display:flex; gap:10px; align-items:flex-start; color:#fff; font-size:.95rem; font-weight:600;}
+  .cotiz-plan-note{color:rgba(255,255,255,.75); font-size:.8rem; margin:14px 0 0;}
   .cotiz-list svg{width:20px;height:20px; flex-shrink:0; margin-top:1px; color:#fff;}
   .calc-card{background:#fff; border-radius:22px; padding:28px 26px; box-shadow:0 30px 70px -25px rgba(1,6,59,.5);}
   .calc-head{font-family:var(--font-display); font-weight:800; font-size:1.05rem; margin-bottom:18px; color:var(--text);}
@@ -491,15 +494,20 @@
 
     <div class="mod-tabs rv" role="tablist">
       <button class="mod-tab active" type="button" data-mod="dashboard">📊 Dashboard</button>
-      <button class="mod-tab" type="button" data-mod="cotizador">🧮 Cotizador</button>
+      <button class="mod-tab" type="button" data-mod="calculadora">🧮 Calculadora</button>
+      <button class="mod-tab" type="button" data-mod="cotizador">📝 Cotizador</button>
       <button class="mod-tab" type="button" data-mod="ventas">🛒 Ventas</button>
       <button class="mod-tab" type="button" data-mod="clientes">👥 Clientes</button>
       <button class="mod-tab" type="button" data-mod="inventario">📦 Inventario</button>
       <button class="mod-tab" type="button" data-mod="compras">🧳 Compras USA</button>
+      <button class="mod-tab" type="button" data-mod="viajes">✈️ Viajes USA</button>
       <button class="mod-tab" type="button" data-mod="logistica">🚚 Logística</button>
       <button class="mod-tab" type="button" data-mod="finanzas">💰 Finanzas</button>
       <button class="mod-tab" type="button" data-mod="vendedores">🧑‍💼 Vendedores</button>
+      <button class="mod-tab" type="button" data-mod="tracker">🔎 Competitor Tracker</button>
+      <button class="mod-tab" type="button" data-mod="calendario">🗓️ Calendario de Contenido</button>
     </div>
+    <p class="mod-note rv">* Los módulos disponibles dependen del plan contratado — mira el detalle en <a href="#precios">Planes</a>.</p>
 
     <div class="rv">
       <div class="mod-panel active" data-panel="dashboard">
@@ -602,16 +610,16 @@
         </div>
       </div>
 
-      <div class="mod-panel" data-panel="cotizador">
+      <div class="mod-panel" data-panel="calculadora">
         <div class="spotlight">
           <div class="sp-text">
-            <span class="tag">🧮 Cotizador & Calculadora</span>
-            <h3>Cotiza en segundos, con todos los cargos ya incluidos</h3>
-            <p class="desc">El dolor #1 de todo personal shopper: calcular a mano cuánto cobrar sumando el producto, el envío, la aduana, la comisión de la tienda y tu margen — sin equivocarte. Ingresas el precio y el sistema arma la cotización completa.</p>
+            <span class="tag">🧮 Calculadora de Precios</span>
+            <h3>Calcula el precio final en segundos, sin fórmulas en la cabeza</h3>
+            <p class="desc">Ingresa el precio del producto y la calculadora suma automáticamente envío, aduanas, comisión de la tienda y tu margen — el cálculo que hoy haces a mano (y a veces mal) en segundos.</p>
             <ul class="sp-list">
               <li><svg><use href="#i-check"/></svg> Cálculo automático: producto + envío + aduanas + comisión + margen</li>
-              <li><svg><use href="#i-check"/></svg> Cotización profesional en PDF, lista para enviar por WhatsApp</li>
-              <li><svg><use href="#i-check"/></svg> Guarda tus fórmulas — no repitas el cálculo a mano cada vez</li>
+              <li><svg><use href="#i-check"/></svg> Guarda tus fórmulas y porcentajes para no repetir el proceso</li>
+              <li><svg><use href="#i-check"/></svg> Ajusta el margen y ve el resultado al instante</li>
             </ul>
           </div>
           <div class="sp-visual">
@@ -623,6 +631,29 @@
             </div>
             <div class="sp-stat-row">
               <div class="sp-stat" style="grid-column:1/-1;"><b class="cnum" data-to="208" data-prefix="$">$0</b><span>Total a cobrar</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="cotizador">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">📝 Cotizador</span>
+            <h3>Convierte el cálculo en una cotización lista para enviar</h3>
+            <p class="desc">El Cotizador toma el resultado de tu Calculadora y arma automáticamente una cotización profesional en PDF — lista para enviar por WhatsApp, sin que el cliente vea tus números internos de costo y margen.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Usa la Calculadora por debajo — sin recalcular nada de nuevo</li>
+              <li><svg><use href="#i-check"/></svg> PDF profesional con tu marca, listo para el cliente</li>
+              <li><svg><use href="#i-check"/></svg> Historial de cotizaciones enviadas por cliente</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Cotización #045 · Beatriz E.</span><span class="val mono">✓ Enviada</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Cotización #044 · Laura M.</span><span class="val mono">✓ Enviada</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Cotización #043 · Ana P.</span><span class="val mono">Pendiente</span></div>
             </div>
           </div>
         </div>
@@ -705,6 +736,32 @@
         </div>
       </div>
 
+      <div class="mod-panel" data-panel="viajes">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">✈️ Viajes USA</span>
+            <h3>Organiza cada viaje de compras, de principio a fin</h3>
+            <p class="desc">Registra fechas, presupuesto y la lista de encargos por viaje — para que cada vuelo salga con el itinerario de compras ya armado, sin dejar nada por fuera.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Presupuesto y gastos por viaje</li>
+              <li><svg><use href="#i-check"/></svg> Lista de encargos y productos a comprar</li>
+              <li><svg><use href="#i-check"/></svg> Historial de viajes anteriores</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="3.2" data-suffix="M" data-prefix="$">$0M</b><span>Presupuesto del viaje</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="18">0</b><span>Encargos por comprar</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Viaje Estados Unidos · 12–18 nov</span><span class="val mono">Activo</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">Viaje Estados Unidos · Oct 2026</span><span class="val mono">Cerrado</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="mod-panel" data-panel="vendedores">
         <div class="spotlight">
           <div class="sp-text">
@@ -729,6 +786,52 @@
           </div>
         </div>
       </div>
+
+      <div class="mod-panel" data-panel="tracker">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🔎 Competitor Tracker</span>
+            <h3>Vigila a tu competencia en Instagram, sin hacerlo a mano</h3>
+            <p class="desc">El sistema rastrea las publicaciones de las cuentas que le indiques y usa IA para avisarte qué está funcionando — así inspiras tu próximo contenido sin pasar horas scrolleando.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Rastreo automático diario de cuentas de la competencia</li>
+              <li><svg><use href="#i-check"/></svg> Análisis con IA de qué publicaciones funcionan mejor</li>
+              <li><svg><use href="#i-check"/></svg> Sugerencias de contenido para recrear</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">@tiendaejemplo · Reel</span><span class="val mono">🔥 Alto</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">@otracompetencia · Carrusel</span><span class="val mono">Medio</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">@marcarival · Post</span><span class="val mono">Bajo</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="calendario">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🗓️ Calendario de Contenido</span>
+            <h3>Planifica tus publicaciones sin perder el hilo</h3>
+            <p class="desc">Organiza qué vas a publicar, cuándo y en qué canal — con alertas para no olvidar verificar links o códigos de descuento antes de salir en vivo.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Vista mensual con categorías y canales</li>
+              <li><svg><use href="#i-check"/></svg> Checklist de verificación por publicación</li>
+              <li><svg><use href="#i-check"/></svg> Plantilla semanal reutilizable</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Lun · Reel — Nueva colección</span><span class="val mono">Listo</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Mié · Post — Descuento envío</span><span class="val mono">Falta cupón</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">Vie · Historia — Testimonio</span><span class="val mono">Programado</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -738,15 +841,16 @@
   <div class="wrap">
     <div class="cotiz-inner rv">
       <div class="cotiz-text">
-        <span class="eyebrow">⭐ El favorito de los personal shoppers</span>
-        <h2 class="h-title">Cotiza en segundos, con todos los cargos ya incluidos</h2>
-        <p class="lead">El dolor #1 de todo personal shopper: calcular a mano cuánto cobrar sumando el precio del producto, el envío, la aduana, la comisión de la tienda y tu margen — sin equivocarte. Con el Cotizador de EncargosPro, ingresas el precio y el sistema arma la cotización completa, lista para enviar por WhatsApp.</p>
+        <span class="eyebrow">⭐ El dúo favorito de los personal shoppers</span>
+        <h2 class="h-title">Calculadora + Cotizador: cotiza en segundos, con todos los cargos ya incluidos</h2>
+        <p class="lead">El dolor #1 de todo personal shopper: calcular a mano cuánto cobrar sumando el producto, el envío, la aduana, la comisión de la tienda y tu margen — sin equivocarte. La Calculadora hace las cuentas; el Cotizador las convierte en una cotización profesional en PDF, lista para enviar por WhatsApp.</p>
         <ul class="cotiz-list">
           <li><svg><use href="#i-check"/></svg> Cálculo automático: producto + envío + aduanas + comisión + tu margen</li>
           <li><svg><use href="#i-check"/></svg> Cotización profesional en PDF, lista para el cliente</li>
           <li><svg><use href="#i-check"/></svg> Guarda tus fórmulas — no repitas el cálculo a mano cada vez</li>
         </ul>
-        <button class="btn btn-ghost-light" id="btn-empezar-gratis-cotiz" type="button">Probar el cotizador gratis →</button>
+        <a class="btn btn-ghost-light" href="#precios">Ver en qué plan está incluido →</a>
+        <p class="cotiz-plan-note">Calculadora incluida desde el plan Starter · Cotizador (con Calculadora) desde el plan Pro.</p>
       </div>
       <div class="calc-card">
         <div class="calc-head">🧮 Cotizador</div>
@@ -815,7 +919,7 @@
         <div class="plan-price">$79.000<span>/mes</span></div>
         <ul>
           <li><svg><use href="#i-check"/></svg> Hasta 2 usuarios</li>
-          <li><svg><use href="#i-check"/></svg> Ventas, Clientes, Inventario</li>
+          <li><svg><use href="#i-check"/></svg> Ventas, Clientes, Inventario y Calculadora</li>
           <li><svg><use href="#i-check"/></svg> Soporte por WhatsApp</li>
         </ul>
       </div>
@@ -825,7 +929,7 @@
         <div class="plan-price">$149.000<span>/mes</span></div>
         <ul>
           <li><svg><use href="#i-check"/></svg> Hasta 8 usuarios</li>
-          <li><svg><use href="#i-check"/></svg> Todos los módulos operativos</li>
+          <li><svg><use href="#i-check"/></svg> Todos los módulos operativos + Cotizador</li>
           <li><svg><use href="#i-check"/></svg> Finanzas y Dashboard 360°</li>
           <li><svg><use href="#i-check"/></svg> Soporte prioritario</li>
         </ul>
@@ -1252,7 +1356,6 @@
   document.getElementById('btn-empezar-gratis')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-header')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-precios')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
-  document.getElementById('btn-empezar-gratis-cotiz')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   overlay.addEventListener('click', function(e){ if (e.target === overlay) cerrar(); });
   document.getElementById('auth-link-login').addEventListener('click', function(e){
     e.preventDefault();
