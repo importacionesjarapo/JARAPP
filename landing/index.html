@@ -179,6 +179,23 @@
   .mod-panel{display:none;}
   .mod-panel.active{display:block; animation:modIn .45s cubic-bezier(.16,.8,.3,1);}
   @keyframes modIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
+
+  /* ---- Cotizador & Calculadora: sección destacada ---- */
+  .cotiz-feature{background:var(--grad-brand); padding-block:90px; position:relative; overflow:hidden;}
+  .cotiz-inner{display:grid; grid-template-columns:1.1fr .9fr; gap:60px; align-items:center;}
+  @media (max-width:900px){ .cotiz-inner{grid-template-columns:1fr;} }
+  .cotiz-feature .eyebrow{background:rgba(255,255,255,.18); color:#fff; border:1px solid rgba(255,255,255,.3);}
+  .cotiz-feature h2{color:#fff; margin:16px 0 18px;}
+  .cotiz-feature .lead{color:rgba(255,255,255,.88); font-size:1.05rem; margin:0 0 26px; max-width:480px;}
+  .cotiz-list{list-style:none; padding:0; margin:0 0 32px; display:flex; flex-direction:column; gap:14px;}
+  .cotiz-list li{display:flex; gap:10px; align-items:flex-start; color:#fff; font-size:.95rem; font-weight:600;}
+  .cotiz-list svg{width:20px;height:20px; flex-shrink:0; margin-top:1px; color:#fff;}
+  .calc-card{background:#fff; border-radius:22px; padding:28px 26px; box-shadow:0 30px 70px -25px rgba(1,6,59,.5);}
+  .calc-head{font-family:var(--font-display); font-weight:800; font-size:1.05rem; margin-bottom:18px; color:var(--text);}
+  .calc-row{display:flex; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px dashed var(--line); font-size:.92rem; color:var(--text-soft);}
+  .calc-row b{color:var(--text); font-family:var(--font-mono); font-weight:700; white-space:nowrap;}
+  .calc-total{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:16px; padding-top:16px; border-top:2px solid var(--line); font-family:var(--font-display); font-weight:800; font-size:1.3rem; color:var(--text);}
+  .calc-total b{font-family:var(--font-mono); background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; color:transparent;}
   .sp-text h3{font-size:clamp(1.4rem,2.4vw,1.9rem); margin-bottom:14px;}
   .sp-text p.desc{color:var(--text-soft); margin-bottom:22px; font-size:1rem;}
   .sp-list{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px;}
@@ -474,9 +491,14 @@
 
     <div class="mod-tabs rv" role="tablist">
       <button class="mod-tab active" type="button" data-mod="dashboard">📊 Dashboard</button>
+      <button class="mod-tab" type="button" data-mod="cotizador">🧮 Cotizador</button>
+      <button class="mod-tab" type="button" data-mod="ventas">🛒 Ventas</button>
+      <button class="mod-tab" type="button" data-mod="clientes">👥 Clientes</button>
+      <button class="mod-tab" type="button" data-mod="inventario">📦 Inventario</button>
+      <button class="mod-tab" type="button" data-mod="compras">🧳 Compras USA</button>
       <button class="mod-tab" type="button" data-mod="logistica">🚚 Logística</button>
       <button class="mod-tab" type="button" data-mod="finanzas">💰 Finanzas</button>
-      <button class="mod-tab" type="button" data-mod="ventas">🛒 Ventas</button>
+      <button class="mod-tab" type="button" data-mod="vendedores">🧑‍💼 Vendedores</button>
     </div>
 
     <div class="rv">
@@ -578,6 +600,162 @@
             <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CARTERA COBRADA — 58%</div>
           </div>
         </div>
+      </div>
+
+      <div class="mod-panel" data-panel="cotizador">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🧮 Cotizador & Calculadora</span>
+            <h3>Cotiza en segundos, con todos los cargos ya incluidos</h3>
+            <p class="desc">El dolor #1 de todo personal shopper: calcular a mano cuánto cobrar sumando el producto, el envío, la aduana, la comisión de la tienda y tu margen — sin equivocarte. Ingresas el precio y el sistema arma la cotización completa.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Cálculo automático: producto + envío + aduanas + comisión + margen</li>
+              <li><svg><use href="#i-check"/></svg> Cotización profesional en PDF, lista para enviar por WhatsApp</li>
+              <li><svg><use href="#i-check"/></svg> Guarda tus fórmulas — no repitas el cálculo a mano cada vez</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="grow">Precio del producto</span><span class="val mono">$120,00</span></div>
+              <div class="sp-row"><span class="grow">Envío + aduanas</span><span class="val mono">+$40,50</span></div>
+              <div class="sp-row"><span class="grow">Comisión + tu margen</span><span class="val mono">+$47,63</span></div>
+            </div>
+            <div class="sp-stat-row">
+              <div class="sp-stat" style="grid-column:1/-1;"><b class="cnum" data-to="208" data-prefix="$">$0</b><span>Total a cobrar</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="clientes">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">👥 Clientes</span>
+            <h3>Cada cliente, con su historial completo a la mano</h3>
+            <p class="desc">Compras, abonos y pedidos en curso en una sola ficha — para atender rápido sin tener que preguntar "¿y usted qué me había pedido?"</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Ficha única con historial de compras y pagos</li>
+              <li><svg><use href="#i-check"/></svg> Notas y preferencias por cliente</li>
+              <li><svg><use href="#i-check"/></svg> Búsqueda rápida por nombre, teléfono o pedido</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">María González · 12 compras</span><span class="val mono">$1.8M</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Carolina Ruiz · 7 compras</span><span class="val mono">$920K</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Daniela Ortega · 4 compras</span><span class="val mono">$540K</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="80"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CLIENTES RECURRENTES — 80%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="inventario">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">📦 Inventario</span>
+            <h3>Sabe qué tienes, qué se agotó y qué va llegando</h3>
+            <p class="desc">Cada producto con su stock real, costo de compra y variantes — para que nunca prometas algo que ya no tienes, y sepas cuándo reabastecer.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Alertas automáticas de stock bajo por producto</li>
+              <li><svg><use href="#i-check"/></svg> Variantes (talla, color) con su propio inventario</li>
+              <li><svg><use href="#i-check"/></svg> Historial de entradas y salidas por producto</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="142">0</b><span>Productos activos</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="8">0</b><span>Stock bajo</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Nike Air Force '07 — Talla 38</span><span class="val mono">12 und.</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Perfume CH Men 100ml</span><span class="val mono">2 und.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="compras">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🧳 Compras Internacionales</span>
+            <h3>Controla cada compra que haces en el exterior</h3>
+            <p class="desc">Registra qué compraste, en qué tienda, cuánto costó en dólares y cómo se traduce en tu costo real en pesos — la base de un costeo confiable.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Registro de compras por tienda y por viaje</li>
+              <li><svg><use href="#i-check"/></svg> Conversión automática con la TRM del día</li>
+              <li><svg><use href="#i-check"/></svg> Vinculación directa con el producto en inventario</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="3106" data-prefix="$">$0</b><span>TRM del día</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="24">0</b><span>Compras este mes</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">Nike.com — 3 pares</span><span class="val mono">-$298</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">Sephora — 5 productos</span><span class="val mono">-$142</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="vendedores">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🧑‍💼 Vendedores</span>
+            <h3>Mide el desempeño de tu equipo, con datos reales</h3>
+            <p class="desc">Cada vendedora con sus propias ventas, comisiones y metas — para reconocer el esfuerzo con números, no con percepciones.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Ventas y comisiones por vendedora, en tiempo real</li>
+              <li><svg><use href="#i-check"/></svg> Metas mensuales con seguimiento de avance</li>
+              <li><svg><use href="#i-check"/></svg> Ranking de desempeño del equipo</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Ana P. — meta mensual</span><span class="val mono">92%</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Laura M. — meta mensual</span><span class="val mono">76%</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Julián R. — meta mensual</span><span class="val mono">54%</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="74"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">DESEMPEÑO DEL EQUIPO — 74%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COTIZADOR: sección destacada ============ -->
+<section class="cotiz-feature">
+  <div class="wrap">
+    <div class="cotiz-inner rv">
+      <div class="cotiz-text">
+        <span class="eyebrow">⭐ El favorito de los personal shoppers</span>
+        <h2 class="h-title">Cotiza en segundos, con todos los cargos ya incluidos</h2>
+        <p class="lead">El dolor #1 de todo personal shopper: calcular a mano cuánto cobrar sumando el precio del producto, el envío, la aduana, la comisión de la tienda y tu margen — sin equivocarte. Con el Cotizador de EncargosPro, ingresas el precio y el sistema arma la cotización completa, lista para enviar por WhatsApp.</p>
+        <ul class="cotiz-list">
+          <li><svg><use href="#i-check"/></svg> Cálculo automático: producto + envío + aduanas + comisión + tu margen</li>
+          <li><svg><use href="#i-check"/></svg> Cotización profesional en PDF, lista para el cliente</li>
+          <li><svg><use href="#i-check"/></svg> Guarda tus fórmulas — no repitas el cálculo a mano cada vez</li>
+        </ul>
+        <button class="btn btn-ghost-light" id="btn-empezar-gratis-cotiz" type="button">Probar el cotizador gratis →</button>
+      </div>
+      <div class="calc-card">
+        <div class="calc-head">🧮 Cotizador</div>
+        <div class="calc-row"><span>Precio del producto</span><b>$120,00</b></div>
+        <div class="calc-row"><span>Envío internacional</span><b>+ $18,00</b></div>
+        <div class="calc-row"><span>Aduanas y nacionalización</span><b>+ $22,50</b></div>
+        <div class="calc-row"><span>Comisión de la tienda</span><b>+ $6,00</b></div>
+        <div class="calc-row"><span>Tu margen (25%)</span><b>+ $41,63</b></div>
+        <div class="calc-total"><span>Total a cobrar</span><b>$208,13</b></div>
       </div>
     </div>
   </div>
@@ -1074,6 +1252,7 @@
   document.getElementById('btn-empezar-gratis')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-header')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-precios')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
+  document.getElementById('btn-empezar-gratis-cotiz')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   overlay.addEventListener('click', function(e){ if (e.target === overlay) cerrar(); });
   document.getElementById('auth-link-login').addEventListener('click', function(e){
     e.preventDefault();
