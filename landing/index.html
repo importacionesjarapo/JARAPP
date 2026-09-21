@@ -170,6 +170,15 @@
   .spotlight.rev .sp-visual{order:2;} .spotlight.rev .sp-text{order:1;}
   @media (max-width:900px){ .spotlight,.spotlight.rev{grid-template-columns:1fr;} .spotlight.rev .sp-visual,.spotlight.rev .sp-text{order:initial;} }
   .sp-text .tag{display:inline-flex; align-items:center; gap:7px; font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--brand-dark); margin-bottom:14px;}
+
+  /* ---- Selector interactivo de módulos ---- */
+  .mod-tabs{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:0 0 12px;}
+  .mod-tab{padding:12px 24px; border-radius:999px; border:1.5px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:800; font-size:.92rem; color:var(--text-soft); cursor:pointer; transition:border-color .2s, background .2s, color .2s, box-shadow .2s; white-space:nowrap;}
+  .mod-tab:hover{border-color:var(--brand);}
+  .mod-tab.active{background:var(--grad-brand); color:#fff; border-color:transparent; box-shadow:var(--shadow-glow);}
+  .mod-panel{display:none;}
+  .mod-panel.active{display:block; animation:modIn .45s cubic-bezier(.16,.8,.3,1);}
+  @keyframes modIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
   .sp-text h3{font-size:clamp(1.4rem,2.4vw,1.9rem); margin-bottom:14px;}
   .sp-text p.desc{color:var(--text-soft); margin-bottom:22px; font-size:1rem;}
   .sp-list{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px;}
@@ -460,106 +469,115 @@
     <div class="section-head rv">
       <span class="eyebrow on-light">El producto</span>
       <h2 class="h-title" style="margin-top:14px;">Todo lo que necesitas,<br>en un solo sistema</h2>
-      <p class="h-sub">Los mismos módulos que usa un negocio de importación real, todos los días.</p>
+      <p class="h-sub">Los mismos módulos que usa un negocio de importación real, todos los días — elige uno y mira cómo se ve.</p>
     </div>
 
-    <div class="spotlight rv">
-      <div class="sp-text">
-        <span class="tag">📊 Dashboard 360°</span>
-        <h3>Toda tu operación, en un solo vistazo</h3>
-        <p class="desc">Ventas, margen, cartera pendiente y alertas de inventario en tiempo real — sin tener que abrir cinco hojas de Excel para saber cómo va tu negocio hoy.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> KPIs de facturación, cartera y margen en vivo</li>
-          <li><svg><use href="#i-check"/></svg> Alertas automáticas de stock bajo y saldos vencidos</li>
-          <li><svg><use href="#i-check"/></svg> Un panel por empresa — nunca mezclado con otro negocio</li>
-        </ul>
-      </div>
-      <div class="sp-visual">
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-stat-row">
-          <div class="sp-stat"><b class="cnum" data-to="18.4" data-suffix="M" data-prefix="$">$0M</b><span>Facturación</span></div>
-          <div class="sp-stat"><b class="cnum" data-to="96" data-suffix="%">0%</b><span>Entregas a tiempo</span></div>
-        </div>
-        <div class="sp-bar-track"><div class="sp-bar-fill" data-w="72"></div></div>
-        <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">META MENSUAL — 72%</div>
-      </div>
+    <div class="mod-tabs rv" role="tablist">
+      <button class="mod-tab active" type="button" data-mod="dashboard">📊 Dashboard</button>
+      <button class="mod-tab" type="button" data-mod="logistica">🚚 Logística</button>
+      <button class="mod-tab" type="button" data-mod="finanzas">💰 Finanzas</button>
+      <button class="mod-tab" type="button" data-mod="ventas">🛒 Ventas</button>
     </div>
 
-    <div class="spotlight rev rv">
-      <div class="sp-text">
-        <span class="tag">🚚 Logística internacional</span>
-        <h3>Rastrea cada pedido, fase por fase</h3>
-        <p class="desc">Desde que se compra en el exterior hasta que se entrega en la puerta del cliente — cada encargo tiene su propia línea de tiempo, visible para ti y consultable por tu cliente.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> Fases claras: comprado, en bodega, en tránsito, entregado</li>
-          <li><svg><use href="#i-check"/></svg> Portal de seguimiento para que tu cliente vea su pedido</li>
-          <li><svg><use href="#i-check"/></svg> Historial completo por guía y por cliente</li>
-        </ul>
-      </div>
-      <div class="sp-visual">
-        <span class="sp-badge">EN VIVO</span>
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-rows">
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">#ENC-7841 · Entregado</span><span class="val mono">Colombia</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--brand-2);"></span><span class="grow">#ENC-7839 · En tránsito</span><span class="val mono">Colombia</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">#ENC-7836 · En bodega</span><span class="val mono">Estados Unidos</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">#ENC-7830 · Comprado</span><span class="val mono">Estados Unidos</span></div>
+    <div class="rv">
+      <div class="mod-panel active" data-panel="dashboard">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">📊 Dashboard 360°</span>
+            <h3>Toda tu operación, en un solo vistazo</h3>
+            <p class="desc">Ventas, margen, cartera pendiente y alertas de inventario en tiempo real — sin tener que abrir cinco hojas de Excel para saber cómo va tu negocio hoy.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> KPIs de facturación, cartera y margen en vivo</li>
+              <li><svg><use href="#i-check"/></svg> Alertas automáticas de stock bajo y saldos vencidos</li>
+              <li><svg><use href="#i-check"/></svg> Un panel por empresa — nunca mezclado con otro negocio</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="18.4" data-suffix="M" data-prefix="$">$0M</b><span>Facturación</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="96" data-suffix="%">0%</b><span>Entregas a tiempo</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="72"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">META MENSUAL — 72%</div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-</section>
 
-<section class="spotlight-section tinted">
-  <div class="wrap">
-    <div class="spotlight rv">
-      <div class="sp-text">
-        <span class="tag">💰 Finanzas & Compras</span>
-        <h3>Sabe cuánto ganas de verdad, en cada venta</h3>
-        <p class="desc">TRM del día, costos reales de compra en el exterior y gastos operativos — todo cruzado automáticamente para mostrarte la rentabilidad real, no la que crees que tienes.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> TRM actualizada automáticamente cada día</li>
-          <li><svg><use href="#i-check"/></svg> Costeo real por compra: producto + envío + comisiones</li>
-          <li><svg><use href="#i-check"/></svg> Reporte de gastos operativos y balance de caja</li>
-        </ul>
-      </div>
-      <div class="sp-visual">
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-stat-row">
-          <div class="sp-stat"><b class="cnum" data-to="3106" data-prefix="$">$0</b><span>TRM hoy</span></div>
-          <div class="sp-stat"><b class="cnum" data-to="34" data-suffix="%">0%</b><span>Margen prom.</span></div>
+      <div class="mod-panel" data-panel="logistica">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🚚 Logística internacional</span>
+            <h3>Rastrea cada pedido, fase por fase</h3>
+            <p class="desc">Desde que se compra en el exterior hasta que se entrega en la puerta del cliente — cada encargo tiene su propia línea de tiempo, visible para ti y consultable por tu cliente.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Fases claras: comprado, en bodega, en tránsito, entregado</li>
+              <li><svg><use href="#i-check"/></svg> Portal de seguimiento para que tu cliente vea su pedido</li>
+              <li><svg><use href="#i-check"/></svg> Historial completo por guía y por cliente</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <span class="sp-badge">EN VIVO</span>
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">#ENC-7841 · Entregado</span><span class="val mono">Colombia</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand-2);"></span><span class="grow">#ENC-7839 · En tránsito</span><span class="val mono">Colombia</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">#ENC-7836 · En bodega</span><span class="val mono">Estados Unidos</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">#ENC-7830 · Comprado</span><span class="val mono">Estados Unidos</span></div>
+            </div>
+          </div>
         </div>
-        <div class="sp-rows">
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Compra USA — Nike Air Force</span><span class="val mono">-$224K</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Gasto operativo — Bodega</span><span class="val mono">-$95K</span></div>
-        </div>
       </div>
-    </div>
-  </div>
-</section>
 
-<section class="spotlight-section">
-  <div class="wrap">
-    <div class="spotlight rev rv">
-      <div class="sp-text">
-        <span class="tag">🛒 Ventas, Clientes & Cotizador</span>
-        <h3>Cotiza, vende y cobra sin salir del sistema</h3>
-        <p class="desc">Registra ventas y abonos, guarda el historial completo de cada cliente y genera cotizaciones profesionales en segundos con tus márgenes ya calculados.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> Ficha de cliente con historial de compras y abonos</li>
-          <li><svg><use href="#i-check"/></svg> Cotizador con PDF listo para enviar por WhatsApp</li>
-          <li><svg><use href="#i-check"/></svg> Comprobantes de pago archivados por venta</li>
-        </ul>
-      </div>
-      <div class="sp-visual">
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-rows">
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Beatriz E. — Nike Air Force '07</span><span class="val mono">$240K</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Omaira I. — Tommy Hilfiger</span><span class="val mono">Saldo</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Héctor R. — Disney Adult</span><span class="val mono">$415K</span></div>
+      <div class="mod-panel" data-panel="finanzas">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">💰 Finanzas & Compras</span>
+            <h3>Sabe cuánto ganas de verdad, en cada venta</h3>
+            <p class="desc">TRM del día, costos reales de compra en el exterior y gastos operativos — todo cruzado automáticamente para mostrarte la rentabilidad real, no la que crees que tienes.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> TRM actualizada automáticamente cada día</li>
+              <li><svg><use href="#i-check"/></svg> Costeo real por compra: producto + envío + comisiones</li>
+              <li><svg><use href="#i-check"/></svg> Reporte de gastos operativos y balance de caja</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="3106" data-prefix="$">$0</b><span>TRM hoy</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="34" data-suffix="%">0%</b><span>Margen prom.</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Compra USA — Nike Air Force</span><span class="val mono">-$224K</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Gasto operativo — Bodega</span><span class="val mono">-$95K</span></div>
+            </div>
+          </div>
         </div>
-        <div class="sp-bar-track"><div class="sp-bar-fill" data-w="58" style="background:var(--grad-cool);"></div></div>
-        <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CARTERA COBRADA — 58%</div>
+      </div>
+
+      <div class="mod-panel" data-panel="ventas">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🛒 Ventas, Clientes & Cotizador</span>
+            <h3>Cotiza, vende y cobra sin salir del sistema</h3>
+            <p class="desc">Registra ventas y abonos, guarda el historial completo de cada cliente y genera cotizaciones profesionales en segundos con tus márgenes ya calculados.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Ficha de cliente con historial de compras y abonos</li>
+              <li><svg><use href="#i-check"/></svg> Cotizador con PDF listo para enviar por WhatsApp</li>
+              <li><svg><use href="#i-check"/></svg> Comprobantes de pago archivados por venta</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Beatriz E. — Nike Air Force '07</span><span class="val mono">$240K</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Omaira I. — Tommy Hilfiger</span><span class="val mono">Saldo</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Héctor R. — Disney Adult</span><span class="val mono">$415K</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="58" style="background:var(--grad-cool);"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CARTERA COBRADA — 58%</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -879,6 +897,26 @@
   document.querySelectorAll('.sp-visual, .stats-grid').forEach(function(el){
     if (io2) io2.observe(el);
     else { el.querySelectorAll('.cnum').forEach(animateCount); el.querySelectorAll('.sp-bar-fill').forEach(function(b){ b.style.width = b.dataset.w + '%'; }); }
+  });
+
+  // Selector interactivo de módulos: cambia el panel visible y dispara
+  // los contadores/barras de ESE panel la primera vez que se muestra
+  // (los de otros paneles ya están cubiertos por el IntersectionObserver
+  // de arriba mientras están visibles en pantalla).
+  var modTabs = document.querySelectorAll('.mod-tab');
+  var modPanels = document.querySelectorAll('.mod-panel');
+  modTabs.forEach(function(tab){
+    tab.addEventListener('click', function(){
+      var mod = tab.dataset.mod;
+      modTabs.forEach(function(t){ t.classList.toggle('active', t === tab); });
+      modPanels.forEach(function(p){
+        var isActive = p.dataset.panel === mod;
+        p.classList.toggle('active', isActive);
+        if (!isActive) return;
+        p.querySelectorAll('.cnum').forEach(function(n){ if(!counted.has(n)){ counted.add(n); animateCount(n);} });
+        p.querySelectorAll('.sp-bar-fill').forEach(function(b){ if(!barred.has(b)){ barred.add(b); requestAnimationFrame(function(){ b.style.width = b.dataset.w + '%'; }); } });
+      });
+    });
   });
 
   // FAQ accordion
