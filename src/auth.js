@@ -483,8 +483,15 @@ class Auth {
     if (module === 'superadmin') return this._profile.role === 'superadmin';
     // Superadmin no opera ningún módulo de negocio — solo el panel de Fase D
     if (this._profile.role === 'superadmin') return false;
-    // Admin siempre tiene acceso total
-    if (this._profile.role === 'admin') return true;
+    // OJO: a propósito NO hay un atajo "role==='admin' => true" acá. Un
+    // admin de trial también tiene role='admin', y sus permisos vienen
+    // deliberadamente acotados por PoliticaTrial (netlify/functions/
+    // admin-empresas.js, crear_empresa_trial) — un bypass por rol anularía
+    // esa restricción y le daría acceso total a cualquier cuenta de prueba.
+    // El admin de una empresa paga sigue teniendo acceso total porque su
+    // `permissions` ya se guarda igual a ROLE_TEMPLATES.admin (ver
+    // ADMIN_PERMISSIONS en admin-empresas.js), así que el fallback de abajo
+    // produce el mismo resultado sin necesitar el atajo.
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
     const storedPerms = this._profile.permissions;
     const hasStoredPerms = storedPerms && typeof storedPerms === 'object' && Object.keys(storedPerms).length > 0;
@@ -497,8 +504,8 @@ class Auth {
     if (!this._profile || !this._profile.is_active) return false;
     if (module === 'superadmin') return this._profile.role === 'superadmin';
     if (this._profile.role === 'superadmin') return false;
-    // Admin siempre puede editar
-    if (this._profile.role === 'admin') return true;
+    // Ver el comentario equivalente en canAccess() — mismo motivo para no
+    // tener un atajo "role==='admin' => true" acá.
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
     const storedPerms = this._profile.permissions;
     const hasStoredPerms = storedPerms && typeof storedPerms === 'object' && Object.keys(storedPerms).length > 0;

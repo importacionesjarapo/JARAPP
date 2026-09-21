@@ -233,7 +233,7 @@ export const renderLayout = (contentHTML) => {
           <span>Cerrar Sesión</span>
         </button>
       </div>
-      <div class="sidebar-foot">Bogotá · ${new Date().getFullYear()}</div>
+      <div class="sidebar-foot">EncargosPro · ${new Date().getFullYear()}</div>
     </div>
 
     <!-- Overlay para cerrar sidebar en mobile -->

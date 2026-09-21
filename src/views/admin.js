@@ -497,7 +497,7 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
           <div class="admin-form-section">
             <h4 class="admin-section-title" style="margin-bottom:1rem; font-size:0.85rem; text-transform:uppercase; color:var(--brand-magenta); letter-spacing:1px;">2. Rol del usuario</h4>
             <div class="admin-role-selector" id="admin-role-selector" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
-              ${Object.entries(ROLE_LABELS).map(([key, label]) => `
+              ${Object.entries(ROLE_LABELS).filter(([key]) => key !== 'superadmin').map(([key, label]) => `
                 <button 
                   type="button"
                   class="admin-role-btn ${currentRole === key ? 'selected' : ''}"
@@ -591,7 +591,7 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
   });
 }
 
-function buildPermsGrid(perms) {
+function buildPermsGrid(perms = {}) {
   const modules = ['dashboard','clients','inventory','sales','vendedores','purchases','logistics','finance','calculadora','params','documentacion','admin','feat_money','feat_usa','feat_calc_desglose','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno','calendario_ver','calendario_crear','calendario_editar','calendario_eliminar','calendario_plantilla_editar','calendario_fechas_editar'];
 
   return modules.map(mod => {

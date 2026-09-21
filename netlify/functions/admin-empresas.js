@@ -349,9 +349,16 @@ export const handler = async (event) => {
       .select().single()
     if (errEmpresa) return res(400, { error: errEmpresa.message })
 
+    // admin: false a propósito — el plan de prueba es de 1 sola persona
+    // (ver PoliticaTrial/MODULOS_TRIAL_TOGGLES en superadmin.js, que ni
+    // siquiera expone un toggle para este módulo), así que no tiene sentido
+    // darle acceso al panel de Administración (crear más usuarios, ver
+    // roles) durante el trial. Antes esto quedaba forzado en `true` sin
+    // importar la política configurada, lo cual — sumado al bypass que
+    // existía en auth.js — era la causa de que un trial viera todo.
     const { error: errProfile } = await supabase.from('user_profiles').upsert({
       id: caller.id, full_name: nombreCompleto, email: caller.email,
-      role: 'admin', permissions: { ...modulos, admin: true }, is_active: true,
+      role: 'admin', permissions: { ...modulos, admin: false }, is_active: true,
       empresa_id: empresa.id,
     }, { onConflict: 'id' })
     if (errProfile) {
