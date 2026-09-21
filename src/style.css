@@ -1784,6 +1784,23 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
 }
 .nav-item-admin.active i, .nav-item-admin i { color: #7C3AED !important; }
 
+/* Módulo visible pero no incluido en el plan contratado — se ve, no se
+   oculta, para invitar a actualizar de plan (patrón "candado" en vez de
+   ocultamiento silencioso). */
+.nav-item-locked {
+  opacity: 0.5;
+  cursor: pointer;
+}
+.nav-item-locked:hover {
+  opacity: 0.75;
+}
+.nav-item-locked .nav-lock-icon {
+  margin-left: auto;
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+  stroke-width: 2;
+}
+
 /* Readonly badge in nav */
 .nav-readonly-badge {
   margin-left: auto;

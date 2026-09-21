@@ -353,7 +353,12 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
     renderAdmin(renderLayout, navigateTo);
   });
   // Botón nuevo usuario
-  document.getElementById('admin-new-user-btn')?.addEventListener('click', () => {
+  document.getElementById('admin-new-user-btn')?.addEventListener('click', async () => {
+    const plan = await auth.getPlan();
+    if (plan?.max_usuarios != null && users.length >= plan.max_usuarios) {
+      showToast(`Tu plan (${plan.nombre}) permite hasta ${plan.max_usuarios} usuario(s). Actualiza tu plan para crear más.`, 'error');
+      return;
+    }
     openUserModal(null, users, navigateTo, renderLayout);
   });
 

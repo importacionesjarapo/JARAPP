@@ -11,48 +11,42 @@ const ESTADOS = ['trial', 'activa', 'vencida', 'cancelada'];
 const ESTADO_LABELS = { trial: 'Trial', activa: 'Activa', vencida: 'Vencida', cancelada: 'Cancelada' };
 const ESTADO_COLORS = { trial: '#7C3AED', activa: '#059669', vencida: '#DC6803', cancelada: '#DC2626' };
 
-// Módulos que el superadmin puede prender/apagar para la prueba gratis
-// self-serve (landing → "Empieza gratis"). 'dashboard' no se lista porque
-// lo tiene todo el mundo siempre — es la base de cualquier rol.
-const MODULOS_TRIAL_TOGGLES = [
-  { key: 'clients', label: 'Clientes' },
-  { key: 'inventory', label: 'Inventario' },
+// Módulos que el superadmin puede prender/apagar por plan — gatean si el
+// módulo aparece BLOQUEADO (candado + upsell) o disponible en el sidebar
+// de una empresa con ese plan (auth.isModuleLockedByPlan(), en main.js).
+// Es independiente del sistema de roles/permisos por usuario (ROLE_TEMPLATES
+// en auth.js): esto dice qué trae contratado la EMPRESA, no qué puede hacer
+// un usuario puntual dentro de ella. 'dashboard' no se lista porque lo
+// tiene todo el mundo siempre en cualquier plan.
+const MODULOS_PLAN_TOGGLES = [
   { key: 'sales', label: 'Ventas' },
+  { key: 'inventory', label: 'Inventario' },
+  { key: 'clients', label: 'Clientes' },
   { key: 'purchases', label: 'Compras USA' },
+  { key: 'viaje', label: 'Viaje EEUU' },
   { key: 'logistics', label: 'Seguimientos' },
   { key: 'finance', label: 'Gastos y Finanzas' },
   { key: 'vendedores', label: 'Vendedores' },
+  { key: 'calculadora', label: 'Calculadora de Precios' },
+  { key: 'cotizador_ver', label: 'Cotizador' },
   { key: 'params', label: 'Parametrización' },
   { key: 'documentacion', label: 'Documentación' },
-  { key: 'calculadora', label: 'Calculadora de Precios' },
+  { key: 'admin', label: 'Administración' },
   { key: 'calendario_ver', label: 'Calendario de Contenido' },
-  { key: 'cotizador_ver', label: 'Cotizador' },
+  { key: 'tracker', label: 'Competitor Tracker' },
 ];
 
-/** Construye el objeto "permissions" completo (mismo shape que ROLE_TEMPLATES.admin en auth.js) a partir de los toggles simples que ve el superadmin. */
-function construirModulosDesdeSeleccion(seleccionados) {
+/** Construye el objeto "modulos" de un plan (Planes.modulos) a partir de los toggles marcados. */
+function construirModulosPlan(seleccionados) {
   const m = { dashboard: true };
-  ['clients', 'inventory', 'sales', 'purchases', 'logistics', 'finance', 'vendedores', 'params', 'documentacion', 'calculadora']
-    .forEach(k => { m[k] = seleccionados.has(k) ? 'edit' : false; });
-  m.feat_money = seleccionados.has('finance');
-  m.feat_usa = seleccionados.has('purchases');
-  m.feat_calc_desglose = seleccionados.has('calculadora');
-  const calOn = seleccionados.has('calendario_ver');
-  Object.assign(m, {
-    calendario_ver: calOn, calendario_crear: calOn, calendario_editar: calOn,
-    calendario_eliminar: calOn, calendario_plantilla_editar: calOn, calendario_fechas_editar: calOn,
-  });
-  const cotOn = seleccionados.has('cotizador_ver');
-  Object.assign(m, {
-    cotizador_ver: cotOn, cotizador_desglose: cotOn, cotizador_pdf_cliente: cotOn, cotizador_pdf_interno: cotOn,
-  });
+  MODULOS_PLAN_TOGGLES.forEach(({ key }) => { m[key] = seleccionados.has(key); });
   return m;
 }
 
-/** Inverso: qué toggles deberían venir marcados según un objeto "permissions" ya guardado. */
+/** Inverso: qué toggles deberían venir marcados según un objeto "modulos" ya guardado. */
 function seleccionDesdeModulos(modulos) {
   const sel = new Set();
-  MODULOS_TRIAL_TOGGLES.forEach(({ key }) => { if (modulos?.[key]) sel.add(key); });
+  MODULOS_PLAN_TOGGLES.forEach(({ key }) => { if (modulos?.[key]) sel.add(key); });
   return sel;
 }
 
@@ -73,19 +67,24 @@ export const renderSuperadmin = async (renderLayout) => {
   renderLayout(`<div class="admin-loading"><div class="loader"></div><p>Cargando empresas...</p></div>`);
 
   let empresas = [];
+  let planes = [];
   let loadError = null;
   try {
-    const data = await callAdminEmpresas({ accion: 'listar_empresas' });
-    empresas = data.empresas || [];
+    const [dataEmpresas, dataPlanes] = await Promise.all([
+      callAdminEmpresas({ accion: 'listar_empresas' }),
+      callAdminEmpresas({ accion: 'listar_planes' }),
+    ]);
+    empresas = dataEmpresas.empresas || [];
+    planes = dataPlanes.planes || [];
   } catch (err) {
     loadError = err.message;
   }
 
-  renderLayout(buildHTML(empresas, loadError));
-  bindEvents(renderLayout);
+  renderLayout(buildHTML(empresas, planes, loadError));
+  bindEvents(renderLayout, planes);
 };
 
-function buildHTML(empresas, error) {
+function buildHTML(empresas, planes, error) {
   return `
     <div class="module-header">
       <div>
@@ -93,13 +92,45 @@ function buildHTML(empresas, error) {
         <h2 class="module-title">Empresas</h2>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-secondary" id="sa-trial-config-btn">🎁 Configurar prueba gratis</button>
         <button class="btn-secondary" id="sa-migrar-imagenes-btn">🗂️ Migrar imágenes antiguas</button>
         <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
       </div>
     </div>
 
     ${error ? `<div class="admin-error-banner">⚠ ${error}</div>` : ''}
+
+    <div class="module-header" style="margin-top:0.5rem;">
+      <div>
+        <p class="module-tag">CATÁLOGO</p>
+        <h3 class="module-title" style="font-size:1.15rem;">Planes</h3>
+      </div>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:1.5rem;">
+      <table class="data-table" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Plan</th>
+            <th>Usuarios máx.</th>
+            <th>Días de prueba</th>
+            <th>Módulos incluidos</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${planes.map(p => `
+            <tr>
+              <td><strong>${p.nombre}</strong> <code style="opacity:0.6;">${p.id}</code></td>
+              <td>${p.max_usuarios ?? 'Sin límite'}</td>
+              <td>${p.id === 'trial' ? (p.dias_prueba ?? '—') : '—'}</td>
+              <td>${Object.entries(p.modulos || {}).filter(([k, v]) => v && k !== 'dashboard').length} de ${MODULOS_PLAN_TOGGLES.length}</td>
+              <td>
+                <button class="btn-secondary sa-btn-editar-plan" data-id="${p.id}" style="padding:4px 10px;font-size:0.8rem;">Editar</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
 
     <div style="overflow-x:auto;">
       <table class="data-table" style="width:100%;">
@@ -125,7 +156,7 @@ function buildHTML(empresas, error) {
               <td>${e.fecha_vencimiento || '—'}</td>
               <td>${e.num_usuarios}</td>
               <td style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button class="btn-secondary sa-btn-estado" data-id="${e.id}" data-nombre="${e.nombre}" data-estado="${e.estado_suscripcion}" style="padding:4px 10px;font-size:0.8rem;">Cambiar estado</button>
+                <button class="btn-secondary sa-btn-estado" data-id="${e.id}" data-nombre="${e.nombre}" data-estado="${e.estado_suscripcion}" data-plan="${e.plan}" style="padding:4px 10px;font-size:0.8rem;">Cambiar estado / plan</button>
               </td>
             </tr>
           `).join('')}
@@ -135,82 +166,87 @@ function buildHTML(empresas, error) {
   `;
 }
 
-function bindEvents(renderLayout) {
-  document.getElementById('sa-new-empresa-btn')?.addEventListener('click', () => modalCrearEmpresa(renderLayout));
+function bindEvents(renderLayout, planes) {
+  document.getElementById('sa-new-empresa-btn')?.addEventListener('click', () => modalCrearEmpresa(renderLayout, planes));
   document.getElementById('sa-migrar-imagenes-btn')?.addEventListener('click', () => modalMigrarImagenes());
-  document.getElementById('sa-trial-config-btn')?.addEventListener('click', () => modalConfigurarTrial());
+  document.querySelectorAll('.sa-btn-editar-plan').forEach(btn => {
+    const plan = planes.find(p => p.id === btn.dataset.id);
+    btn.addEventListener('click', () => modalEditarPlan(plan, renderLayout));
+  });
   document.querySelectorAll('.sa-btn-estado').forEach(btn => {
-    btn.addEventListener('click', () => modalCambiarEstado(btn.dataset.id, btn.dataset.nombre, btn.dataset.estado, renderLayout));
+    btn.addEventListener('click', () => modalCambiarEstado(btn.dataset.id, btn.dataset.nombre, btn.dataset.estado, btn.dataset.plan, planes, renderLayout));
   });
 }
 
-async function modalConfigurarTrial() {
+function modalEditarPlan(plan, renderLayout) {
   const container = document.getElementById('modal-container');
   const content = document.getElementById('modal-content');
+  const sel = seleccionDesdeModulos(plan.modulos);
+  const esTrial = plan.id === 'trial';
+
   content.innerHTML = `
     <div class="modal-content">
       <div class="modal-header">
-        <h2 class="modal-title">🎁 Prueba gratis (self-serve)</h2>
+        <h2 class="modal-title">📋 Plan ${plan.nombre}</h2>
         <button onclick="window.closeModal()" class="modal-close">&times;</button>
       </div>
-      <div class="modal-body" id="sa-trial-body">
-        <div class="admin-loading"><div class="loader"></div><p>Cargando configuración actual...</p></div>
+      <div class="modal-body">
+        <p style="color:var(--text-faint);font-size:0.85rem;margin-bottom:1.2rem;">
+          ${esTrial
+            ? 'Así se configura la cuenta de cualquiera que se registre solo desde el botón "Empieza gratis" de la landing — sin que tú intervengas.'
+            : 'Los módulos que desmarques aparecen en el sidebar de cualquier empresa con este plan, pero bloqueados con candado (con opción de actualizar de plan) en vez de ocultos.'}
+        </p>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.2rem;">
+          <div class="form-group" style="max-width:200px;">
+            <label class="form-label">Usuarios máximos</label>
+            <input type="number" id="sp-max-usuarios" class="form-input" min="1" placeholder="Sin límite" value="${plan.max_usuarios ?? ''}">
+          </div>
+          ${esTrial ? `
+            <div class="form-group" style="max-width:200px;">
+              <label class="form-label">Días de prueba</label>
+              <input type="number" id="sp-dias-prueba" class="form-input" min="1" value="${plan.dias_prueba ?? 7}">
+            </div>
+          ` : ''}
+        </div>
+        <label class="form-label" style="display:block;margin-bottom:0.6rem;">Módulos incluidos</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">
+          ${MODULOS_PLAN_TOGGLES.map(({ key, label }) => `
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;cursor:pointer;">
+              <input type="checkbox" class="sp-modulo" value="${key}" ${sel.has(key) ? 'checked' : ''}>
+              ${label}
+            </label>
+          `).join('')}
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
-        <button type="button" class="btn-primary" id="sa-trial-btn-save" onclick="window._saGuardarTrial()">Guardar</button>
+        <button type="button" class="btn-primary" id="sp-btn-save">Guardar</button>
       </div>
     </div>`;
   container.style.display = 'flex';
 
-  try {
-    const data = await callAdminEmpresas({ accion: 'obtener_politica_trial' });
-    const politica = data.politica || { dias_prueba: 7, modulos_habilitados: { dashboard: true } };
-    const sel = seleccionDesdeModulos(politica.modulos_habilitados);
+  document.getElementById('sp-btn-save').addEventListener('click', async () => {
+    const btn = document.getElementById('sp-btn-save');
+    const maxUsuariosRaw = document.getElementById('sp-max-usuarios').value;
+    const max_usuarios = maxUsuariosRaw === '' ? null : parseInt(maxUsuariosRaw, 10);
+    const dias_prueba = esTrial ? parseInt(document.getElementById('sp-dias-prueba').value, 10) : undefined;
+    if (esTrial && (!dias_prueba || dias_prueba < 1)) return showToast('Ingresa un número de días de prueba válido.', 'error');
 
-    document.getElementById('sa-trial-body').innerHTML = `
-      <p style="color:var(--text-faint);font-size:0.85rem;margin-bottom:1.2rem;">
-        Así se configura la cuenta de cualquiera que se registre solo desde el botón "Empieza gratis" de la landing — sin que tú intervengas.
-      </p>
-      <div class="form-group" style="margin-bottom:1.2rem;">
-        <label class="form-label">Días de prueba</label>
-        <input type="number" id="sa-trial-dias" class="form-input" min="1" value="${politica.dias_prueba}" style="max-width:160px;">
-      </div>
-      <label class="form-label" style="display:block;margin-bottom:0.6rem;">Módulos habilitados</label>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">
-        ${MODULOS_TRIAL_TOGGLES.map(({ key, label }) => `
-          <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;cursor:pointer;">
-            <input type="checkbox" class="sa-trial-modulo" value="${key}" ${sel.has(key) ? 'checked' : ''}>
-            ${label}
-          </label>
-        `).join('')}
-      </div>
-    `;
-  } catch (err) {
-    document.getElementById('sa-trial-body').innerHTML = `<div class="admin-error-banner">⚠ ${err.message}</div>`;
-  }
+    const seleccionados = new Set([...document.querySelectorAll('.sp-modulo:checked')].map(el => el.value));
+    const modulos = construirModulosPlan(seleccionados);
+
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+      await callAdminEmpresas({ accion: 'guardar_plan', plan_id: plan.id, max_usuarios, dias_prueba, modulos });
+      window.closeModal();
+      showToast(`✅ Plan ${plan.nombre} actualizado`, 'success');
+      renderSuperadmin(renderLayout);
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Guardar';
+    }
+  });
 }
-
-window._saGuardarTrial = async () => {
-  const btn = document.getElementById('sa-trial-btn-save');
-  const dias = parseInt(document.getElementById('sa-trial-dias')?.value, 10);
-  if (!dias || dias < 1) return showToast('Ingresa un número de días válido.', 'error');
-
-  const seleccionados = new Set(
-    [...document.querySelectorAll('.sa-trial-modulo:checked')].map(el => el.value)
-  );
-  const modulos_habilitados = construirModulosDesdeSeleccion(seleccionados);
-
-  btn.disabled = true; btn.textContent = 'Guardando...';
-  try {
-    await callAdminEmpresas({ accion: 'guardar_politica_trial', dias_prueba: dias, modulos_habilitados });
-    window.closeModal();
-    showToast('✅ Configuración de prueba gratis guardada', 'success');
-  } catch (err) {
-    showToast(err.message, 'error');
-    btn.disabled = false; btn.textContent = 'Guardar';
-  }
-};
 
 const LOTE_MIGRACION = 8;
 
@@ -276,7 +312,7 @@ async function modalMigrarImagenes() {
   }
 }
 
-function modalCrearEmpresa(renderLayout) {
+function modalCrearEmpresa(renderLayout, planes) {
   const container = document.getElementById('modal-container');
   const content = document.getElementById('modal-content');
   content.innerHTML = `
@@ -297,7 +333,9 @@ function modalCrearEmpresa(renderLayout) {
           </div>
           <div class="form-group">
             <label class="form-label">Plan</label>
-            <input type="text" id="ce-plan" class="form-input" placeholder="basico" value="basico">
+            <select id="ce-plan" class="form-input">
+              ${planes.map(p => `<option value="${p.id}" ${p.id === 'basico' ? 'selected' : ''}>${p.nombre}</option>`).join('')}
+            </select>
           </div>
           <hr style="border-color:var(--border-base);opacity:0.5;">
           <p style="font-size:0.85rem;opacity:0.7;margin:0;">Primer usuario administrador de esta empresa:</p>
@@ -346,7 +384,7 @@ function modalCrearEmpresa(renderLayout) {
   };
 }
 
-function modalCambiarEstado(empresaId, nombre, estadoActual, renderLayout) {
+function modalCambiarEstado(empresaId, nombre, estadoActual, planActual, planes, renderLayout) {
   const container = document.getElementById('modal-container');
   const content = document.getElementById('modal-content');
   content.innerHTML = `
@@ -357,6 +395,12 @@ function modalCambiarEstado(empresaId, nombre, estadoActual, renderLayout) {
       </div>
       <div class="modal-body">
         <form id="form-estado-empresa" style="display:flex;flex-direction:column;gap:1rem;">
+          <div class="form-group">
+            <label class="form-label">Plan</label>
+            <select id="ce-plan-estado" class="form-input">
+              ${planes.map(p => `<option value="${p.id}" ${p.id === planActual ? 'selected' : ''}>${p.nombre}</option>`).join('')}
+            </select>
+          </div>
           <div class="form-group">
             <label class="form-label">Estado</label>
             <select id="ce-estado" class="form-input">
@@ -382,11 +426,13 @@ function modalCambiarEstado(empresaId, nombre, estadoActual, renderLayout) {
     btn.disabled = true; btn.innerText = 'Guardando...';
     try {
       const fecha = document.getElementById('ce-fecha-vencimiento').value;
+      const plan = document.getElementById('ce-plan-estado').value;
       await callAdminEmpresas({
         accion: 'actualizar_suscripcion',
         empresa_id: empresaId,
         estado_suscripcion: document.getElementById('ce-estado').value,
         ...(fecha ? { fecha_vencimiento: fecha } : {}),
+        ...(plan !== planActual ? { plan } : {}),
       });
       window.closeModal();
       showToast('✅ Suscripción actualizada', 'success');

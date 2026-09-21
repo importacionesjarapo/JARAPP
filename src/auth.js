@@ -115,6 +115,8 @@ class Auth {
     this._profile = null;
     this._listeners = [];
     this._empresa = null;
+    this._plan = null;
+    this._planLoaded = false;
   }
 
   _getClient() {
@@ -278,6 +280,56 @@ class Auth {
     }
   }
 
+  /**
+   * Fila de "Planes" (catálogo de suscripciones) correspondiente al plan
+   * contratado por la empresa actual. null para superadmin, para una
+   * empresa sin plan asignado, o si el id de plan no existe en el catálogo
+   * — en ese caso getPlanModules()/isModuleLockedByPlan() deben tratarlo
+   * como "sin restricción" (no bloquear nada) en vez de bloquear todo, para
+   * no dejar sin acceso a una empresa existente por un plan mal escrito.
+   * Se cachea en memoria durante la sesión — se limpia en logout().
+   */
+  async getPlan() {
+    if (this._planLoaded) return this._plan;
+    this._planLoaded = true;
+
+    const empresa = await this.getEmpresa();
+    if (!empresa || !empresa.plan) { this._plan = null; return null; }
+
+    const client = this._getClient();
+    if (!client) { this._plan = null; return null; }
+    try {
+      const { data, error } = await withTimeout(
+        client.from('Planes').select('*').eq('id', empresa.plan).maybeSingle(),
+        8000, 'Timeout al cargar el plan'
+      );
+      if (error) { console.error('[Auth] getPlan error:', error.message); this._plan = null; return null; }
+      this._plan = data;
+      return data;
+    } catch (e) {
+      console.error('[Auth] getPlan exception:', e.message);
+      this._plan = null;
+      return null;
+    }
+  }
+
+  /** Mapa de módulos incluidos en el plan actual (sync — requiere haber llamado getPlan() antes). null = sin restricción conocida. */
+  getPlanModules() {
+    return this._plan?.modulos || null;
+  }
+
+  /**
+   * true solo si hay un catálogo de plan cargado Y ese plan excluye
+   * explícitamente el módulo. Independiente de canAccess()/canEdit(): esto
+   * gatea qué módulos están disponibles para la EMPRESA según lo que
+   * contrató, no qué puede hacer un usuario puntual dentro de ella.
+   */
+  isModuleLockedByPlan(moduleKey) {
+    const modulos = this.getPlanModules();
+    if (!modulos) return false;
+    return !modulos[moduleKey];
+  }
+
   /** Login con email y password */
   async login(email, password) {
     const client = this._getClient();
@@ -365,6 +417,8 @@ class Auth {
     this._session = null;
     this._profile = null;
     this._empresa = null;
+    this._plan = null;
+    this._planLoaded = false;
   }
 
   /** Crear nuevo usuario (solo admin puede hacer esto desde el panel) */
@@ -372,6 +426,21 @@ class Auth {
     const client = this._getClient();
     if (!client) throw new Error('Supabase no configurado.');
     if (!this.isAdmin()) throw new Error('Solo el administrador puede crear usuarios.');
+
+    // Límite de usuarios del plan contratado — repetido acá (además del
+    // check en la UI de admin.js) porque este método es el que realmente
+    // escribe en la base de datos; la UI es solo la primera línea de
+    // defensa, no la única.
+    const plan = await this.getPlan();
+    if (plan?.max_usuarios != null) {
+      const { count, error: errCount } = await client
+        .from('user_profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('empresa_id', this.getEmpresaId());
+      if (!errCount && count >= plan.max_usuarios) {
+        throw new Error(`Tu plan (${plan.nombre}) permite hasta ${plan.max_usuarios} usuario(s). Actualiza tu plan para crear más.`);
+      }
+    }
 
     // 1. Validar que el correo no exista ya
     const { data: existingUser } = await client

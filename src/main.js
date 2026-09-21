@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar, Lock } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -58,8 +58,8 @@ const NAV_GROUPS = [
       { view: 'cotizador',   icon: 'file-text',         label: 'Cotizador',    module: 'cotizador_ver' },
       { view: 'purchases',   icon: 'globe',             label: 'Compras USA',  module: 'purchases'   },
       { view: 'logistics',   icon: 'truck',             label: 'Seguimientos', module: 'logistics'   },
-      { view: 'viaje',       icon: 'plane',             label: 'Viaje EEUU',   module: null, roleOnly: ['admin','gerente'] },
-      { view: 'tracker',     icon: 'trending-up',       label: 'Competitor Tracker', module: null, roleOnly: ['admin','gerente'] },
+      { view: 'viaje',       icon: 'plane',             label: 'Viaje EEUU',   module: null, planModule: 'viaje', roleOnly: ['admin','gerente'] },
+      { view: 'tracker',     icon: 'trending-up',       label: 'Competitor Tracker', module: null, planModule: 'tracker', roleOnly: ['admin','gerente'] },
     ]
   },
   {
@@ -77,7 +77,7 @@ const NAV_GROUPS = [
     items: [
       { view: 'params',        icon: 'settings-2',        label: 'Parámetros',   module: 'params'        },
       { view: 'documentacion', icon: 'book-open',         label: 'Documentación',module: 'documentacion' },
-      { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
+      { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, planModule: 'admin', adminOnly: true },
       { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, superadminOnly: true },
       { view: 'superadmin',    icon: 'shield',            label: 'Empresas',     module: 'superadmin' },
     ]
@@ -154,6 +154,13 @@ export const renderLayout = (contentHTML) => {
       if (profileLoaded && item.module && !auth.canAccess(item.module)) return '';
       const isReadOnly = profileLoaded && item.module && auth.canAccess(item.module) && !auth.canEdit(item.module);
       const isAdmin = item.view === 'admin';
+      // Bloqueo por PLAN (independiente de canAccess/permisos de rol): el
+      // módulo pasó todos los checks de arriba (el usuario SÍ podría
+      // operarlo), pero la empresa no lo tiene contratado. Se muestra
+      // visible-pero-bloqueado (candado + modal de upgrade) en vez de
+      // ocultarlo, para invitar a actualizar de plan.
+      const planKey = item.planModule || item.module;
+      const isLockedByPlan = profileLoaded && planKey && auth.isModuleLockedByPlan(planKey);
       const alertBadge = item.view === 'dashboard' && _dangerAlertCount > 0
         ? `<span id="sidebar-alert-badge-dashboard" style="background:#ef4444;color:#fff;font-size:0.52rem;font-weight:800;min-width:15px;height:15px;padding:0 3px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;line-height:1;margin-left:auto;">${_dangerAlertCount}</span>`
         : (item.view === 'dashboard' ? `<span id="sidebar-alert-badge-dashboard" style="display:none;background:#ef4444;color:#fff;font-size:0.52rem;font-weight:800;min-width:15px;height:15px;padding:0 3px;border-radius:8px;display:none;align-items:center;justify-content:center;line-height:1;margin-left:auto;">${_dangerAlertCount}</span>` : '');
@@ -162,11 +169,12 @@ export const renderLayout = (contentHTML) => {
         ? `<span class="viaje-badge" style="background:#06D6A0;color:white;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;letter-spacing:0.04em;margin-left:auto;">ACTIVO</span>`
         : '';
       return `
-        <div class="nav-item ${state.currentView === item.view ? 'active' : ''} ${isAdmin ? 'nav-item-admin' : ''}" data-view="${item.view}">
+        <div class="nav-item ${state.currentView === item.view ? 'active' : ''} ${isAdmin ? 'nav-item-admin' : ''} ${isLockedByPlan ? 'nav-item-locked' : ''}" data-view="${item.view}" ${isLockedByPlan ? `data-locked-module="${planKey}" data-locked-label="${item.label}"` : ''}>
           <i data-lucide="${item.icon}"></i>
           <span>${item.label}</span>
-          ${isReadOnly ? '<span class="nav-readonly-badge">Ver</span>' : ''}
-          ${alertBadge}${viajeBadge}
+          ${isLockedByPlan ? '<i data-lucide="lock" class="nav-lock-icon"></i>' : ''}
+          ${!isLockedByPlan && isReadOnly ? '<span class="nav-readonly-badge">Ver</span>' : ''}
+          ${!isLockedByPlan ? `${alertBadge}${viajeBadge}` : ''}
         </div>
       `;
     }).join('');
@@ -284,7 +292,13 @@ export const renderLayout = (contentHTML) => {
   `;
 
   document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.onclick = () => navigateTo(btn.getAttribute('data-view'));
+    btn.onclick = () => {
+      if (btn.dataset.lockedModule) {
+        abrirModalUpgradePlan(btn.dataset.lockedModule, btn.dataset.lockedLabel);
+        return;
+      }
+      navigateTo(btn.getAttribute('data-view'));
+    };
   });
 
   // Aplicar estado colapsado del sidebar síncronamente (antes del primer paint)
@@ -297,7 +311,7 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg (delay 0 = próximo microtask, sin flash visible)
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar, Lock }
     });
 
     // Restaurar logo desde sessionStorage (persiste entre navegaciones)
@@ -462,6 +476,24 @@ export const navigateTo = (view) => {
     return;
   }
 
+  // Guard: módulo no incluido en el plan contratado — respaldo por si se
+  // navega directo (sin pasar por el candado del sidebar en renderLayout).
+  const planKeyMap = { ...moduleMap, admin: 'admin', viaje: 'viaje', tracker: 'tracker' };
+  if (planKeyMap[view] && auth.isModuleLockedByPlan(planKeyMap[view])) {
+    renderLayout(`
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:50vh; gap:1rem; text-align:center;">
+        <div style="font-size:3rem;">🔒</div>
+        <h2 style="color:var(--text-main);">No incluido en tu plan</h2>
+        <p style="color:var(--text-faint); max-width:360px;">
+          <strong>${MODULE_LABELS[view] || view}</strong> no está disponible en tu plan actual.<br>
+          Actualiza tu suscripción para desbloquearlo.
+        </p>
+        <button class="btn-primary" onclick="window._navigateTo('dashboard')">← Ir al Dashboard</button>
+      </div>
+    `);
+    return;
+  }
+
   // Routing Map
   switch(view) {
     case 'dashboard':    renderDashboard(renderLayout, renderErrorInternal); break;
@@ -488,7 +520,7 @@ export const navigateTo = (view) => {
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar, Lock }
     });
   }, 200);
 };
@@ -639,8 +671,41 @@ async function bootApp() {
     return;
   }
 
+  // Precargar el plan contratado ANTES de construir el sidebar por primera
+  // vez — renderLayout() arma el menú de forma síncrona (auth.getPlanModules()),
+  // así que el catálogo ya tiene que estar en caché para esa primera llamada.
+  await auth.getPlan();
+
   // Ya autenticado → arrancar directamente
   startApp();
+}
+
+/** Modal de upgrade — se abre al hacer clic en un módulo del sidebar bloqueado por el plan actual (ver isModuleLockedByPlan en auth.js). */
+function abrirModalUpgradePlan(moduleKey, label) {
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  if (!container || !content) return;
+
+  const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
+  const mensaje = encodeURIComponent(`Hola, quiero actualizar mi plan de EncargosPro para desbloquear ${label}.`);
+
+  content.innerHTML = `
+    <div class="modal-content" style="max-width:420px;text-align:center;">
+      <div class="modal-header" style="justify-content:flex-end;border:none;">
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" style="padding-top:0;">
+        <div style="width:64px;height:64px;border-radius:16px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:1.8rem;">🔒</div>
+        <h2 style="margin:0 0 10px;font-size:1.25rem;">${label} no está incluido en tu plan</h2>
+        <p style="color:var(--text-faint);font-size:0.9rem;margin:0 0 20px;">
+          Actualiza tu suscripción de EncargosPro para desbloquear este módulo y seguir creciendo tu negocio.
+        </p>
+        <a class="btn-primary" style="display:inline-flex;width:100%;justify-content:center;" href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener">
+          💬 Hablar con nosotros por WhatsApp
+        </a>
+      </div>
+    </div>`;
+  container.style.display = 'flex';
 }
 
 function renderSuscripcionVencida(empresa) {

@@ -117,9 +117,19 @@ export const handler = async (event) => {
       return res(400, { error: 'nombre, slug, nombreAdmin, emailAdmin y passwordAdmin son obligatorios.' })
     }
 
+    const planId = plan || 'basico'
+    // Validar contra el catálogo real — una empresa con un plan_id que no
+    // existe en "Planes" queda sin restricción alguna en el sidebar
+    // (getPlanModules() lo trata como "sin catálogo = no bloquear nada"),
+    // así que un typo acá terminaría regalando todos los módulos.
+    const { data: planExiste, error: errPlanExiste } = await supabase
+      .from('Planes').select('id').eq('id', planId).maybeSingle()
+    if (errPlanExiste) return res(500, { error: errPlanExiste.message })
+    if (!planExiste) return res(400, { error: `El plan "${planId}" no existe en el catálogo.` })
+
     const { data: empresa, error: errEmpresa } = await supabase
       .from('Empresas')
-      .insert({ nombre, slug, plan: plan || 'basico', estado_suscripcion: 'trial' })
+      .insert({ nombre, slug, plan: planId, estado_suscripcion: 'trial' })
       .select().single()
     if (errEmpresa) return res(400, { error: errEmpresa.message })
 
@@ -145,7 +155,7 @@ export const handler = async (event) => {
 
   // ── RENOVAR / SUSPENDER SUSCRIPCIÓN ──
   if (accion === 'actualizar_suscripcion') {
-    const { empresa_id, estado_suscripcion, fecha_vencimiento } = body
+    const { empresa_id, estado_suscripcion, fecha_vencimiento, plan } = body
     const validos = ['activa', 'vencida', 'trial', 'cancelada']
     if (!empresa_id || !validos.includes(estado_suscripcion)) {
       return res(400, { error: `empresa_id requerido y estado_suscripcion debe ser uno de: ${validos.join(', ')}` })
@@ -153,6 +163,13 @@ export const handler = async (event) => {
 
     const updates = { estado_suscripcion }
     if (fecha_vencimiento !== undefined) updates.fecha_vencimiento = fecha_vencimiento
+    if (plan !== undefined) {
+      const { data: planExiste, error: errPlanExiste } = await supabase
+        .from('Planes').select('id').eq('id', plan).maybeSingle()
+      if (errPlanExiste) return res(500, { error: errPlanExiste.message })
+      if (!planExiste) return res(400, { error: `El plan "${plan}" no existe en el catálogo.` })
+      updates.plan = plan
+    }
 
     const { data, error } = await supabase.from('Empresas').update(updates).eq('id', empresa_id).select().single()
     if (error) return res(400, { error: error.message })
@@ -284,27 +301,32 @@ export const handler = async (event) => {
     return res(200, { ok: true, ...resultado })
   }
 
-  // ── PRUEBA GRATIS (self-serve) ──
+  // ── CATÁLOGO DE PLANES (Prueba/Básico/Pro/Empresarial) ──
 
-  // Config global de la prueba gratis (superadmin) — cuántos días dura y
-  // qué módulos vienen habilitados para quien se registre solo.
-  if (accion === 'obtener_politica_trial') {
-    const { data, error } = await supabase.from('PoliticaTrial').select('*').eq('id', 1).maybeSingle()
+  // Listar los 4 planes con sus módulos y límites — panel de superadmin.
+  if (accion === 'listar_planes') {
+    const { data, error } = await supabase.from('Planes').select('*').order('orden')
     if (error) return res(500, { error: error.message })
-    return res(200, { ok: true, politica: data })
+    return res(200, { ok: true, planes: data })
   }
 
-  if (accion === 'guardar_politica_trial') {
-    const { dias_prueba, modulos_habilitados } = body
-    if (!dias_prueba || dias_prueba < 1) return res(400, { error: 'dias_prueba debe ser mayor a 0.' })
-    if (!modulos_habilitados || typeof modulos_habilitados !== 'object') {
-      return res(400, { error: 'modulos_habilitados es obligatorio.' })
+  // Actualiza un plan del catálogo (módulos incluidos, límite de usuarios,
+  // días de prueba si aplica). No crea planes nuevos — los 4 vienen
+  // sembrados por la migración 021_planes_catalogo.sql.
+  if (accion === 'guardar_plan') {
+    const { plan_id, max_usuarios, dias_prueba, modulos } = body
+    if (!plan_id) return res(400, { error: 'plan_id es obligatorio.' })
+    if (!modulos || typeof modulos !== 'object') {
+      return res(400, { error: 'modulos es obligatorio.' })
     }
-    const { data, error } = await supabase.from('PoliticaTrial')
-      .update({ dias_prueba, modulos_habilitados, updated_at: new Date().toISOString() })
-      .eq('id', 1).select().single()
+    const updates = { modulos, updated_at: new Date().toISOString() }
+    if (max_usuarios !== undefined) updates.max_usuarios = max_usuarios
+    if (dias_prueba !== undefined) updates.dias_prueba = dias_prueba
+    const { data, error } = await supabase.from('Planes')
+      .update(updates).eq('id', plan_id).select().maybeSingle()
     if (error) return res(500, { error: error.message })
-    return res(200, { ok: true, politica: data })
+    if (!data) return res(404, { error: `No existe el plan "${plan_id}".` })
+    return res(200, { ok: true, plan: data })
   }
 
   // Crea la empresa + perfil admin del usuario que se acaba de registrar
@@ -324,11 +346,10 @@ export const handler = async (event) => {
       return res(400, { error: 'Esta cuenta ya tiene una empresa activa. Inicia sesión en la app en vez de crear una nueva.' })
     }
 
-    const { data: politica, error: errPolitica } = await supabase
-      .from('PoliticaTrial').select('*').eq('id', 1).maybeSingle()
-    if (errPolitica) return res(500, { error: errPolitica.message })
-    const diasPrueba = politica?.dias_prueba ?? 7
-    const modulos = politica?.modulos_habilitados ?? { dashboard: true }
+    const { data: planTrial, error: errPlan } = await supabase
+      .from('Planes').select('*').eq('id', 'trial').maybeSingle()
+    if (errPlan) return res(500, { error: errPlan.message })
+    const diasPrueba = planTrial?.dias_prueba ?? 7
 
     // Slug único a partir del nombre — no puede depender de que el usuario
     // elija uno bueno (a diferencia de crear_empresa, que sí lo pide).
@@ -349,16 +370,19 @@ export const handler = async (event) => {
       .select().single()
     if (errEmpresa) return res(400, { error: errEmpresa.message })
 
-    // admin: false a propósito — el plan de prueba es de 1 sola persona
-    // (ver PoliticaTrial/MODULOS_TRIAL_TOGGLES en superadmin.js, que ni
-    // siquiera expone un toggle para este módulo), así que no tiene sentido
-    // darle acceso al panel de Administración (crear más usuarios, ver
-    // roles) durante el trial. Antes esto quedaba forzado en `true` sin
-    // importar la política configurada, lo cual — sumado al bypass que
-    // existía en auth.js — era la causa de que un trial viera todo.
+    // El usuario de trial recibe el mismo nivel de permisos "admin" que un
+    // admin de empresa paga (ADMIN_PERMISSIONS) — es la única persona del
+    // trial, así que dentro de su cuenta puede operar cualquier módulo sin
+    // restricción de ROL. Qué módulos ve disponibles de verdad lo decide el
+    // catálogo "Planes" (tabla Planes, fila 'trial'), que la app consulta
+    // aparte vía auth.getPlan()/isModuleLockedByPlan() para pintar en el
+    // sidebar los módulos no incluidos como bloqueados (candado + upsell)
+    // en vez de ocultarlos — separar "qué puede hacer este usuario" de "qué
+    // trae contratado la empresa" es lo que corrige el bug de que un trial
+    // veía todo (antes ambas cosas vivían mezcladas en `permissions`).
     const { error: errProfile } = await supabase.from('user_profiles').upsert({
       id: caller.id, full_name: nombreCompleto, email: caller.email,
-      role: 'admin', permissions: { ...modulos, admin: false }, is_active: true,
+      role: 'admin', permissions: ADMIN_PERMISSIONS, is_active: true,
       empresa_id: empresa.id,
     }, { onConflict: 'id' })
     if (errProfile) {
