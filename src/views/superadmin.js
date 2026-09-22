@@ -239,12 +239,21 @@ function modalEditarPlan(plan, renderLayout) {
           ` : ''}
         </div>
         <label class="form-label" style="display:block;margin-bottom:0.6rem;">Módulos incluidos</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;">
+        <div class="admin-perms-grid">
           ${MODULOS_PLAN_TOGGLES.map(({ key, label }) => `
-            <label style="display:flex;align-items:center;gap:8px;font-size:0.88rem;cursor:pointer;">
-              <input type="checkbox" class="sp-modulo" value="${key}" ${sel.has(key) ? 'checked' : ''}>
-              ${label}
-            </label>
+            <div class="admin-perm-row">
+              <div class="admin-perm-label">
+                <span class="admin-perm-dot ${sel.has(key) ? 'active' : ''}"></span>
+                <span>${label}</span>
+              </div>
+              <div class="admin-perm-controls">
+                <label class="admin-toggle-wrap">
+                  <input type="checkbox" class="sp-modulo" value="${key}" ${sel.has(key) ? 'checked' : ''} />
+                  <span class="admin-toggle-slider"></span>
+                  <span class="admin-toggle-label">Incluido</span>
+                </label>
+              </div>
+            </div>
           `).join('')}
         </div>
       </div>
