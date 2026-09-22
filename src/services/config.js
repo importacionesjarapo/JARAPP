@@ -36,10 +36,5 @@ export const ConfigService = {
       img.src = url;
       img.style.display = 'block';
     });
-    // Silueta de fondo ambiental (.main-content::after, style.css) — usa el
-    // logo real del tenant como máscara en vez del logo genérico de
-    // EncargosPro (/logo.png, fallback vía var(..., url(...)) mientras este
-    // valor no se haya seteado todavía, ej. un tenant que no ha subido el suyo).
-    document.documentElement.style.setProperty('--tenant-logo-mask', `url("${url}")`);
   },
 };

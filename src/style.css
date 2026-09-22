@@ -280,48 +280,6 @@ nav {
   transition: margin-left 0.35s cubic-bezier(0.34,1.56,0.64,1);
 }
 
-/* Anillo de marca — el logo real del tenant (o el genérico de EncargosPro
-   como fallback si aún no cargó/no se ha subido uno), muy grande y tenue,
-   de fondo en ambos temas. Ver ConfigService.applyLogo() en config.js. */
-.main-content::after {
-  content: '';
-  position: fixed;
-  right: -4%;
-  bottom: -6%;
-  width: 30vw;
-  height: 30vw;
-  max-width: 460px;
-  max-height: 460px;
-  min-width: 280px;
-  min-height: 280px;
-  background-color: var(--primary);
-  opacity: 0.05;
-  -webkit-mask-image: var(--tenant-logo-mask, url('/logo.png'));
-  mask-image: var(--tenant-logo-mask, url('/logo.png'));
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  /* Sin rotación fija: -6deg quedaba bien con el arte específico del ring
-     original, pero tuerce raro un logo cualquiera que suba un tenant.
-     El blur ayuda a que un logo sin transparencia (fondo sólido) se vea
-     como un bloque difuminado en vez de un rectángulo de borde duro. */
-  filter: blur(3px);
-  pointer-events: none;
-  z-index: -1;
-}
-[data-theme="dark"] .main-content::after {
-  opacity: 0.09;
-}
-@media (max-width: 900px) {
-  .main-content::after { display: none; }
-}
-@media print {
-  .main-content::after { display: none; }
-}
-
 /* ── Top Header ── */
 .header {
   display: flex;
