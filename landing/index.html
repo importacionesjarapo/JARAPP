@@ -380,6 +380,7 @@
         <a href="#faq">Preguntas</a>
       </span>
       <span class="hnav-ctas">
+        <a class="btn btn-ghost-light btn-sm" id="btn-login-header" href="#">Iniciar sesión</a>
         <a class="btn btn-wa btn-sm hnav-wa" id="cta-header" href="#" target="_blank" rel="noopener">Hablar por WhatsApp</a>
         <button class="btn btn-brand btn-sm" id="btn-empezar-gratis-header" type="button">Probar ahora →</button>
       </span>
@@ -1140,6 +1141,14 @@
     if (el) el.href = waUrl;
   });
   document.getElementById('year').textContent = new Date().getFullYear();
+
+  // Botón "Iniciar sesión" del header: lleva directo al login de la app,
+  // sin pasar por el modal de registro — para cuando esta landing sea el
+  // único dominio público y los usuarios ya existentes necesiten un punto
+  // de entrada obvio (antes solo estaba escondido como link chiquito
+  // dentro del modal de "Empieza gratis").
+  var loginHeaderBtn = document.getElementById('btn-login-header');
+  if (loginHeaderBtn) loginHeaderBtn.href = cfg.appUrl;
 
   // Sticky header state
   var hdr = document.getElementById('hdr');
