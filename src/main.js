@@ -675,28 +675,141 @@ async function bootApp() {
   startApp();
 }
 
+// Contenido de venta por módulo bloqueado — ícono, titular persuasivo,
+// descripción y beneficios reales del módulo (no un genérico "no incluido").
+// Solo hace falta contenido curado para los módulos que realmente quedan
+// fuera de algún plan hoy (admin, cotizador_ver, calendario_ver, viaje,
+// tracker — ver Planes.modulos); el resto usa un fallback genérico por si
+// el superadmin reconfigura los planes más adelante.
+const UPGRADE_CONTENT = {
+  cotizador_ver: {
+    icon: '📝',
+    headline: 'Cotiza en segundos y da una imagen profesional',
+    desc: 'El Cotizador convierte tu Calculadora en una cotización lista para enviar por WhatsApp, con tu logo y todo el desglose de costos automático.',
+    bullets: [
+      'Cotización profesional en PDF lista para el cliente',
+      'Cálculo automático: producto + envío + aduanas + tu margen',
+      'Guarda tus fórmulas — no repitas el cálculo a mano cada vez',
+      'Incluye tu logo y los datos de tu negocio',
+    ],
+  },
+  calendario_ver: {
+    icon: '🗓️',
+    headline: 'Nunca más te quedes sin qué publicar',
+    desc: 'Planifica el contenido de tus redes con un calendario semanal, plantillas reutilizables y las fechas clave del año ya cargadas.',
+    bullets: [
+      'Plantilla semanal de contenido reutilizable',
+      'Fechas clave y días especiales ya cargados',
+      'Reprograma publicaciones sin perder el hilo',
+      'Mantén tu marca activa en redes sin improvisar',
+    ],
+  },
+  tracker: {
+    icon: '🔎',
+    headline: 'Descubre qué le está funcionando a tu competencia',
+    desc: 'Monitorea automáticamente cuentas de otros personal shoppers y tiendas — qué contenido se vuelve viral y qué formatos funcionan.',
+    bullets: [
+      'Seguimiento automático de cuentas de competencia',
+      'Detecta qué publicaciones se vuelven virales',
+      'Recreaciones de contenido con IA',
+      'Reportes periódicos de rendimiento',
+    ],
+  },
+  viaje: {
+    icon: '✈️',
+    headline: 'Organiza cada viaje de compras a Estados Unidos',
+    desc: 'Lleva el control completo de un viaje de encargos: qué productos vas a traer, cuánto pesan y el estado de cada uno, todo en un solo lugar.',
+    bullets: [
+      'Modo especial para gestionar un viaje activo',
+      'Control de peso y cantidad de productos por viaje',
+      'Tu equipo ve el estado del viaje en tiempo real',
+      'Evita perder o duplicar encargos durante el viaje',
+    ],
+  },
+  admin: {
+    icon: '🛡️',
+    headline: 'Dale acceso a tu equipo sin perder el control',
+    desc: 'Crea cuentas para tus vendedores, logística o finanzas con permisos específicos para cada uno — tú decides qué puede ver y editar cada persona.',
+    bullets: [
+      'Crea usuarios según el límite de tu plan',
+      'Permisos específicos por módulo y por persona',
+      'Historial de accesos de cada usuario',
+      'Ideal cuando tu equipo empieza a crecer',
+    ],
+  },
+};
+
+function getUpgradeContent(moduleKey, label) {
+  return UPGRADE_CONTENT[moduleKey] || {
+    icon: '🔒',
+    headline: `Desbloquea ${label}`,
+    desc: `${label} no está incluido en tu plan actual — actualiza tu suscripción para empezar a usarlo.`,
+    bullets: [
+      'Accede a todas las funciones de este módulo',
+      'Impulsa la gestión de tu negocio',
+      'Disponible en planes superiores',
+    ],
+  };
+}
+
 /** Modal de upgrade — se abre al hacer clic en un módulo del sidebar bloqueado por el plan actual (ver isModuleLockedByPlan en auth.js). */
-function abrirModalUpgradePlan(moduleKey, label) {
+async function abrirModalUpgradePlan(moduleKey, label) {
   const container = document.getElementById('modal-container');
   const content = document.getElementById('modal-content');
   if (!container || !content) return;
 
+  const info = getUpgradeContent(moduleKey, label);
+
+  // Plan más económico que sí incluye este módulo, para mostrarlo como
+  // gancho ("Disponible desde el plan Pro"). Si falla (red, RLS, etc.) el
+  // modal igual se muestra, solo sin ese dato — nunca bloquea el CTA.
+  let planNombre = null;
+  try {
+    const client = auth.getClient();
+    if (client) {
+      const { data } = await client.from('Planes').select('nombre, orden, modulos').order('orden');
+      planNombre = (data || []).find(p => p.modulos?.[moduleKey])?.nombre || null;
+    }
+  } catch (_) { /* sin dato de plan, el modal sigue funcionando igual */ }
+
   const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
   const mensaje = encodeURIComponent(`Hola, quiero actualizar mi plan de EncargosPro para desbloquear ${label}.`);
+  const check = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-top:1px;">
+      <circle cx="12" cy="12" r="10" fill="var(--success)" opacity="0.15"/>
+      <path d="M8 12.5l2.5 2.5L16 9" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
 
   content.innerHTML = `
-    <div class="modal-content" style="max-width:420px;text-align:center;">
-      <div class="modal-header" style="justify-content:flex-end;border:none;">
-        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+    <div class="modal-content" style="max-width:440px;">
+      <div style="position:relative; padding:28px 28px 0;">
+        <button onclick="window.closeModal()" class="modal-close" style="position:absolute; top:16px; right:16px;">&times;</button>
+        ${planNombre ? `
+          <span style="position:absolute; top:18px; left:28px; background:rgba(124,58,237,0.12); color:#7C3AED; border:1px solid rgba(124,58,237,0.25); font-size:0.62rem; font-weight:800; letter-spacing:0.5px; text-transform:uppercase; padding:4px 10px; border-radius:999px;">● ${planNombre}</span>
+        ` : ''}
+        <div style="width:72px;height:72px;border-radius:20px;background:var(--surface-2);border:1px solid var(--border-base);display:flex;align-items:center;justify-content:center;margin:38px auto 20px;font-size:2.1rem;position:relative;">
+          ${info.icon}
+          <span style="position:absolute; bottom:-4px; right:-4px; width:26px;height:26px;border-radius:50%;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 8px rgba(0,0,0,0.3);">🔒</span>
+        </div>
       </div>
-      <div class="modal-body" style="padding-top:0;">
-        <div style="width:64px;height:64px;border-radius:16px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:1.8rem;">🔒</div>
-        <h2 style="margin:0 0 10px;font-size:1.25rem;">${label} no está incluido en tu plan</h2>
-        <p style="color:var(--text-faint);font-size:0.9rem;margin:0 0 20px;">
-          Actualiza tu suscripción de EncargosPro para desbloquear este módulo y seguir creciendo tu negocio.
-        </p>
-        <a class="btn-primary" style="display:inline-flex;width:100%;justify-content:center;" href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener">
-          💬 Hablar con nosotros por WhatsApp
+      <div class="modal-body" style="padding-top:0; text-align:center;">
+        <h2 style="margin:0 0 10px;font-size:1.3rem;font-weight:800;line-height:1.25;">${info.headline}</h2>
+        <p style="color:var(--text-faint);font-size:0.88rem;margin:0 0 22px;line-height:1.5;">${info.desc}</p>
+        <ul style="list-style:none;padding:0;margin:0 0 22px;display:flex;flex-direction:column;gap:12px;text-align:left;">
+          ${info.bullets.map(b => `
+            <li style="display:flex;gap:10px;align-items:flex-start;font-size:0.85rem;color:var(--text-main);font-weight:600;">
+              ${check}
+              <span>${b}</span>
+            </li>
+          `).join('')}
+        </ul>
+        <div style="background:var(--surface-2); border:1px solid var(--border-base); border-radius:14px; padding:16px 18px; margin-bottom:20px; text-align:left;">
+          <p style="margin:0 0 4px;font-weight:800;font-size:0.9rem;">${planNombre ? `Disponible desde el plan ${planNombre}` : 'No incluido en tu plan actual'}</p>
+          <p style="margin:0;font-size:0.76rem;color:var(--text-faint);">Escríbenos y te ayudamos a actualizar tu suscripción hoy mismo.</p>
+        </div>
+        <a href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#20BD5C;color:#fff;border:none;padding:14px;border-radius:12px;font-weight:800;font-size:0.9rem;text-decoration:none;box-sizing:border-box;">
+          💬 Hablar por WhatsApp para actualizar mi plan
         </a>
       </div>
     </div>`;
