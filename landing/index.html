@@ -70,8 +70,8 @@
   .btn-ghost-dark:hover{background:rgba(255,255,255,.14);}
   .btn-ghost-light{background:#fff; color:var(--text); border:1px solid var(--line);}
   .btn-ghost-light:hover{border-color:var(--brand);}
-  .btn-login{background:var(--cool); color:#fff; box-shadow:0 8px 20px -8px rgba(82,79,238,.6);}
-  .btn-login:hover{background:var(--cool-dark);}
+  .btn-login{background:#fff; border:2px solid var(--cool); box-shadow:none;}
+  .btn-login:hover{background:var(--cool);}
   .btn-sm{padding:9px 16px; font-size:.82rem;}
 
   /* ---- header ---- */
@@ -86,6 +86,8 @@
   nav.hnav a:hover{color:var(--brand-dark);}
   nav.hnav a.hnav-wa{color:#fff;}
   nav.hnav a.hnav-wa:hover{color:#fff;}
+  nav.hnav a.btn-login{color:var(--cool-dark);}
+  nav.hnav a.btn-login:hover{color:#fff;}
   .hnav-ctas{display:flex; gap:10px; align-items:center;}
   @media (max-width:820px){ nav.hnav .hlinks{display:none!important;} }
   @media (max-width:560px){ .hnav-wa{display:none!important;} }
