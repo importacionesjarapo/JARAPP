@@ -516,20 +516,32 @@ function modalPagosEmpresa(empresaId, nombre, renderLayout) {
         <button onclick="window.closeModal()" class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
-        <form id="form-nuevo-pago" style="display:flex; flex-direction:row; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:1.5rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border-base);">
-          <div class="form-group" style="margin-bottom:0; flex:1; min-width:120px;">
-            <label class="form-label">Monto (COP)</label>
-            <input type="number" id="pg-monto" class="form-input" min="1" step="1" required>
+        <form id="form-nuevo-pago" style="display:flex; flex-direction:column; gap:12px; margin-bottom:1.5rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border-base);">
+          <div style="display:flex; flex-direction:row; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0; flex:1; min-width:120px;">
+              <label class="form-label">Monto (COP)</label>
+              <input type="number" id="pg-monto" class="form-input" min="1" step="1" required>
+            </div>
+            <div class="form-group" style="margin-bottom:0; flex:1; min-width:140px;">
+              <label class="form-label">Fecha de pago</label>
+              <input type="date" id="pg-fecha" class="form-input" required value="${new Date().toISOString().split('T')[0]}">
+            </div>
+            <div class="form-group" style="margin-bottom:0; flex:1; min-width:130px;">
+              <label class="form-label">Método</label>
+              <input type="text" id="pg-metodo" class="form-input" placeholder="Transferencia">
+            </div>
           </div>
-          <div class="form-group" style="margin-bottom:0; flex:1; min-width:140px;">
-            <label class="form-label">Fecha de pago</label>
-            <input type="date" id="pg-fecha" class="form-input" required value="${new Date().toISOString().split('T')[0]}">
+          <div style="display:flex; flex-direction:row; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0; flex:1; min-width:140px;">
+              <label class="form-label">Periodo cubierto desde <span style="font-weight:400;color:var(--text-faint);">(opcional)</span></label>
+              <input type="date" id="pg-periodo-desde" class="form-input">
+            </div>
+            <div class="form-group" style="margin-bottom:0; flex:1; min-width:140px;">
+              <label class="form-label">Periodo cubierto hasta <span style="font-weight:400;color:var(--text-faint);">(opcional)</span></label>
+              <input type="date" id="pg-periodo-hasta" class="form-input">
+            </div>
+            <button type="submit" class="btn-primary" id="pg-btn-agregar" style="height:44px;">+ Registrar</button>
           </div>
-          <div class="form-group" style="margin-bottom:0; flex:1; min-width:130px;">
-            <label class="form-label">Método</label>
-            <input type="text" id="pg-metodo" class="form-input" placeholder="Transferencia">
-          </div>
-          <button type="submit" class="btn-primary" id="pg-btn-agregar" style="height:44px;">+ Registrar</button>
         </form>
         <div id="pg-lista">
           <div class="admin-loading"><div class="loader"></div><p>Cargando pagos...</p></div>
@@ -578,6 +590,8 @@ function modalPagosEmpresa(empresaId, nombre, renderLayout) {
         monto: Number(document.getElementById('pg-monto').value),
         fecha_pago: document.getElementById('pg-fecha').value,
         metodo_pago: document.getElementById('pg-metodo').value.trim() || undefined,
+        periodo_desde: document.getElementById('pg-periodo-desde').value || undefined,
+        periodo_hasta: document.getElementById('pg-periodo-hasta').value || undefined,
       });
       document.getElementById('form-nuevo-pago').reset();
       document.getElementById('pg-fecha').value = new Date().toISOString().split('T')[0];
