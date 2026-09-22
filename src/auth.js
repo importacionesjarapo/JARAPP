@@ -496,6 +496,15 @@ class Auth {
     this._diasGracia = 0;
     this._diasGraciaCargado = false;
     this._readOnlyMode = false;
+
+    // El logo de empresa se cachea en sessionStorage/localStorage para no
+    // volver a pedirlo en cada navegación (ver services/config.js) — sin
+    // esto, quedaba pegado en el navegador después de cerrar sesión y se
+    // filtraba a la pantalla de login (compartida por todas las empresas)
+    // o al siguiente tenant que iniciara sesión en el mismo dispositivo.
+    sessionStorage.removeItem('JARAPP_LOGO');
+    localStorage.removeItem('GLOBAL_LOGO_URL');
+    window.JARAPP_LOGO = null;
   }
 
   /** Crear nuevo usuario (solo admin puede hacer esto desde el panel) */

@@ -6,12 +6,6 @@
 
 import { auth } from '../auth.js';
 
-// Prioridad: sesión activa → localStorage → null (fallback a la "J")
-const _logoUrl = window.JARAPP_LOGO
-  || sessionStorage.getItem('JARAPP_LOGO')
-  || localStorage.getItem('GLOBAL_LOGO_URL')
-  || null;
-
 export const renderLogin = (onSuccess) => {
   const appEl = document.querySelector('#app');
   
@@ -27,13 +21,14 @@ export const renderLogin = (onSuccess) => {
         <!-- Línea superior de acento -->
         <div class="login-card-accent"></div>
 
-        <!-- Logo y branding -->
+        <!-- Logo y branding — esta pantalla es compartida por todas las
+             empresas (todavía no se sabe qué usuario va a ingresar), así
+             que nunca debe mostrar el logo subido por un tenant en
+             particular. Ese logo por-empresa solo aparece DESPUÉS de
+             iniciar sesión, en el sidebar (ver main.js). -->
         <div class="login-logo-zone">
           <div class="login-logo-ring">
-            ${_logoUrl
-              ? `<img src="${_logoUrl}" class="app-logo-img" style="width:100%;height:100%;object-fit:contain;" alt="EncargosPro">`
-              : `<div style="font-size:3rem;font-weight:900;color:var(--primary);display:flex;align-items:center;justify-content:center;width:100%;height:100%;">E</div>`
-            }
+            <div style="font-size:3rem;font-weight:900;color:var(--primary);display:flex;align-items:center;justify-content:center;width:100%;height:100%;">E</div>
           </div>
           <div class="login-brand">
             <h1 class="login-title">EncargosPro</h1>
