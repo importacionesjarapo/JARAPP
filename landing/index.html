@@ -11,17 +11,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --ink:#0A0E1A; --ink-2:#131A2C; --ink-3:#1C2540;
+    /* Paleta oficial de marca EncargosPro */
+    --navy:#01063B; --magenta:#EA168F; --violeta:#912EE5; --azul-elec:#524FEE; --coral:#FD9779;
+
+    --ink:#01063B; --ink-2:#131A2C; --ink-3:#1C2540;
     --paper:#FBF9F5; --surface:#FFFFFF; --surface-tint:#FDF3EC;
     --line:#ECE7DD; --line-dark:rgba(255,255,255,.10);
-    --text:#181B22; --text-soft:#5B6172; --fog:#9AA3B8; --fog-soft:#6B7386;
-    --brand:#DB3A6B; --brand-dark:#A61E4D; --brand-2:#FFB648; --cool:#2FD9C7; --cool-dark:#12A594;
+    --text:#01063B; --text-soft:#5B6172; --fog:#9AA3B8; --fog-soft:#6B7386;
+    --brand:#EA168F; --brand-dark:#910E59; --brand-2:#FD9779; --cool:#524FEE; --cool-dark:#3836A2;
     --success:#22C55E; --warn:#F59E0B;
-    --grad-brand:linear-gradient(135deg,#8B5CF6 0%,#EC4899 100%);
-    --grad-cool:linear-gradient(135deg,var(--cool) 0%,#3B82F6 100%);
-    --shadow-sm:0 2px 10px -4px rgba(10,14,26,.08);
-    --shadow-md:0 16px 40px -12px rgba(10,14,26,.16);
-    --shadow-glow:0 0 0 1px rgba(219,58,107,.15), 0 20px 45px -18px rgba(219,58,107,.35);
+    --grad-brand:linear-gradient(135deg,var(--coral) 0%,var(--magenta) 38%,var(--violeta) 68%,var(--azul-elec) 100%);
+    --grad-cool:linear-gradient(135deg,var(--cool) 0%,var(--violeta) 100%);
+    --shadow-sm:0 2px 10px -4px rgba(1,6,59,.08);
+    --shadow-md:0 16px 40px -12px rgba(1,6,59,.16);
+    --shadow-glow:0 0 0 1px rgba(234,22,143,.15), 0 20px 45px -18px rgba(234,22,143,.35);
     --radius:20px;
     --font-display:'Sora',system-ui,sans-serif;
     --font-body:'Manrope',-apple-system,BlinkMacSystemFont,sans-serif;
@@ -70,15 +73,17 @@
   .btn-sm{padding:9px 16px; font-size:.82rem;}
 
   /* ---- header ---- */
-  header{position:fixed; top:0; left:0; right:0; z-index:50; padding-block:18px; transition:padding .3s, background .3s, box-shadow .3s; background:rgba(255,252,253,.6); backdrop-filter:blur(10px);}
-  header.scrolled{padding-block:12px; background:rgba(255,255,255,.92); box-shadow:0 8px 28px -18px rgba(166,30,77,.28);}
+  header{position:fixed; top:0; left:0; right:0; z-index:50; padding-block:8px; transition:padding .3s, background .3s, box-shadow .3s; background:rgba(255,252,253,.6); backdrop-filter:blur(10px);}
+  header.scrolled{padding-block:5px; background:rgba(255,255,255,.92); box-shadow:0 8px 28px -18px rgba(145,14,89,.28);}
   header .wrap{display:flex; align-items:center; justify-content:space-between; gap:20px;}
   .logo{display:flex; align-items:center; gap:9px; font-family:var(--font-display); font-weight:800; font-size:1.15rem; color:var(--text);}
-  .logo .dot{width:9px;height:9px;border-radius:50%;background:var(--grad-brand); box-shadow:0 0 12px var(--brand);}
+  .logo-img{height:78px; width:auto; display:block;}
   nav.hnav{display:flex; gap:28px; align-items:center;}
   nav.hnav .hlinks{display:flex; gap:28px; align-items:center;}
-  nav.hnav a{font-size:.88rem; font-weight:600; color:var(--text-soft); text-decoration:none; transition:color .2s;}
+  nav.hnav a{font-size:1.02rem; font-weight:800; color:var(--text-soft); text-decoration:none; transition:color .2s;}
   nav.hnav a:hover{color:var(--brand-dark);}
+  nav.hnav a.hnav-wa{color:#fff;}
+  nav.hnav a.hnav-wa:hover{color:#fff;}
   .hnav-ctas{display:flex; gap:10px; align-items:center;}
   @media (max-width:820px){ nav.hnav .hlinks{display:none!important;} }
   @media (max-width:560px){ .hnav-wa{display:none!important;} }
@@ -87,8 +92,8 @@
   section.tight{padding-block:72px;}
   .eyebrow{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:.72rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; padding:7px 16px 7px 10px; border-radius:999px;}
   .eyebrow .pip{width:6px;height:6px;border-radius:50%;background:currentColor;}
-  .eyebrow.on-dark{color:#FFD3E6; background:rgba(219,58,107,.18); border:1px solid rgba(219,58,107,.32);}
-  .eyebrow.on-light{color:var(--brand-dark); background:#FCE7EF; border:1px solid #F6D0DE;}
+  .eyebrow.on-dark{color:#FBD5EB; background:rgba(234,22,143,.18); border:1px solid rgba(234,22,143,.32);}
+  .eyebrow.on-light{color:var(--brand-dark); background:#FDE8F4; border:1px solid #FACCE6;}
 
   h2.h-title{font-size:clamp(1.9rem,3.6vw,2.7rem); font-weight:800; margin-bottom:14px;}
   p.h-sub{color:var(--text-soft); font-size:1.05rem; max-width:600px; margin:0 auto;}
@@ -96,7 +101,7 @@
 
   /* ================= HERO ================= */
   .hero{
-    background:linear-gradient(180deg,#FFF6FA 0%,#FDEDF3 45%,var(--paper) 100%);
+    background:linear-gradient(180deg,#FDEAF5 0%,#F4EAFC 45%,var(--paper) 100%);
     color:var(--text); padding-top:170px; padding-bottom:120px;
     position:relative; overflow:hidden; isolation:isolate;
   }
@@ -104,7 +109,7 @@
   .hero-blob.b1{width:520px;height:520px; background:radial-gradient(circle,var(--brand) 0%,transparent 70%); top:-180px; left:-140px;}
   .hero-blob.b2{width:460px;height:460px; background:radial-gradient(circle,var(--cool) 0%,transparent 70%); bottom:-220px; right:-120px; animation-delay:-9s;}
   .hero-grid{position:absolute; inset:0; z-index:-1;
-    background-image:linear-gradient(rgba(166,30,77,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(166,30,77,.05) 1px,transparent 1px);
+    background-image:linear-gradient(rgba(145,14,89,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(145,14,89,.05) 1px,transparent 1px);
     background-size:64px 64px; mask-image:radial-gradient(ellipse 70% 60% at 50% 20%, black 40%, transparent 100%);}
   @keyframes drift{0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(40px,-30px) scale(1.08);}}
 
@@ -122,17 +127,17 @@
   /* route visual */
   .route-card{
     background:linear-gradient(180deg,var(--ink-2),var(--ink-3)); border:1px solid var(--line-dark); border-radius:24px;
-    padding:28px 24px 24px; box-shadow:0 30px 70px -25px rgba(166,30,77,.35), 0 14px 34px -16px rgba(10,14,26,.22);
+    padding:28px 24px 24px; box-shadow:0 30px 70px -25px rgba(234,22,143,.32), 0 14px 34px -16px rgba(1,6,59,.22);
   }
   .route-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:22px;}
   .route-head .lbl{font-family:var(--font-mono); font-size:.68rem; letter-spacing:.08em; color:var(--fog); text-transform:uppercase;}
-  .route-head .code{font-family:var(--font-mono); font-size:.72rem; color:var(--cool); background:rgba(47,217,199,.12); padding:4px 10px; border-radius:8px;}
+  .route-head .code{font-family:var(--font-mono); font-size:.72rem; color:var(--cool); background:rgba(82,79,238,.15); padding:4px 10px; border-radius:8px;}
   .route-svg-wrap{position:relative; height:150px;}
   .route-pin{position:absolute; top:50%; transform:translateY(-50%); text-align:center; font-size:.72rem; color:#fff; font-weight:700;}
   .route-pin .ico{width:42px;height:28px;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin:0 auto 6px; box-shadow:0 3px 10px -2px rgba(0,0,0,.4);}
   .route-pin .ico svg{width:100%;height:100%;display:block;}
-  .route-pin.origin{left:0;} .route-pin.origin .ico{border:1px solid rgba(47,217,199,.55);}
-  .route-pin.dest{right:0;} .route-pin.dest .ico{border:1px solid rgba(219,58,107,.55);}
+  .route-pin.origin{left:0;} .route-pin.origin .ico{border:1px solid rgba(82,79,238,.55);}
+  .route-pin.dest{right:0;} .route-pin.dest .ico{border:1px solid rgba(234,22,143,.55);}
   .route-pin small{display:block; color:var(--fog); font-weight:500; font-size:.65rem; margin-top:2px;}
   .kpi-row{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:22px;}
   .kpi-chip{background:rgba(255,255,255,.04); border:1px solid var(--line-dark); border-radius:14px; padding:12px 10px; text-align:center;}
@@ -152,7 +157,7 @@
   .foryou-card:hover{transform:translateY(-6px); box-shadow:var(--shadow-md); border-color:transparent;}
   .foryou-card .ico-wrap{width:52px;height:52px;border-radius:14px; display:flex; align-items:center; justify-content:center; margin-bottom:18px; background:var(--grad-brand);}
   .foryou-card:nth-child(2) .ico-wrap{background:var(--grad-cool);}
-  .foryou-card:nth-child(3) .ico-wrap{background:linear-gradient(135deg,#8B5CF6,#EC4899);}
+  .foryou-card:nth-child(3) .ico-wrap{background:linear-gradient(135deg,var(--violeta),var(--magenta));}
   .foryou-card .ico-wrap svg{width:26px;height:26px;color:#fff;}
   .foryou-card h3{font-size:1.05rem; margin-bottom:8px;}
   .foryou-card p{color:var(--text-soft); font-size:.9rem; margin:0;}
@@ -165,6 +170,35 @@
   .spotlight.rev .sp-visual{order:2;} .spotlight.rev .sp-text{order:1;}
   @media (max-width:900px){ .spotlight,.spotlight.rev{grid-template-columns:1fr;} .spotlight.rev .sp-visual,.spotlight.rev .sp-text{order:initial;} }
   .sp-text .tag{display:inline-flex; align-items:center; gap:7px; font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--brand-dark); margin-bottom:14px;}
+
+  /* ---- Selector interactivo de módulos ---- */
+  .mod-tabs{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:0 0 12px;}
+  .mod-note{text-align:center; font-size:.8rem; color:var(--fog-soft); margin:0 0 40px;}
+  .mod-note a{color:var(--brand-dark); font-weight:700; text-decoration:underline;}
+  .mod-tab{padding:12px 24px; border-radius:999px; border:1.5px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:800; font-size:.92rem; color:var(--text-soft); cursor:pointer; transition:border-color .2s, background .2s, color .2s, box-shadow .2s; white-space:nowrap;}
+  .mod-tab:hover{border-color:var(--brand);}
+  .mod-tab.active{background:var(--grad-brand); color:#fff; border-color:transparent; box-shadow:var(--shadow-glow);}
+  .mod-panel{display:none;}
+  .mod-panel.active{display:block; animation:modIn .45s cubic-bezier(.16,.8,.3,1);}
+  @keyframes modIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
+
+  /* ---- Cotizador & Calculadora: sección destacada ---- */
+  .cotiz-feature{background:linear-gradient(160deg,#FDEAF5 0%,#F4EAFC 55%,var(--paper) 100%); padding-block:90px; position:relative; overflow:hidden;}
+  .cotiz-inner{display:grid; grid-template-columns:1.1fr .9fr; gap:60px; align-items:center;}
+  @media (max-width:900px){ .cotiz-inner{grid-template-columns:1fr;} }
+  .cotiz-feature .eyebrow{background:#fff; color:var(--brand-dark); border:1px solid var(--line); box-shadow:var(--shadow-sm);}
+  .cotiz-feature h2{color:var(--text); margin:16px 0 18px;}
+  .cotiz-feature .lead{color:var(--text-soft); font-size:1.05rem; margin:0 0 26px; max-width:480px;}
+  .cotiz-list{list-style:none; padding:0; margin:0 0 32px; display:flex; flex-direction:column; gap:14px;}
+  .cotiz-list li{display:flex; gap:10px; align-items:flex-start; color:var(--text); font-size:.95rem; font-weight:600;}
+  .cotiz-plan-note{color:var(--fog-soft); font-size:.8rem; margin:14px 0 0;}
+  .cotiz-list svg{width:20px;height:20px; flex-shrink:0; margin-top:1px; color:var(--success);}
+  .calc-card{background:#fff; border-radius:22px; padding:28px 26px; box-shadow:var(--shadow-md);}
+  .calc-head{font-family:var(--font-display); font-weight:800; font-size:1.05rem; margin-bottom:18px; color:var(--text);}
+  .calc-row{display:flex; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px dashed var(--line); font-size:.92rem; color:var(--text-soft);}
+  .calc-row b{color:var(--text); font-family:var(--font-mono); font-weight:700; white-space:nowrap;}
+  .calc-total{display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:16px; padding-top:16px; border-top:2px solid var(--line); font-family:var(--font-display); font-weight:800; font-size:1.3rem; color:var(--text);}
+  .calc-total b{font-family:var(--font-mono); background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; color:transparent;}
   .sp-text h3{font-size:clamp(1.4rem,2.4vw,1.9rem); margin-bottom:14px;}
   .sp-text p.desc{color:var(--text-soft); margin-bottom:22px; font-size:1rem;}
   .sp-list{list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px;}
@@ -185,7 +219,7 @@
   .sp-row .dotc{width:8px;height:8px;border-radius:50%; flex-shrink:0;}
   .sp-row .grow{flex:1; color:var(--text-soft); font-weight:600;}
   .sp-row .val{font-family:var(--font-mono); font-weight:700; color:var(--text);}
-  .sp-badge{position:absolute; top:-14px; right:22px; background:var(--grad-cool); color:#fff; font-size:.68rem; font-weight:800; padding:7px 14px; border-radius:999px; box-shadow:0 8px 20px -8px rgba(47,217,199,.6);}
+  .sp-badge{position:absolute; top:-14px; right:22px; background:var(--grad-cool); color:#fff; font-size:.68rem; font-weight:800; padding:7px 14px; border-radius:999px; box-shadow:0 8px 20px -8px rgba(82,79,238,.6);}
 
   /* ================= HOW IT WORKS ================= */
   .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:0; position:relative;}
@@ -236,7 +270,8 @@
 
   footer{background:var(--ink-2); border-top:1px solid var(--line-dark); padding-block:40px; color:var(--fog);}
   footer .wrap{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; font-size:.82rem;}
-  footer .flogo{display:flex; align-items:center; gap:8px; font-family:var(--font-display); font-weight:800; color:#fff;}
+  footer .flogo{display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-weight:800; font-size:1.1rem; color:#fff;}
+  .flogo-img{height:54px; width:auto; display:block;}
 
   .wa-float{position:fixed; bottom:24px; right:24px; z-index:60; width:60px;height:60px; border-radius:50%; background:#20BD5C; display:flex; align-items:center; justify-content:center; text-decoration:none; box-shadow:0 12px 28px -8px rgba(32,189,92,.6);}
   .wa-float svg{width:28px;height:28px; color:#fff;}
@@ -247,8 +282,8 @@
 
   /* ================= AUTH MODAL (Empieza gratis) ================= */
   .auth-overlay{
-    display:none; position:fixed; inset:0; z-index:100; background:rgba(10,14,26,.68); backdrop-filter:blur(4px);
-    align-items:center; justify-content:center; padding:20px; overflow-y:auto;
+    display:none; position:fixed; inset:0; z-index:100; background:rgba(1,6,59,.68); backdrop-filter:blur(4px);
+    align-items:safe center; justify-content:center; padding:20px; overflow-y:auto;
   }
   .auth-overlay.open{display:flex;}
   .auth-modal{
@@ -256,34 +291,38 @@
     box-shadow:0 40px 80px -20px rgba(0,0,0,.4); animation:authIn .35s cubic-bezier(.16,.8,.3,1);
   }
   @keyframes authIn{from{opacity:0; transform:translateY(18px) scale(.97);} to{opacity:1; transform:translateY(0) scale(1);}}
-  .auth-head{background:var(--grad-brand); color:#fff; padding:30px 30px 26px; text-align:center; position:relative;}
-  .auth-head .logo-mark{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.18); display:flex;align-items:center;justify-content:center;margin:0 auto 14px; font-family:var(--font-display); font-weight:800;}
+  .auth-head{background:var(--grad-brand); color:#fff; padding:22px 30px 18px; text-align:center; position:relative;}
+  .auth-head.plain{background:#fff; border-bottom:1px solid var(--line);}
+  .auth-head.plain h3{color:var(--text);}
+  .auth-head.plain p{color:var(--text-soft);}
+  .auth-head.plain .auth-close{background:var(--surface-tint); color:var(--text-soft);}
+  .auth-head .logo-full{height:110px; width:auto; margin:0 auto 8px; display:block;}
   .auth-head h3{color:#fff; font-size:1.3rem; margin-bottom:6px;}
   .auth-head p{margin:0; font-size:.85rem; color:rgba(255,255,255,.85);}
   .auth-close{position:absolute; top:14px; right:14px; width:30px;height:30px; border-radius:50%; background:rgba(255,255,255,.18); border:none; color:#fff; font-size:1.1rem; cursor:pointer; display:flex; align-items:center; justify-content:center;}
-  .auth-body{padding:28px 30px 30px;}
-  .auth-google{width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:13px; border-radius:999px; border:1px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:700; font-size:.92rem; cursor:pointer; transition:background .2s, border-color .2s;}
+  .auth-body{padding:20px 30px 24px;}
+  .auth-google{width:100%; display:flex; align-items:center; justify-content:center; gap:10px; padding:12px; border-radius:999px; border:1px solid var(--line); background:#fff; font-family:var(--font-body); font-weight:700; font-size:.92rem; cursor:pointer; transition:background .2s, border-color .2s;}
   .auth-google:hover{background:var(--surface-tint); border-color:var(--fog);}
-  .auth-divider{display:flex; align-items:center; gap:12px; margin:18px 0; color:var(--fog-soft); font-size:.78rem; font-weight:700;}
+  .auth-divider{display:flex; align-items:center; gap:12px; margin:14px 0; color:var(--fog-soft); font-size:.78rem; font-weight:700;}
   .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--line);}
-  .auth-field{margin-bottom:16px;}
+  .auth-field{margin-bottom:12px;}
   .auth-field label{display:block; font-size:.72rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--fog-soft); margin-bottom:8px;}
   .auth-field-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; margin-bottom:8px;}
   .auth-field-head label{margin-bottom:0;}
   .auth-hint{font-size:.74rem; font-weight:600; color:var(--fog-soft); text-transform:none; letter-spacing:0; white-space:nowrap;}
-  .auth-field input{width:100%; padding:15px 22px; border-radius:999px; border:1.5px solid transparent; background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
+  .auth-field input{width:100%; padding:12px 22px; border-radius:999px; border:1.5px solid transparent; background:var(--surface-tint); font-family:var(--font-body); font-size:.95rem; color:var(--text); outline:none; transition:border-color .2s;}
   .auth-field input:focus{border-color:var(--brand);}
   .auth-logo-picker{display:flex; align-items:center; justify-content:center; gap:10px; padding:15px 22px; border:1.5px dashed var(--line); border-radius:999px; background:var(--surface-tint); cursor:pointer; transition:border-color .2s, background .2s;}
   .auth-logo-picker:hover{border-color:var(--brand); background:#fff;}
   .auth-logo-preview{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--fog-soft);flex-shrink:0;overflow:hidden;}
   .auth-logo-preview img{width:100%;height:100%;object-fit:contain;}
   .auth-logo-txt{font-size:.9rem;color:var(--text-soft);font-weight:700;}
-  .auth-submit{width:100%; padding:14px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
+  .auth-submit{width:100%; padding:13px; border-radius:999px; border:none; background:var(--grad-brand); color:#fff; font-family:var(--font-body); font-weight:800; font-size:.95rem; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .2s;}
   .auth-submit:hover{transform:translateY(-1px);}
   .auth-submit:disabled{opacity:.6; cursor:not-allowed; transform:none;}
-  .auth-foot{text-align:center; margin-top:18px; font-size:.85rem; color:var(--text-soft);}
+  .auth-foot{text-align:center; margin-top:14px; font-size:.85rem; color:var(--text-soft);}
   .auth-foot a,.auth-foot button.link{color:var(--brand-dark); font-weight:700; text-decoration:none; background:none; border:none; font-size:inherit; cursor:pointer; padding:0; font-family:inherit;}
-  .auth-error{background:#FCE7EF; color:var(--brand-dark); border:1px solid #F6D0DE; border-radius:12px; padding:11px 14px; font-size:.84rem; margin-bottom:16px;}
+  .auth-error{background:#FDE8F4; color:var(--brand-dark); border:1px solid #FACCE6; border-radius:12px; padding:11px 14px; font-size:.84rem; margin-bottom:16px;}
   .auth-icon-circle{width:60px;height:60px;border-radius:50%; background:var(--surface-tint); display:flex; align-items:center; justify-content:center; margin:0 auto 18px;}
   .auth-icon-circle svg{width:26px;height:26px; color:var(--brand);}
   .auth-screen{display:none;}
@@ -333,7 +372,7 @@
 
 <header id="hdr">
   <div class="wrap">
-    <div class="logo"><span class="dot"></span> EncargosPro</div>
+    <div class="logo"><img src="logo.png" alt="EncargosPro" class="logo-img"></div>
     <nav class="hnav">
       <span class="hlinks">
         <a href="#modulos">Producto</a>
@@ -341,7 +380,7 @@
         <a href="#faq">Preguntas</a>
       </span>
       <span class="hnav-ctas">
-        <a class="btn btn-ghost-light btn-sm hnav-wa" id="cta-header" href="#" target="_blank" rel="noopener">Hablar por WhatsApp</a>
+        <a class="btn btn-wa btn-sm hnav-wa" id="cta-header" href="#" target="_blank" rel="noopener">Hablar por WhatsApp</a>
         <button class="btn btn-brand btn-sm" id="btn-empezar-gratis-header" type="button">Probar ahora →</button>
       </span>
     </nav>
@@ -362,7 +401,7 @@
         <button class="btn btn-brand" id="btn-empezar-gratis" type="button">
           Empieza gratis →
         </button>
-        <a class="btn btn-ghost-light" id="cta-hero" href="#" target="_blank" rel="noopener">
+        <a class="btn btn-wa" id="cta-hero" href="#" target="_blank" rel="noopener">
           <svg width="19" height="19"><use href="#i-wa"/></svg> Hablar por WhatsApp
         </a>
       </div>
@@ -382,7 +421,7 @@
         <div class="route-svg-wrap">
           <svg viewBox="0 0 320 150" width="100%" height="150" style="overflow:visible;">
             <path id="routePath" d="M40,110 C110,10 210,10 280,40" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="2" stroke-dasharray="2 8" stroke-linecap="round"/>
-            <circle r="6" fill="#2FD9C7">
+            <circle r="6" fill="#524FEE">
               <animateMotion dur="3.4s" repeatCount="indefinite" rotate="auto">
                 <mpath href="#routePath"/>
               </animateMotion>
@@ -448,106 +487,377 @@
     <div class="section-head rv">
       <span class="eyebrow on-light">El producto</span>
       <h2 class="h-title" style="margin-top:14px;">Todo lo que necesitas,<br>en un solo sistema</h2>
-      <p class="h-sub">Los mismos módulos que usa un negocio de importación real, todos los días.</p>
+      <p class="h-sub">Los mismos módulos que usa un negocio de importación real, todos los días — elige uno y mira cómo se ve.</p>
     </div>
 
-    <div class="spotlight rv">
-      <div class="sp-text">
-        <span class="tag">📊 Dashboard 360°</span>
-        <h3>Toda tu operación, en un solo vistazo</h3>
-        <p class="desc">Ventas, margen, cartera pendiente y alertas de inventario en tiempo real — sin tener que abrir cinco hojas de Excel para saber cómo va tu negocio hoy.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> KPIs de facturación, cartera y margen en vivo</li>
-          <li><svg><use href="#i-check"/></svg> Alertas automáticas de stock bajo y saldos vencidos</li>
-          <li><svg><use href="#i-check"/></svg> Un panel por empresa — nunca mezclado con otro negocio</li>
-        </ul>
-      </div>
-      <div class="sp-visual">
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-stat-row">
-          <div class="sp-stat"><b class="cnum" data-to="18.4" data-suffix="M" data-prefix="$">$0M</b><span>Facturación</span></div>
-          <div class="sp-stat"><b class="cnum" data-to="96" data-suffix="%">0%</b><span>Entregas a tiempo</span></div>
+    <div class="mod-tabs rv" role="tablist">
+      <button class="mod-tab active" type="button" data-mod="dashboard">📊 Dashboard</button>
+      <button class="mod-tab" type="button" data-mod="calculadora">🧮 Calculadora</button>
+      <button class="mod-tab" type="button" data-mod="cotizador">📝 Cotizador</button>
+      <button class="mod-tab" type="button" data-mod="ventas">🛒 Ventas</button>
+      <button class="mod-tab" type="button" data-mod="clientes">👥 Clientes</button>
+      <button class="mod-tab" type="button" data-mod="inventario">📦 Inventario</button>
+      <button class="mod-tab" type="button" data-mod="compras">🧳 Compras USA</button>
+      <button class="mod-tab" type="button" data-mod="viajes">✈️ Viajes USA</button>
+      <button class="mod-tab" type="button" data-mod="logistica">🚚 Logística</button>
+      <button class="mod-tab" type="button" data-mod="finanzas">💰 Finanzas</button>
+      <button class="mod-tab" type="button" data-mod="vendedores">🧑‍💼 Vendedores</button>
+      <button class="mod-tab" type="button" data-mod="tracker">🔎 Competitor Tracker</button>
+      <button class="mod-tab" type="button" data-mod="calendario">🗓️ Calendario de Contenido</button>
+    </div>
+    <p class="mod-note rv">* Los módulos disponibles dependen del plan contratado — mira el detalle en <a href="#precios">Planes</a>.</p>
+
+    <div class="rv">
+      <div class="mod-panel active" data-panel="dashboard">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">📊 Dashboard 360°</span>
+            <h3>Toda tu operación, en un solo vistazo</h3>
+            <p class="desc">Ventas, margen, cartera pendiente y alertas de inventario en tiempo real — sin tener que abrir cinco hojas de Excel para saber cómo va tu negocio hoy.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> KPIs de facturación, cartera y margen en vivo</li>
+              <li><svg><use href="#i-check"/></svg> Alertas automáticas de stock bajo y saldos vencidos</li>
+              <li><svg><use href="#i-check"/></svg> Un panel por empresa — nunca mezclado con otro negocio</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="18.4" data-suffix="M" data-prefix="$">$0M</b><span>Facturación</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="96" data-suffix="%">0%</b><span>Entregas a tiempo</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="72"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">META MENSUAL — 72%</div>
+          </div>
         </div>
-        <div class="sp-bar-track"><div class="sp-bar-fill" data-w="72"></div></div>
-        <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">META MENSUAL — 72%</div>
       </div>
-    </div>
 
-    <div class="spotlight rev rv">
-      <div class="sp-text">
-        <span class="tag">🚚 Logística internacional</span>
-        <h3>Rastrea cada pedido, fase por fase</h3>
-        <p class="desc">Desde que se compra en el exterior hasta que se entrega en la puerta del cliente — cada encargo tiene su propia línea de tiempo, visible para ti y consultable por tu cliente.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> Fases claras: comprado, en bodega, en tránsito, entregado</li>
-          <li><svg><use href="#i-check"/></svg> Portal de seguimiento para que tu cliente vea su pedido</li>
-          <li><svg><use href="#i-check"/></svg> Historial completo por guía y por cliente</li>
-        </ul>
+      <div class="mod-panel" data-panel="logistica">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🚚 Logística internacional</span>
+            <h3>Rastrea cada pedido, fase por fase</h3>
+            <p class="desc">Desde que se compra en el exterior hasta que se entrega en la puerta del cliente — cada encargo tiene su propia línea de tiempo, visible para ti y consultable por tu cliente.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Fases claras: comprado, en bodega, en tránsito, entregado</li>
+              <li><svg><use href="#i-check"/></svg> Portal de seguimiento para que tu cliente vea su pedido</li>
+              <li><svg><use href="#i-check"/></svg> Historial completo por guía y por cliente</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <span class="sp-badge">EN VIVO</span>
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">#ENC-7841 · Entregado</span><span class="val mono">Colombia</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand-2);"></span><span class="grow">#ENC-7839 · En tránsito</span><span class="val mono">Colombia</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">#ENC-7836 · En bodega</span><span class="val mono">Estados Unidos</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">#ENC-7830 · Comprado</span><span class="val mono">Estados Unidos</span></div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="sp-visual">
-        <span class="sp-badge">EN VIVO</span>
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-rows">
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">#ENC-7841 · Entregado</span><span class="val mono">Colombia</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--brand-2);"></span><span class="grow">#ENC-7839 · En tránsito</span><span class="val mono">Colombia</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">#ENC-7836 · En bodega</span><span class="val mono">Estados Unidos</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">#ENC-7830 · Comprado</span><span class="val mono">Estados Unidos</span></div>
+
+      <div class="mod-panel" data-panel="finanzas">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">💰 Finanzas & Compras</span>
+            <h3>Sabe cuánto ganas de verdad, en cada venta</h3>
+            <p class="desc">TRM del día, costos reales de compra en el exterior y gastos operativos — todo cruzado automáticamente para mostrarte la rentabilidad real, no la que crees que tienes.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> TRM actualizada automáticamente cada día</li>
+              <li><svg><use href="#i-check"/></svg> Costeo real por compra: producto + envío + comisiones</li>
+              <li><svg><use href="#i-check"/></svg> Reporte de gastos operativos y balance de caja</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="3106" data-prefix="$">$0</b><span>TRM hoy</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="34" data-suffix="%">0%</b><span>Margen prom.</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Compra USA — Nike Air Force</span><span class="val mono">-$224K</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Gasto operativo — Bodega</span><span class="val mono">-$95K</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="ventas">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🛒 Ventas, Clientes & Cotizador</span>
+            <h3>Cotiza, vende y cobra sin salir del sistema</h3>
+            <p class="desc">Registra ventas y abonos, guarda el historial completo de cada cliente y genera cotizaciones profesionales en segundos con tus márgenes ya calculados.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Ficha de cliente con historial de compras y abonos</li>
+              <li><svg><use href="#i-check"/></svg> Cotizador con PDF listo para enviar por WhatsApp</li>
+              <li><svg><use href="#i-check"/></svg> Comprobantes de pago archivados por venta</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Beatriz E. — Nike Air Force '07</span><span class="val mono">$240K</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Omaira I. — Tommy Hilfiger</span><span class="val mono">Saldo</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Héctor R. — Disney Adult</span><span class="val mono">$415K</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="58" style="background:var(--grad-cool);"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CARTERA COBRADA — 58%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="calculadora">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🧮 Calculadora de Precios</span>
+            <h3>Calcula el precio final en segundos, sin fórmulas en la cabeza</h3>
+            <p class="desc">Ingresa el precio del producto y la calculadora suma automáticamente envío, aduanas, comisión de la tienda y tu margen — el cálculo que hoy haces a mano (y a veces mal) en segundos.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Cálculo automático: producto + envío + aduanas + comisión + margen</li>
+              <li><svg><use href="#i-check"/></svg> Guarda tus fórmulas y porcentajes para no repetir el proceso</li>
+              <li><svg><use href="#i-check"/></svg> Ajusta el margen y ve el resultado al instante</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="grow">Precio del producto</span><span class="val mono">$120,00</span></div>
+              <div class="sp-row"><span class="grow">Envío + aduanas</span><span class="val mono">+$40,50</span></div>
+              <div class="sp-row"><span class="grow">Comisión + tu margen</span><span class="val mono">+$47,63</span></div>
+            </div>
+            <div class="sp-stat-row">
+              <div class="sp-stat" style="grid-column:1/-1;"><b class="cnum" data-to="208" data-prefix="$">$0</b><span>Total a cobrar</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="cotizador">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">📝 Cotizador</span>
+            <h3>Convierte el cálculo en una cotización lista para enviar</h3>
+            <p class="desc">El Cotizador toma el resultado de tu Calculadora y arma automáticamente una cotización profesional en PDF — lista para enviar por WhatsApp, sin que el cliente vea tus números internos de costo y margen.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Usa la Calculadora por debajo — sin recalcular nada de nuevo</li>
+              <li><svg><use href="#i-check"/></svg> PDF profesional con tu marca, listo para el cliente</li>
+              <li><svg><use href="#i-check"/></svg> Historial de cotizaciones enviadas por cliente</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Cotización #045 · Beatriz E.</span><span class="val mono">✓ Enviada</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Cotización #044 · Laura M.</span><span class="val mono">✓ Enviada</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Cotización #043 · Ana P.</span><span class="val mono">Pendiente</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="clientes">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">👥 Clientes</span>
+            <h3>Cada cliente, con su historial completo a la mano</h3>
+            <p class="desc">Compras, abonos y pedidos en curso en una sola ficha — para atender rápido sin tener que preguntar "¿y usted qué me había pedido?"</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Ficha única con historial de compras y pagos</li>
+              <li><svg><use href="#i-check"/></svg> Notas y preferencias por cliente</li>
+              <li><svg><use href="#i-check"/></svg> Búsqueda rápida por nombre, teléfono o pedido</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">María González · 12 compras</span><span class="val mono">$1.8M</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Carolina Ruiz · 7 compras</span><span class="val mono">$920K</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Daniela Ortega · 4 compras</span><span class="val mono">$540K</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="80"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CLIENTES RECURRENTES — 80%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="inventario">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">📦 Inventario</span>
+            <h3>Sabe qué tienes, qué se agotó y qué va llegando</h3>
+            <p class="desc">Cada producto con su stock real, costo de compra y variantes — para que nunca prometas algo que ya no tienes, y sepas cuándo reabastecer.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Alertas automáticas de stock bajo por producto</li>
+              <li><svg><use href="#i-check"/></svg> Variantes (talla, color) con su propio inventario</li>
+              <li><svg><use href="#i-check"/></svg> Historial de entradas y salidas por producto</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="142">0</b><span>Productos activos</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="8">0</b><span>Stock bajo</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Nike Air Force '07 — Talla 38</span><span class="val mono">12 und.</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Perfume CH Men 100ml</span><span class="val mono">2 und.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="compras">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🧳 Compras Internacionales</span>
+            <h3>Controla cada compra que haces en el exterior</h3>
+            <p class="desc">Registra qué compraste, en qué tienda, cuánto costó en dólares y cómo se traduce en tu costo real en pesos — la base de un costeo confiable.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Registro de compras por tienda y por viaje</li>
+              <li><svg><use href="#i-check"/></svg> Conversión automática con la TRM del día</li>
+              <li><svg><use href="#i-check"/></svg> Vinculación directa con el producto en inventario</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="3106" data-prefix="$">$0</b><span>TRM del día</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="24">0</b><span>Compras este mes</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">Nike.com — 3 pares</span><span class="val mono">-$298</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--cool);"></span><span class="grow">Sephora — 5 productos</span><span class="val mono">-$142</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="viajes">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">✈️ Viajes USA</span>
+            <h3>Organiza cada viaje de compras, de principio a fin</h3>
+            <p class="desc">Registra fechas, presupuesto y la lista de encargos por viaje — para que cada vuelo salga con el itinerario de compras ya armado, sin dejar nada por fuera.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Presupuesto y gastos por viaje</li>
+              <li><svg><use href="#i-check"/></svg> Lista de encargos y productos a comprar</li>
+              <li><svg><use href="#i-check"/></svg> Historial de viajes anteriores</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-stat-row">
+              <div class="sp-stat"><b class="cnum" data-to="3.2" data-suffix="M" data-prefix="$">$0M</b><span>Presupuesto del viaje</span></div>
+              <div class="sp-stat"><b class="cnum" data-to="18">0</b><span>Encargos por comprar</span></div>
+            </div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Viaje Estados Unidos · 12–18 nov</span><span class="val mono">Activo</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">Viaje Estados Unidos · Oct 2026</span><span class="val mono">Cerrado</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="vendedores">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🧑‍💼 Vendedores</span>
+            <h3>Mide el desempeño de tu equipo, con datos reales</h3>
+            <p class="desc">Cada vendedora con sus propias ventas, comisiones y metas — para reconocer el esfuerzo con números, no con percepciones.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Ventas y comisiones por vendedora, en tiempo real</li>
+              <li><svg><use href="#i-check"/></svg> Metas mensuales con seguimiento de avance</li>
+              <li><svg><use href="#i-check"/></svg> Ranking de desempeño del equipo</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Ana P. — meta mensual</span><span class="val mono">92%</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Laura M. — meta mensual</span><span class="val mono">76%</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Julián R. — meta mensual</span><span class="val mono">54%</span></div>
+            </div>
+            <div class="sp-bar-track"><div class="sp-bar-fill" data-w="74"></div></div>
+            <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">DESEMPEÑO DEL EQUIPO — 74%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="tracker">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🔎 Competitor Tracker</span>
+            <h3>Vigila a tu competencia en Instagram, sin hacerlo a mano</h3>
+            <p class="desc">El sistema rastrea las publicaciones de las cuentas que le indiques y usa IA para avisarte qué está funcionando — así inspiras tu próximo contenido sin pasar horas scrolleando.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Rastreo automático diario de cuentas de la competencia</li>
+              <li><svg><use href="#i-check"/></svg> Análisis con IA de qué publicaciones funcionan mejor</li>
+              <li><svg><use href="#i-check"/></svg> Sugerencias de contenido para recrear</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">@tiendaejemplo · Reel</span><span class="val mono">🔥 Alto</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">@otracompetencia · Carrusel</span><span class="val mono">Medio</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">@marcarival · Post</span><span class="val mono">Bajo</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mod-panel" data-panel="calendario">
+        <div class="spotlight">
+          <div class="sp-text">
+            <span class="tag">🗓️ Calendario de Contenido</span>
+            <h3>Planifica tus publicaciones sin perder el hilo</h3>
+            <p class="desc">Organiza qué vas a publicar, cuándo y en qué canal — con alertas para no olvidar verificar links o códigos de descuento antes de salir en vivo.</p>
+            <ul class="sp-list">
+              <li><svg><use href="#i-check"/></svg> Vista mensual con categorías y canales</li>
+              <li><svg><use href="#i-check"/></svg> Checklist de verificación por publicación</li>
+              <li><svg><use href="#i-check"/></svg> Plantilla semanal reutilizable</li>
+            </ul>
+          </div>
+          <div class="sp-visual">
+            <div class="win-bar"><span></span><span></span><span></span></div>
+            <div class="sp-rows">
+              <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Lun · Reel — Nueva colección</span><span class="val mono">Listo</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Mié · Post — Descuento envío</span><span class="val mono">Falta cupón</span></div>
+              <div class="sp-row"><span class="dotc" style="background:var(--fog);"></span><span class="grow">Vie · Historia — Testimonio</span><span class="val mono">Programado</span></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="spotlight-section tinted">
+<!-- ============ COTIZADOR: sección destacada ============ -->
+<section class="cotiz-feature">
   <div class="wrap">
-    <div class="spotlight rv">
-      <div class="sp-text">
-        <span class="tag">💰 Finanzas & Compras</span>
-        <h3>Sabe cuánto ganas de verdad, en cada venta</h3>
-        <p class="desc">TRM del día, costos reales de compra en el exterior y gastos operativos — todo cruzado automáticamente para mostrarte la rentabilidad real, no la que crees que tienes.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> TRM actualizada automáticamente cada día</li>
-          <li><svg><use href="#i-check"/></svg> Costeo real por compra: producto + envío + comisiones</li>
-          <li><svg><use href="#i-check"/></svg> Reporte de gastos operativos y balance de caja</li>
+    <div class="cotiz-inner rv">
+      <div class="cotiz-text">
+        <span class="eyebrow">⭐ El dúo favorito de los personal shoppers</span>
+        <h2 class="h-title">Calculadora + Cotizador: cotiza en segundos, con todos los cargos ya incluidos</h2>
+        <p class="lead">El dolor #1 de todo personal shopper: calcular a mano cuánto cobrar sumando el producto, el envío, la aduana, la comisión de la tienda y tu margen — sin equivocarte. La Calculadora hace las cuentas; el Cotizador las convierte en una cotización profesional en PDF, lista para enviar por WhatsApp.</p>
+        <ul class="cotiz-list">
+          <li><svg><use href="#i-check"/></svg> Cálculo automático: producto + envío + aduanas + comisión + tu margen</li>
+          <li><svg><use href="#i-check"/></svg> Cotización profesional en PDF, lista para el cliente</li>
+          <li><svg><use href="#i-check"/></svg> Guarda tus fórmulas — no repitas el cálculo a mano cada vez</li>
         </ul>
+        <a class="btn btn-ghost-light" href="#precios">Ver en qué plan está incluido →</a>
+        <p class="cotiz-plan-note">Calculadora incluida desde el plan Starter · Cotizador (con Calculadora) desde el plan Pro.</p>
       </div>
-      <div class="sp-visual">
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-stat-row">
-          <div class="sp-stat"><b class="cnum" data-to="3106" data-prefix="$">$0</b><span>TRM hoy</span></div>
-          <div class="sp-stat"><b class="cnum" data-to="34" data-suffix="%">0%</b><span>Margen prom.</span></div>
-        </div>
-        <div class="sp-rows">
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Compra USA — Nike Air Force</span><span class="val mono">-$224K</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--brand);"></span><span class="grow">Gasto operativo — Bodega</span><span class="val mono">-$95K</span></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="spotlight-section">
-  <div class="wrap">
-    <div class="spotlight rev rv">
-      <div class="sp-text">
-        <span class="tag">🛒 Ventas, Clientes & Cotizador</span>
-        <h3>Cotiza, vende y cobra sin salir del sistema</h3>
-        <p class="desc">Registra ventas y abonos, guarda el historial completo de cada cliente y genera cotizaciones profesionales en segundos con tus márgenes ya calculados.</p>
-        <ul class="sp-list">
-          <li><svg><use href="#i-check"/></svg> Ficha de cliente con historial de compras y abonos</li>
-          <li><svg><use href="#i-check"/></svg> Cotizador con PDF listo para enviar por WhatsApp</li>
-          <li><svg><use href="#i-check"/></svg> Comprobantes de pago archivados por venta</li>
-        </ul>
-      </div>
-      <div class="sp-visual">
-        <div class="win-bar"><span></span><span></span><span></span></div>
-        <div class="sp-rows">
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Beatriz E. — Nike Air Force '07</span><span class="val mono">$240K</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--warn);"></span><span class="grow">Omaira I. — Tommy Hilfiger</span><span class="val mono">Saldo</span></div>
-          <div class="sp-row"><span class="dotc" style="background:var(--success);"></span><span class="grow">Héctor R. — Disney Adult</span><span class="val mono">$415K</span></div>
-        </div>
-        <div class="sp-bar-track"><div class="sp-bar-fill" data-w="58" style="background:var(--grad-cool);"></div></div>
-        <div style="font-size:.68rem;color:var(--fog-soft);font-weight:700;margin-top:6px;">CARTERA COBRADA — 58%</div>
+      <div class="calc-card">
+        <div class="calc-head">🧮 Cotizador</div>
+        <div class="calc-row"><span>Precio del producto</span><b>$120,00</b></div>
+        <div class="calc-row"><span>Envío internacional</span><b>+ $18,00</b></div>
+        <div class="calc-row"><span>Aduanas y nacionalización</span><b>+ $22,50</b></div>
+        <div class="calc-row"><span>Comisión de la tienda</span><b>+ $6,00</b></div>
+        <div class="calc-row"><span>Tu margen (25%)</span><b>+ $41,63</b></div>
+        <div class="calc-total"><span>Total a cobrar</span><b>$208,13</b></div>
       </div>
     </div>
   </div>
@@ -607,7 +917,7 @@
         <div class="plan-price">$79.000<span>/mes</span></div>
         <ul>
           <li><svg><use href="#i-check"/></svg> Hasta 2 usuarios</li>
-          <li><svg><use href="#i-check"/></svg> Ventas, Clientes, Inventario</li>
+          <li><svg><use href="#i-check"/></svg> Ventas, Clientes, Inventario y Calculadora</li>
           <li><svg><use href="#i-check"/></svg> Soporte por WhatsApp</li>
         </ul>
       </div>
@@ -617,7 +927,7 @@
         <div class="plan-price">$149.000<span>/mes</span></div>
         <ul>
           <li><svg><use href="#i-check"/></svg> Hasta 8 usuarios</li>
-          <li><svg><use href="#i-check"/></svg> Todos los módulos operativos</li>
+          <li><svg><use href="#i-check"/></svg> Todos los módulos operativos + Cotizador</li>
           <li><svg><use href="#i-check"/></svg> Finanzas y Dashboard 360°</li>
           <li><svg><use href="#i-check"/></svg> Soporte prioritario</li>
         </ul>
@@ -686,7 +996,7 @@
 
 <footer>
   <div class="wrap">
-    <div class="flogo"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--brand);display:inline-block;"></span> EncargosPro</div>
+    <div class="flogo"><img src="logo-icon.png" alt="EncargosPro" class="flogo-img"></div>
     <div>Software de gestión para importadores y personal shoppers</div>
     <div>© <span id="year"></span> EncargosPro</div>
   </div>
@@ -703,9 +1013,9 @@
 
     <!-- Pantalla 1: crear cuenta -->
     <div class="auth-screen active" id="auth-screen-signup">
-      <div class="auth-head">
+      <div class="auth-head plain">
         <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
-        <div class="logo-mark">EP</div>
+        <img src="logo-full.png" alt="EncargosPro" class="logo-full">
         <h3>Crea tu cuenta</h3>
         <p>Empieza tu prueba gratis hoy</p>
       </div>
@@ -737,9 +1047,9 @@
 
     <!-- Pantalla 2: revisa tu correo -->
     <div class="auth-screen" id="auth-screen-confirm">
-      <div class="auth-head">
+      <div class="auth-head plain">
         <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
-        <div class="logo-mark">EP</div>
+        <img src="logo-full.png" alt="EncargosPro" class="logo-full">
         <h3>Ya casi</h3>
         <p>Solo falta confirmar tu correo</p>
       </div>
@@ -755,9 +1065,9 @@
 
     <!-- Pantalla 3: onboarding (ya autenticado, falta crear la empresa) -->
     <div class="auth-screen" id="auth-screen-onboarding">
-      <div class="auth-head">
+      <div class="auth-head plain">
         <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
-        <div class="logo-mark">✨</div>
+        <img src="logo-full.png" alt="EncargosPro" class="logo-full">
         <h3>¡Bienvenido a EncargosPro!</h3>
         <p>Vamos a personalizar tu cuenta</p>
       </div>
@@ -785,6 +1095,13 @@
             </label>
             <input type="file" id="auth-onb-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none;">
           </div>
+          <div class="auth-field">
+            <div class="auth-field-head">
+              <label>Código de referido</label>
+              <span class="auth-hint">Opcional</span>
+            </div>
+            <input type="text" id="auth-onb-referido" placeholder="Ej: ACME-4F2B" style="text-transform:uppercase;">
+          </div>
           <button type="submit" class="auth-submit" id="auth-onb-btn">Comenzar prueba gratis →</button>
         </form>
       </div>
@@ -792,14 +1109,19 @@
 
     <!-- Pantalla 4: éxito -->
     <div class="auth-screen" id="auth-screen-exito">
-      <div class="auth-head">
+      <div class="auth-head plain">
         <button class="auth-close" type="button" onclick="window.EncargosAuth.cerrar()">&times;</button>
-        <div class="logo-mark">🎉</div>
+        <img src="logo-full.png" alt="EncargosPro" class="logo-full">
         <h3>¡Tu cuenta está lista!</h3>
         <p>Tu prueba gratis ya está activa</p>
       </div>
       <div class="auth-body" style="text-align:center;">
-        <p style="color:var(--text-soft);font-size:.92rem;margin-bottom:24px;">Inicia sesión con el mismo correo para entrar a tu cuenta de EncargosPro.</p>
+        <p style="color:var(--text-soft);font-size:.92rem;margin-bottom:16px;">Inicia sesión con el mismo correo para entrar a tu cuenta de EncargosPro.</p>
+        <div id="auth-exito-referido" style="display:none;background:var(--surface-tint);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:20px;text-align:left;">
+          <p style="font-size:.78rem;font-weight:700;color:var(--text-soft);margin:0 0 6px;">TU CÓDIGO DE REFERIDO</p>
+          <p style="font-size:1.1rem;font-weight:800;color:var(--brand-dark);margin:0;font-family:var(--font-mono);" id="auth-exito-codigo">—</p>
+          <p style="font-size:.8rem;color:var(--text-soft);margin:8px 0 0;">Compártelo con otros negocios de importación — ambos reciben beneficios en su plan.</p>
+        </div>
         <a class="auth-submit" style="display:block;text-decoration:none;" id="auth-entrar-app" href="#">Entrar a EncargosPro →</a>
       </div>
     </div>
@@ -867,6 +1189,26 @@
   document.querySelectorAll('.sp-visual, .stats-grid').forEach(function(el){
     if (io2) io2.observe(el);
     else { el.querySelectorAll('.cnum').forEach(animateCount); el.querySelectorAll('.sp-bar-fill').forEach(function(b){ b.style.width = b.dataset.w + '%'; }); }
+  });
+
+  // Selector interactivo de módulos: cambia el panel visible y dispara
+  // los contadores/barras de ESE panel la primera vez que se muestra
+  // (los de otros paneles ya están cubiertos por el IntersectionObserver
+  // de arriba mientras están visibles en pantalla).
+  var modTabs = document.querySelectorAll('.mod-tab');
+  var modPanels = document.querySelectorAll('.mod-panel');
+  modTabs.forEach(function(tab){
+    tab.addEventListener('click', function(){
+      var mod = tab.dataset.mod;
+      modTabs.forEach(function(t){ t.classList.toggle('active', t === tab); });
+      modPanels.forEach(function(p){
+        var isActive = p.dataset.panel === mod;
+        p.classList.toggle('active', isActive);
+        if (!isActive) return;
+        p.querySelectorAll('.cnum').forEach(function(n){ if(!counted.has(n)){ counted.add(n); animateCount(n);} });
+        p.querySelectorAll('.sp-bar-fill').forEach(function(b){ if(!barred.has(b)){ barred.add(b); requestAnimationFrame(function(){ b.style.width = b.dataset.w + '%'; }); } });
+      });
+    });
   });
 
   // FAQ accordion
@@ -951,7 +1293,7 @@
     }
   }
 
-  async function crearEmpresaTrial(nombreCompleto, nombreEmpresa){
+  async function crearEmpresaTrial(nombreCompleto, nombreEmpresa, codigoReferido){
     var { data: sessionData } = await supa.auth.getSession();
     var token = sessionData?.session?.access_token;
     if (!token) throw new Error('Tu sesión expiró. Cierra este cuadro e inicia el registro de nuevo.');
@@ -959,7 +1301,7 @@
     var resp = await fetch(FUNC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ accion: 'crear_empresa_trial', nombreCompleto: nombreCompleto, nombreEmpresa: nombreEmpresa }),
+      body: JSON.stringify({ accion: 'crear_empresa_trial', nombreCompleto: nombreCompleto, nombreEmpresa: nombreEmpresa, codigoReferido: codigoReferido || undefined }),
     });
     var data = await resp.json().catch(function(){ return {}; });
     if (!resp.ok) throw new Error(data.error || ('Error ' + resp.status));
@@ -1021,6 +1363,12 @@
     abrir('auth-screen-onboarding');
   }
 
+  // Link de referido compartido (ej. encargospro.com/?ref=ACME-4F2B):
+  // precarga el código en el formulario de onboarding sin obligar a nadie
+  // a escribirlo a mano.
+  var refParam = new URLSearchParams(window.location.search).get('ref');
+  if (refParam) document.getElementById('auth-onb-referido').value = refParam.toUpperCase();
+
   document.getElementById('btn-empezar-gratis')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-header')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-precios')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
@@ -1071,11 +1419,16 @@
     setError('auth-onboarding-error', '');
     var nombreCompleto = document.getElementById('auth-onb-nombre').value.trim();
     var nombreEmpresa = document.getElementById('auth-onb-empresa').value.trim();
+    var codigoReferido = document.getElementById('auth-onb-referido').value.trim();
     var btn = document.getElementById('auth-onb-btn');
     btn.disabled = true; btn.textContent = 'Creando tu espacio...';
 
     try {
-      var resultado = await crearEmpresaTrial(nombreCompleto, nombreEmpresa);
+      var resultado = await crearEmpresaTrial(nombreCompleto, nombreEmpresa, codigoReferido);
+      if (resultado && resultado.empresa && resultado.empresa.codigo_referido) {
+        document.getElementById('auth-exito-codigo').textContent = resultado.empresa.codigo_referido;
+        document.getElementById('auth-exito-referido').style.display = 'block';
+      }
       if (onbLogoFile && resultado && resultado.empresa) {
         btn.textContent = 'Subiendo tu logo...';
         try { await subirLogoEmpresa(resultado.empresa.id, onbLogoFile); }

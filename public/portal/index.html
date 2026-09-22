@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Mi Pedido — Importaciones Jarapo</title>
+  <title>Mi Pedido — EncargosPro</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --rojo: #D91010; --rojo-s: #b50e0e; --rojo-claro: #fff0f0;
-      --ok: #059669; --warn: #d97706;
+      --rojo: #EA168F; --rojo-s: #B01374; --rojo-claro: #FDEAF5;
+      --ok: #22C55E; --warn: #F59E0B;
       --bg: #f5f5f7; --card: #ffffff; --txt: #1a1a1a; --txt2: #6b6b6b;
       --borde: #e8e8e8;
     }
@@ -16,7 +16,7 @@
 
     /* ── HERO HEADER ── */
     .hero {
-      background: linear-gradient(135deg, #c00d0d 0%, #D91010 60%, #b50000 100%);
+      background: linear-gradient(135deg, #FD9779 0%, #EA168F 55%, #912EE5 100%);
       padding: 24px 20px 20px;
       display: flex;
       flex-direction: column;
@@ -436,7 +436,7 @@
   <span class="hero-avion" style="bottom:5px;left:10px;transform:rotate(-10deg);font-size:55px">✈</span>
   <span class="hero-avion" style="bottom:-5px;right:20px;transform:rotate(20deg);font-size:90px">✈</span>
   <div class="hero-logo-wrap">
-    <img src="/logo_jarapo.png" alt="Importaciones Jarapo" class="hero-logo-img">
+    <img src="/logo.png" alt="EncargosPro" class="hero-logo-img">
   </div>
   <div class="hero-sub" id="hero-sub">Seguimiento de tu pedido</div>
   <div class="hero-tel" id="hero-tel"></div>
@@ -552,7 +552,7 @@ const TRACKS = {
     {n:'Compra realizada en USA',d:'Tu producto fue comprado en tienda de Estados Unidos'},
     {n:'En camino a Colombia',d:'Tu producto está viajando desde USA hacia Colombia'},
     {n:'En aduana / trámites',d:'Tu producto está en proceso de aduana en Colombia'},
-    {n:'Llegó a bodega en Medellín',d:'Tu producto llegó a nuestra bodega en Medellín'},
+    {n:'Llegó a bodega local',d:'Tu producto llegó a nuestra bodega local'},
     {n:'Pedido confirmado al cliente',d:'Nos comunicamos contigo para coordinar la entrega'},
     {n:'En preparación / empaque',d:'Estamos preparando y empacando tu pedido'},
     {n:'Enviado',d:'Tu pedido está en camino hacia ti'},
@@ -564,7 +564,7 @@ const TRACKS = {
     {n:'En camino a bodega USA',d:'Tu producto se dirige a nuestra bodega en USA'},
     {n:'En camino a Colombia',d:'Tu producto está en tránsito desde USA a Colombia'},
     {n:'En aduana / trámites',d:'Tu producto está en proceso de aduana en Colombia'},
-    {n:'Llegó a bodega en Medellín',d:'Tu producto llegó a nuestra bodega en Medellín'},
+    {n:'Llegó a bodega local',d:'Tu producto llegó a nuestra bodega local'},
     {n:'Pedido confirmado al cliente',d:'Nos comunicamos contigo para coordinar la entrega'},
     {n:'En preparación / empaque',d:'Estamos preparando y empacando tu pedido'},
     {n:'Enviado',d:'Tu pedido está en camino hacia ti'},
@@ -682,7 +682,7 @@ function estadoCliente(v) {
     '4. En Camino a Colombia':                    { txt: 'En camino a Colombia ✈️',    color: '#0891b2', num: 4 },
     '5. En Aduana Colombia':                      { txt: 'En aduana / trámites 🛃',    color: '#d97706', num: 5 },
     '6. Entregado a Cliente Final':               { txt: '¡Entregado! 🎉',             color: '#059669', num: 9 },
-    '7. En Bodega Medellín':                      { txt: 'Llegó a Medellín 📍',        color: '#059669', num: 6 },
+    '7. En Bodega Medellín':                      { txt: 'Llegó a tu ciudad 📍',       color: '#059669', num: 6 },
     '8. Notificado al Cliente':                   { txt: 'Pedido confirmado 📞',        color: '#059669', num: 7 },
     '9. Enviado Interno Colombia':                { txt: 'En camino hacia ti 🚚',       color: '#059669', num: 8 },
   }
@@ -719,7 +719,7 @@ function fasesTrack(track) {
       { n: 'Compra realizada en USA',      d: 'Tu producto fue comprado en tienda de USA' },
       { n: 'En camino a Colombia',         d: 'Tu producto viaja desde USA hacia Colombia' },
       { n: 'En aduana / trámites',         d: 'Tu producto está en proceso de aduana' },
-      { n: 'Llegó a bodega en Medellín',   d: 'Tu producto llegó a nuestra bodega' },
+      { n: 'Llegó a bodega local',   d: 'Tu producto llegó a nuestra bodega' },
       { n: 'Pedido confirmado al cliente', d: 'Coordinando la entrega contigo' },
       { n: 'En preparación / empaque',     d: 'Estamos preparando y empacando tu pedido' },
       { n: 'Enviado',                      d: 'Tu pedido está en camino hacia ti' },
@@ -731,7 +731,7 @@ function fasesTrack(track) {
       { n: 'En camino a bodega USA',       d: 'Tu producto se dirige a nuestra bodega en USA' },
       { n: 'En camino a Colombia',         d: 'Tu producto está en tránsito desde USA' },
       { n: 'En aduana / trámites',         d: 'Tu producto está en proceso de aduana' },
-      { n: 'Llegó a bodega en Medellín',   d: 'Tu producto llegó a nuestra bodega' },
+      { n: 'Llegó a bodega local',   d: 'Tu producto llegó a nuestra bodega' },
       { n: 'Pedido confirmado al cliente', d: 'Coordinando la entrega contigo' },
       { n: 'En preparación / empaque',     d: 'Estamos preparando y empacando tu pedido' },
       { n: 'Enviado',                      d: 'Tu pedido está en camino hacia ti' },

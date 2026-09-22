@@ -1,7 +1,7 @@
 import './style.css';
 import { db } from './db.js';
 import { auth, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from './auth.js';
-import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar } from 'lucide';
+import { createIcons, LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar, Lock } from 'lucide';
 
 // Importación de módulos refactorizados
 import { renderDashboard } from './views/dashboard.js';
@@ -34,7 +34,7 @@ document.documentElement.setAttribute('data-theme', savedTheme);
 
 window.auth = auth;
 /**
- * Jarapo Admin - Aplicación Operativa Medellín (v3.0.0 · Auth + RBAC)
+ * EncargosPro - Aplicación Operativa (v3.0.0 · Auth + RBAC)
  */
 
 const mainAppContent = document.querySelector('#app');
@@ -58,8 +58,8 @@ const NAV_GROUPS = [
       { view: 'cotizador',   icon: 'file-text',         label: 'Cotizador',    module: 'cotizador_ver' },
       { view: 'purchases',   icon: 'globe',             label: 'Compras USA',  module: 'purchases'   },
       { view: 'logistics',   icon: 'truck',             label: 'Seguimientos', module: 'logistics'   },
-      { view: 'viaje',       icon: 'plane',             label: 'Viaje EEUU',   module: null, roleOnly: ['admin','gerente'] },
-      { view: 'tracker',     icon: 'trending-up',       label: 'Competitor Tracker', module: null, roleOnly: ['admin','gerente'] },
+      { view: 'viaje',       icon: 'plane',             label: 'Viaje EEUU',   module: null, planModule: 'viaje', roleOnly: ['admin','gerente'] },
+      { view: 'tracker',     icon: 'trending-up',       label: 'Competitor Tracker', module: null, planModule: 'tracker', roleOnly: ['admin','gerente'] },
     ]
   },
   {
@@ -77,7 +77,7 @@ const NAV_GROUPS = [
     items: [
       { view: 'params',        icon: 'settings-2',        label: 'Parámetros',   module: 'params'        },
       { view: 'documentacion', icon: 'book-open',         label: 'Documentación',module: 'documentacion' },
-      { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, adminOnly: true },
+      { view: 'admin',         icon: 'shield',            label: 'Admin',        module: null, planModule: 'admin', adminOnly: true },
       { view: 'settings',      icon: 'settings',          label: 'Configuración',module: null, superadminOnly: true },
       { view: 'superadmin',    icon: 'shield',            label: 'Empresas',     module: 'superadmin' },
     ]
@@ -154,6 +154,13 @@ export const renderLayout = (contentHTML) => {
       if (profileLoaded && item.module && !auth.canAccess(item.module)) return '';
       const isReadOnly = profileLoaded && item.module && auth.canAccess(item.module) && !auth.canEdit(item.module);
       const isAdmin = item.view === 'admin';
+      // Bloqueo por PLAN (independiente de canAccess/permisos de rol): el
+      // módulo pasó todos los checks de arriba (el usuario SÍ podría
+      // operarlo), pero la empresa no lo tiene contratado. Se muestra
+      // visible-pero-bloqueado (candado + modal de upgrade) en vez de
+      // ocultarlo, para invitar a actualizar de plan.
+      const planKey = item.planModule || item.module;
+      const isLockedByPlan = profileLoaded && planKey && auth.isModuleLockedByPlan(planKey);
       const alertBadge = item.view === 'dashboard' && _dangerAlertCount > 0
         ? `<span id="sidebar-alert-badge-dashboard" style="background:#ef4444;color:#fff;font-size:0.52rem;font-weight:800;min-width:15px;height:15px;padding:0 3px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;line-height:1;margin-left:auto;">${_dangerAlertCount}</span>`
         : (item.view === 'dashboard' ? `<span id="sidebar-alert-badge-dashboard" style="display:none;background:#ef4444;color:#fff;font-size:0.52rem;font-weight:800;min-width:15px;height:15px;padding:0 3px;border-radius:8px;display:none;align-items:center;justify-content:center;line-height:1;margin-left:auto;">${_dangerAlertCount}</span>` : '');
@@ -162,11 +169,12 @@ export const renderLayout = (contentHTML) => {
         ? `<span class="viaje-badge" style="background:#06D6A0;color:white;font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;letter-spacing:0.04em;margin-left:auto;">ACTIVO</span>`
         : '';
       return `
-        <div class="nav-item ${state.currentView === item.view ? 'active' : ''} ${isAdmin ? 'nav-item-admin' : ''}" data-view="${item.view}">
+        <div class="nav-item ${state.currentView === item.view ? 'active' : ''} ${isAdmin ? 'nav-item-admin' : ''} ${isLockedByPlan ? 'nav-item-locked' : ''}" data-view="${item.view}" ${isLockedByPlan ? `data-locked-module="${planKey}" data-locked-label="${item.label}"` : ''}>
           <i data-lucide="${item.icon}"></i>
           <span>${item.label}</span>
-          ${isReadOnly ? '<span class="nav-readonly-badge">Ver</span>' : ''}
-          ${alertBadge}${viajeBadge}
+          ${isLockedByPlan ? '<i data-lucide="lock" class="nav-lock-icon"></i>' : ''}
+          ${!isLockedByPlan && isReadOnly ? '<span class="nav-readonly-badge">Ver</span>' : ''}
+          ${!isLockedByPlan ? `${alertBadge}${viajeBadge}` : ''}
         </div>
       `;
     }).join('');
@@ -177,20 +185,21 @@ export const renderLayout = (contentHTML) => {
   const adminNavItem = ''; // incluido en NAV_GROUPS › Sistema
 
   const _logoUrl = window.JARAPP_LOGO || sessionStorage.getItem('JARAPP_LOGO') || null;
+  const _empresaNombre = auth.isSuperadmin() ? 'Panel Superadmin' : auth.getEmpresaNombre();
   const _logoZoneHtml = _logoUrl
     ? `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Logo Jarapo">
+         <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Logo de ${_empresaNombre}">
        </div>
        <div class="sidebar-brand">
          <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
-         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
+         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">${_empresaNombre}</div>
        </div>`
     : `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">E</span>
+         <img src="/logo-encargospro.png" style="width:100%;height:100%;object-fit:contain;" alt="EncargosPro">
        </div>
        <div class="sidebar-brand">
          <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
-         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
+         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">${_empresaNombre}</div>
        </div>`;
 
   mainAppContent.innerHTML = `
@@ -233,17 +242,18 @@ export const renderLayout = (contentHTML) => {
           <span>Cerrar Sesión</span>
         </button>
       </div>
-      <div class="sidebar-foot">Bogotá · ${new Date().getFullYear()}</div>
+      <div class="sidebar-foot">EncargosPro · ${new Date().getFullYear()}</div>
     </div>
 
     <!-- Overlay para cerrar sidebar en mobile -->
     <div id="sidebar-overlay"></div>
 
     <main class="main-content">
+      ${auth.isReadOnlyMode() ? bannerSoloLectura(auth.getEmpresaSync()) : ''}
       <header class="header">
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
           <div class="welcome-msg">
-            <p>Importaciones Jarapo</p>
+            <p>${_empresaNombre}</p>
             <h1>Gestión Operativa</h1>
           </div>
           <button id="mobile-menu-btn" style="display:none; background:var(--surface-2); border:1px solid var(--border-base); color:var(--text-main); padding:8px 12px; border-radius:8px; cursor:pointer;">
@@ -284,7 +294,13 @@ export const renderLayout = (contentHTML) => {
   `;
 
   document.querySelectorAll('.nav-item').forEach(btn => {
-    btn.onclick = () => navigateTo(btn.getAttribute('data-view'));
+    btn.onclick = () => {
+      if (btn.dataset.lockedModule) {
+        abrirModalUpgradePlan(btn.dataset.lockedModule, btn.dataset.lockedLabel);
+        return;
+      }
+      navigateTo(btn.getAttribute('data-view'));
+    };
   });
 
   // Aplicar estado colapsado del sidebar síncronamente (antes del primer paint)
@@ -297,7 +313,7 @@ export const renderLayout = (contentHTML) => {
   // Renderizar iconos svg (delay 0 = próximo microtask, sin flash visible)
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar, Lock }
     });
 
     // Restaurar logo desde sessionStorage (persiste entre navegaciones)
@@ -462,6 +478,24 @@ export const navigateTo = (view) => {
     return;
   }
 
+  // Guard: módulo no incluido en el plan contratado — respaldo por si se
+  // navega directo (sin pasar por el candado del sidebar en renderLayout).
+  const planKeyMap = { ...moduleMap, admin: 'admin', viaje: 'viaje', tracker: 'tracker' };
+  if (planKeyMap[view] && auth.isModuleLockedByPlan(planKeyMap[view])) {
+    renderLayout(`
+      <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:50vh; gap:1rem; text-align:center;">
+        <div style="font-size:3rem;">🔒</div>
+        <h2 style="color:var(--text-main);">No incluido en tu plan</h2>
+        <p style="color:var(--text-faint); max-width:360px;">
+          <strong>${MODULE_LABELS[view] || view}</strong> no está disponible en tu plan actual.<br>
+          Actualiza tu suscripción para desbloquearlo.
+        </p>
+        <button class="btn-primary" onclick="window._navigateTo('dashboard')">← Ir al Dashboard</button>
+      </div>
+    `);
+    return;
+  }
+
   // Routing Map
   switch(view) {
     case 'dashboard':    renderDashboard(renderLayout, renderErrorInternal); break;
@@ -488,7 +522,7 @@ export const navigateTo = (view) => {
   // Re-pintar iconos al cambiar la vista
   setTimeout(() => {
     createIcons({
-      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar }
+      icons: { LayoutDashboard, Package, ShoppingCart, Truck, Users, Activity, Settings, Settings2, Moon, Sun, Globe, Menu, LogOut, Shield, UserCircle, Calculator, Plane, FileText, Sparkles, PanelLeftOpen, TrendingUp, Calendar, Lock }
     });
   }, 200);
 };
@@ -631,36 +665,183 @@ async function bootApp() {
     return;
   }
 
-  // Guard: suscripción de la empresa vencida/cancelada → bloquear navegación.
-  // El superadmin no tiene empresa propia (getEmpresa() da null) y no pasa por este guard.
-  const empresa = await auth.getEmpresa();
-  if (empresa && ['vencida', 'cancelada'].includes(empresa.estado_suscripcion)) {
-    renderSuscripcionVencida(empresa);
-    return;
-  }
-
   // Ya autenticado → arrancar directamente
   startApp();
 }
 
-function renderSuscripcionVencida(empresa) {
+// Contenido de venta por módulo bloqueado — ícono, titular persuasivo,
+// descripción y beneficios reales del módulo (no un genérico "no incluido").
+// Solo hace falta contenido curado para los módulos que realmente quedan
+// fuera de algún plan hoy (admin, cotizador_ver, calendario_ver, viaje,
+// tracker — ver Planes.modulos); el resto usa un fallback genérico por si
+// el superadmin reconfigura los planes más adelante.
+const UPGRADE_CONTENT = {
+  cotizador_ver: {
+    icon: '📝',
+    headline: 'Cotiza en segundos y da una imagen profesional',
+    desc: 'El Cotizador convierte tu Calculadora en una cotización lista para enviar por WhatsApp, con tu logo y todo el desglose de costos automático.',
+    bullets: [
+      'Cotización profesional en PDF lista para el cliente',
+      'Cálculo automático: producto + envío + aduanas + tu margen',
+      'Guarda tus fórmulas — no repitas el cálculo a mano cada vez',
+      'Incluye tu logo y los datos de tu negocio',
+    ],
+  },
+  calendario_ver: {
+    icon: '🗓️',
+    headline: 'Nunca más te quedes sin qué publicar',
+    desc: 'Planifica el contenido de tus redes con un calendario semanal, plantillas reutilizables y las fechas clave del año ya cargadas.',
+    bullets: [
+      'Plantilla semanal de contenido reutilizable',
+      'Fechas clave y días especiales ya cargados',
+      'Reprograma publicaciones sin perder el hilo',
+      'Mantén tu marca activa en redes sin improvisar',
+    ],
+  },
+  tracker: {
+    icon: '🔎',
+    headline: 'Descubre qué le está funcionando a tu competencia',
+    desc: 'Monitorea automáticamente cuentas de otros personal shoppers y tiendas — qué contenido se vuelve viral y qué formatos funcionan.',
+    bullets: [
+      'Seguimiento automático de cuentas de competencia',
+      'Detecta qué publicaciones se vuelven virales',
+      'Recreaciones de contenido con IA',
+      'Reportes periódicos de rendimiento',
+    ],
+  },
+  viaje: {
+    icon: '✈️',
+    headline: 'Organiza cada viaje de compras a Estados Unidos',
+    desc: 'Lleva el control completo de un viaje de encargos: qué productos vas a traer, cuánto pesan y el estado de cada uno, todo en un solo lugar.',
+    bullets: [
+      'Modo especial para gestionar un viaje activo',
+      'Control de peso y cantidad de productos por viaje',
+      'Tu equipo ve el estado del viaje en tiempo real',
+      'Evita perder o duplicar encargos durante el viaje',
+    ],
+  },
+  admin: {
+    icon: '🛡️',
+    headline: 'Dale acceso a tu equipo sin perder el control',
+    desc: 'Crea cuentas para tus vendedores, logística o finanzas con permisos específicos para cada uno — tú decides qué puede ver y editar cada persona.',
+    bullets: [
+      'Crea usuarios según el límite de tu plan',
+      'Permisos específicos por módulo y por persona',
+      'Historial de accesos de cada usuario',
+      'Ideal cuando tu equipo empieza a crecer',
+    ],
+  },
+};
+
+function getUpgradeContent(moduleKey, label) {
+  return UPGRADE_CONTENT[moduleKey] || {
+    icon: '🔒',
+    headline: `Desbloquea ${label}`,
+    desc: `${label} no está incluido en tu plan actual — actualiza tu suscripción para empezar a usarlo.`,
+    bullets: [
+      'Accede a todas las funciones de este módulo',
+      'Impulsa la gestión de tu negocio',
+      'Disponible en planes superiores',
+    ],
+  };
+}
+
+/** Modal de upgrade — se abre al hacer clic en un módulo del sidebar bloqueado por el plan actual (ver isModuleLockedByPlan en auth.js). */
+async function abrirModalUpgradePlan(moduleKey, label) {
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  if (!container || !content) return;
+
+  const info = getUpgradeContent(moduleKey, label);
+
+  // Plan más económico que sí incluye este módulo, para mostrarlo como
+  // gancho ("Disponible desde el plan Pro"). Si falla (red, RLS, etc.) el
+  // modal igual se muestra, solo sin ese dato — nunca bloquea el CTA.
+  let planNombre = null;
+  try {
+    const client = auth.getClient();
+    if (client) {
+      const { data } = await client.from('Planes').select('nombre, orden, modulos').order('orden');
+      planNombre = (data || []).find(p => p.modulos?.[moduleKey])?.nombre || null;
+    }
+  } catch (_) { /* sin dato de plan, el modal sigue funcionando igual */ }
+
+  const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
+  const mensaje = encodeURIComponent(`Hola, quiero actualizar mi plan de EncargosPro para desbloquear ${label}.`);
+  const check = `
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-top:1px;">
+      <circle cx="12" cy="12" r="10" fill="var(--success)" opacity="0.15"/>
+      <path d="M8 12.5l2.5 2.5L16 9" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+
+  content.innerHTML = `
+    <div class="modal-content" style="max-width:440px;">
+      <div style="position:relative; padding:28px 28px 0;">
+        <button onclick="window.closeModal()" class="modal-close" style="position:absolute; top:16px; right:16px;">&times;</button>
+        ${planNombre ? `
+          <span style="position:absolute; top:18px; left:28px; background:rgba(124,58,237,0.12); color:#7C3AED; border:1px solid rgba(124,58,237,0.25); font-size:0.62rem; font-weight:800; letter-spacing:0.5px; text-transform:uppercase; padding:4px 10px; border-radius:999px;">● ${planNombre}</span>
+        ` : ''}
+        <div style="width:72px;height:72px;border-radius:20px;background:var(--surface-2);border:1px solid var(--border-base);display:flex;align-items:center;justify-content:center;margin:38px auto 20px;font-size:2.1rem;position:relative;">
+          ${info.icon}
+          <span style="position:absolute; bottom:-4px; right:-4px; width:26px;height:26px;border-radius:50%;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 8px rgba(0,0,0,0.3);">🔒</span>
+        </div>
+      </div>
+      <div class="modal-body" style="padding-top:0; text-align:center;">
+        <h2 style="margin:0 0 10px;font-size:1.3rem;font-weight:800;line-height:1.25;">${info.headline}</h2>
+        <p style="color:var(--text-faint);font-size:0.88rem;margin:0 0 22px;line-height:1.5;">${info.desc}</p>
+        <ul style="list-style:none;padding:0;margin:0 0 22px;display:flex;flex-direction:column;gap:12px;text-align:left;">
+          ${info.bullets.map(b => `
+            <li style="display:flex;gap:10px;align-items:flex-start;font-size:0.85rem;color:var(--text-main);font-weight:600;">
+              ${check}
+              <span>${b}</span>
+            </li>
+          `).join('')}
+        </ul>
+        <div style="background:var(--surface-2); border:1px solid var(--border-base); border-radius:14px; padding:16px 18px; margin-bottom:20px; text-align:left;">
+          <p style="margin:0 0 4px;font-weight:800;font-size:0.9rem;">${planNombre ? `Disponible desde el plan ${planNombre}` : 'No incluido en tu plan actual'}</p>
+          <p style="margin:0;font-size:0.76rem;color:var(--text-faint);">Escríbenos y te ayudamos a actualizar tu suscripción hoy mismo.</p>
+        </div>
+        <a href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#20BD5C;color:#fff;border:none;padding:14px;border-radius:12px;font-weight:800;font-size:0.9rem;text-decoration:none;box-sizing:border-box;">
+          💬 Hablar por WhatsApp para actualizar mi plan
+        </a>
+      </div>
+    </div>`;
+  container.style.display = 'flex';
+}
+
+function renderSuscripcionVencida(empresa, motivo) {
   // Configurable vía variable de entorno VITE_WHATSAPP_COMERCIAL (Netlify →
   // Site settings → Environment variables), sin tocar código. El número de
   // Jarapo queda solo como fallback de desarrollo si no está configurada.
   const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
   const mensaje = encodeURIComponent(`Hola, mi suscripción a EncargosPro (${empresa.nombre}) está ${empresa.estado_suscripcion}. Quiero renovarla.`);
+  const textoDefault = `El acceso de <strong>${empresa.nombre}</strong> a EncargosPro está pausado. Contáctanos por WhatsApp para reactivar tu suscripción.`;
   document.querySelector('#app').innerHTML = `
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:1rem; text-align:center; padding:2rem;">
       <div style="font-size:3rem;">⏸️</div>
       <h2 style="color:var(--text-main);">Suscripción ${empresa.estado_suscripcion === 'cancelada' ? 'cancelada' : 'vencida'}</h2>
       <p style="color:var(--text-faint); max-width:380px;">
-        El acceso de <strong>${empresa.nombre}</strong> a EncargosPro está pausado.
-        Contáctanos por WhatsApp para reactivar tu suscripción.
+        ${motivo || textoDefault}
       </p>
       <a class="btn-primary" href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener">
         💬 Reactivar por WhatsApp
       </a>
       <button class="btn-secondary" onclick="window.location.reload()">Ya renové — Recargar</button>
+    </div>
+  `;
+}
+
+/** Banner persistente cuando el admin está operando en modo solo-lectura (gracia post-vencimiento). */
+function bannerSoloLectura(empresa) {
+  const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
+  const mensaje = encodeURIComponent(`Hola, mi suscripción a EncargosPro (${empresa?.nombre || ''}) venció y estoy en modo de solo lectura. Quiero renovarla.`);
+  return `
+    <div id="banner-solo-lectura" style="background:#7C1D1D; color:#fff; padding:10px 20px; display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; font-size:0.82rem; text-align:center;">
+      <span>🔒 Tu suscripción venció — estás en modo de <strong>solo consulta</strong>. No puedes crear ni editar información.</span>
+      <a href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener" style="background:#20BD5C; color:#fff; padding:5px 14px; border-radius:8px; font-weight:700; text-decoration:none; white-space:nowrap;">
+        💬 Renovar ahora
+      </a>
     </div>
   `;
 }
@@ -672,6 +853,34 @@ async function startApp() {
     renderLogin(() => startApp());
     return;
   }
+
+  // Precargar el plan contratado ANTES de construir el sidebar por primera
+  // vez — renderLayout() arma el menú de forma síncrona (auth.getPlanModules()),
+  // así que el catálogo ya tiene que estar en caché para esa primera llamada.
+  // Va acá (y no en bootApp) porque este es el único punto por el que pasan
+  // TODOS los caminos: sesión ya activa al recargar Y login recién hecho
+  // (los callbacks de renderLogin() llaman directo a startApp(), sin pasar
+  // por el resto de bootApp) — antes solo se precargaba en el primero, así
+  // que un login recién hecho nunca veía los candados hasta refrescar.
+  await auth.getPlan();
+
+  // Guard de suscripción: bloqueo total, modo solo-lectura (solo admin,
+  // durante los días de gracia configurados), o acceso normal. El
+  // superadmin no tiene empresa propia y evaluarAccesoSuscripcion() nunca
+  // lo bloquea (ver auth.js). Va acá y no en bootApp por el mismo motivo
+  // que auth.getPlan() arriba: este es el único punto por el que pasan
+  // todos los caminos de login.
+  const acceso = await auth.evaluarAccesoSuscripcion();
+  const empresaActual = auth.getEmpresaSync();
+  if (acceso.bloqueado) {
+    renderSuscripcionVencida(empresaActual);
+    return;
+  }
+  if (acceso.soloLectura && !auth.isAdmin()) {
+    renderSuscripcionVencida(empresaActual, `El acceso de <strong>${empresaActual?.nombre || ''}</strong> venció. Solo el administrador puede consultar información durante el periodo de gracia — contacta a tu administrador o renueven la suscripción.`);
+    return;
+  }
+  auth.setReadOnlyMode(acceso.soloLectura && auth.isAdmin());
 
   // Cargar logo en background
   ConfigService.getLogo().then(url => {

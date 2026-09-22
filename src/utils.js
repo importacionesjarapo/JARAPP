@@ -243,6 +243,40 @@ export const downloadExcel = (jsonData, fileName = 'reporte', sheetName = 'Datos
 };
 
 /**
+ * Lee un archivo .xlsx/.xls/.csv elegido por el usuario y devuelve un array
+ * de objetos (una fila = un objeto, llaves = encabezados de la primera fila).
+ * Usado por los importadores de Clientes/Ventas (Fase 5, #29).
+ */
+export const readExcelFile = (file) => {
+    return import('xlsx').then(XLSX => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const wb = XLSX.read(e.target.result, { type: 'array' });
+                const sheet = wb.Sheets[wb.SheetNames[0]];
+                resolve(XLSX.utils.sheet_to_json(sheet, { defval: '' }));
+            } catch (err) { reject(err); }
+        };
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+        reader.readAsArrayBuffer(file);
+    }));
+};
+
+/** Busca el valor de una fila probando varios nombres de columna posibles
+ * (case/acentos-insensitive) — para tolerar encabezados de Excel escritos
+ * de formas distintas (ej. "WhatsApp" vs "Whatsapp" vs "Celular"). */
+export const buscarColumna = (fila, ...nombres) => {
+    const claves = Object.keys(fila);
+    const normalizar = (s) => s.toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    for (const nombre of nombres) {
+        const objetivo = normalizar(nombre);
+        const clave = claves.find(k => normalizar(k) === objetivo);
+        if (clave !== undefined && fila[clave] !== '') return fila[clave];
+    }
+    return '';
+};
+
+/**
  * Abre el modal genérico para detalles de KPI.
  * @param {string} title - Título del modal
  * @param {string} subtitle - Subtítulo descriptivo

@@ -280,42 +280,6 @@ nav {
   transition: margin-left 0.35s cubic-bezier(0.34,1.56,0.64,1);
 }
 
-/* Anillo de marca — el logo, muy grande y tenue, de fondo en ambos temas */
-.main-content::after {
-  content: '';
-  position: fixed;
-  right: -4%;
-  bottom: -6%;
-  width: 30vw;
-  height: 30vw;
-  max-width: 460px;
-  max-height: 460px;
-  min-width: 280px;
-  min-height: 280px;
-  background-color: var(--primary);
-  opacity: 0.05;
-  -webkit-mask-image: url('/logo_ring_bg.png');
-  mask-image: url('/logo_ring_bg.png');
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  transform: rotate(-6deg);
-  pointer-events: none;
-  z-index: -1;
-}
-[data-theme="dark"] .main-content::after {
-  opacity: 0.09;
-}
-@media (max-width: 900px) {
-  .main-content::after { display: none; }
-}
-@media print {
-  .main-content::after { display: none; }
-}
-
 /* ── Top Header ── */
 .header {
   display: flex;
@@ -511,6 +475,27 @@ nav {
   background: var(--surface-3);
   color: var(--text-main);
   transform: scale(1.03);
+}
+
+/* .btn-secondary — usado en ~10 vistas (Cancelar de modales, botones de
+   utilidad) pero nunca tuvo regla propia: quedaba con el estilo por
+   defecto del navegador. Mismo tamaño/tipografía que .btn-primary, en
+   versión neutra/ghost. */
+.btn-secondary {
+  background: var(--surface-2);
+  border: 1px solid var(--border-base);
+  color: var(--text-main);
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.22s ease;
+}
+.btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--text-faint);
 }
 
 /* ════════════════════════════════════════════════
@@ -861,7 +846,7 @@ select {
   cursor: pointer;
   padding-right: 42px !important;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23D91010' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23EA168F' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 18px;
@@ -990,6 +975,34 @@ input:focus, select:focus, textarea:focus {
   font-weight: 800;
   letter-spacing: -0.4px;
   line-height: 1.1;
+}
+
+/* .module-header/.module-tag/.module-title — mismo patrón que .page-eyebrow/
+   .page-title, usado por admin.js y superadmin.js. Nunca tuvieron regla
+   propia (quedaban como texto plano sin estilo). */
+.module-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 1.5rem;
+}
+.module-tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  display: block;
+  margin: 0 0 4px;
+}
+.module-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  line-height: 1.1;
+  margin: 0;
 }
 
 /* Inventory grid view helpers */
@@ -1783,6 +1796,23 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
   border-color: rgba(124,58,237,0.2) !important;
 }
 .nav-item-admin.active i, .nav-item-admin i { color: #7C3AED !important; }
+
+/* Módulo visible pero no incluido en el plan contratado — se ve, no se
+   oculta, para invitar a actualizar de plan (patrón "candado" en vez de
+   ocultamiento silencioso). */
+.nav-item-locked {
+  opacity: 0.5;
+  cursor: pointer;
+}
+.nav-item-locked:hover {
+  opacity: 0.75;
+}
+.nav-item-locked .nav-lock-icon {
+  margin-left: auto;
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+  stroke-width: 2;
+}
 
 /* Readonly badge in nav */
 .nav-readonly-badge {

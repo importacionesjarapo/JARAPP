@@ -115,6 +115,11 @@ class Auth {
     this._profile = null;
     this._listeners = [];
     this._empresa = null;
+    this._plan = null;
+    this._planLoaded = false;
+    this._diasGracia = 0;
+    this._diasGraciaCargado = false;
+    this._readOnlyMode = false;
   }
 
   _getClient() {
@@ -278,6 +283,127 @@ class Auth {
     }
   }
 
+  /**
+   * Nombre del tenant actual, listo para usar en textos de UI/PDF/WhatsApp
+   * sin tener que repetir "getEmpresaSync()?.nombre || 'EncargosPro'" en
+   * cada vista. Requiere haber llamado getEmpresa() antes (ya ocurre en
+   * startApp() para toda vista de negocio); "EncargosPro" es el genérico
+   * seguro para superadmin (sin empresa) o mientras aún no carga.
+   */
+  getEmpresaNombre() { return this._empresa?.nombre || 'EncargosPro'; }
+
+  /**
+   * Fila de "Planes" (catálogo de suscripciones) correspondiente al plan
+   * contratado por la empresa actual. null para superadmin, para una
+   * empresa sin plan asignado, o si el id de plan no existe en el catálogo
+   * — en ese caso getPlanModules()/isModuleLockedByPlan() deben tratarlo
+   * como "sin restricción" (no bloquear nada) en vez de bloquear todo, para
+   * no dejar sin acceso a una empresa existente por un plan mal escrito.
+   * Se cachea en memoria durante la sesión — se limpia en logout().
+   */
+  async getPlan() {
+    if (this._planLoaded) return this._plan;
+    this._planLoaded = true;
+
+    const empresa = await this.getEmpresa();
+    if (!empresa || !empresa.plan) { this._plan = null; return null; }
+
+    const client = this._getClient();
+    if (!client) { this._plan = null; return null; }
+    try {
+      const { data, error } = await withTimeout(
+        client.from('Planes').select('*').eq('id', empresa.plan).maybeSingle(),
+        8000, 'Timeout al cargar el plan'
+      );
+      if (error) { console.error('[Auth] getPlan error:', error.message); this._plan = null; return null; }
+      this._plan = data;
+      return data;
+    } catch (e) {
+      console.error('[Auth] getPlan exception:', e.message);
+      this._plan = null;
+      return null;
+    }
+  }
+
+  /** Mapa de módulos incluidos en el plan actual (sync — requiere haber llamado getPlan() antes). null = sin restricción conocida. */
+  getPlanModules() {
+    return this._plan?.modulos || null;
+  }
+
+  /**
+   * true solo si hay un catálogo de plan cargado Y ese plan excluye
+   * explícitamente el módulo. Independiente de canAccess()/canEdit(): esto
+   * gatea qué módulos están disponibles para la EMPRESA según lo que
+   * contrató, no qué puede hacer un usuario puntual dentro de ella.
+   */
+  isModuleLockedByPlan(moduleKey) {
+    const modulos = this.getPlanModules();
+    if (!modulos) return false;
+    return !modulos[moduleKey];
+  }
+
+  /**
+   * Días de gracia en modo solo-lectura tras vencer la suscripción —
+   * parámetro global configurado por el superadmin (tabla
+   * "PoliticaSuscripcion", SELECT público). Se cachea igual que getPlan();
+   * si falla la consulta, se asume 0 días de gracia (el criterio más
+   * conservador: nunca deja pasar de largo un bloqueo por un error de red).
+   */
+  async getDiasGraciaSuscripcion() {
+    if (this._diasGraciaCargado) return this._diasGracia;
+    this._diasGraciaCargado = true;
+    const client = this._getClient();
+    if (!client) { this._diasGracia = 0; return 0; }
+    try {
+      const { data, error } = await withTimeout(
+        client.from('PoliticaSuscripcion').select('dias_gracia_solo_lectura').eq('id', 1).maybeSingle(),
+        8000, 'Timeout al cargar la política de suscripción'
+      );
+      this._diasGracia = (!error && data) ? data.dias_gracia_solo_lectura : 0;
+    } catch (e) {
+      console.error('[Auth] getDiasGraciaSuscripcion exception:', e.message);
+      this._diasGracia = 0;
+    }
+    return this._diasGracia;
+  }
+
+  /**
+   * Evalúa el acceso de la empresa actual contra fecha_vencimiento +
+   * estado_suscripcion + los días de gracia configurados. Devuelve
+   * { bloqueado, soloLectura } — nunca ambos true a la vez.
+   * - 'cancelada' corta de inmediato, sin gracia (decisión manual del
+   *   superadmin, no depende de fechas).
+   * - 'activa' nunca bloquea.
+   * - 'trial'/'vencida' se rigen por fecha_vencimiento: antes de esa fecha,
+   *   acceso normal; dentro de los N días de gracia después, solo lectura;
+   *   pasada la gracia, bloqueado.
+   * Sin empresa (superadmin) o sin fecha_vencimiento: nunca bloquea.
+   */
+  async evaluarAccesoSuscripcion() {
+    const empresa = await this.getEmpresa();
+    if (!empresa) return { bloqueado: false, soloLectura: false };
+    if (empresa.estado_suscripcion === 'cancelada') return { bloqueado: true, soloLectura: false };
+    if (empresa.estado_suscripcion === 'activa') return { bloqueado: false, soloLectura: false };
+    if (!empresa.fecha_vencimiento) return { bloqueado: false, soloLectura: false };
+
+    const diasGracia = await this.getDiasGraciaSuscripcion();
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const vencimiento = new Date(empresa.fecha_vencimiento + 'T00:00:00');
+    if (hoy <= vencimiento) return { bloqueado: false, soloLectura: false };
+
+    const finGracia = new Date(vencimiento);
+    finGracia.setDate(finGracia.getDate() + diasGracia);
+    if (hoy <= finGracia) return { bloqueado: false, soloLectura: true };
+    return { bloqueado: true, soloLectura: false };
+  }
+
+  /** Activa/consulta el modo solo-lectura global — ver evaluarAccesoSuscripcion() en main.js. */
+  setReadOnlyMode(activo) { this._readOnlyMode = !!activo; }
+  isReadOnlyMode() { return this._readOnlyMode; }
+
+  /** Empresa ya cacheada en memoria (sin consultar la BD) — para usar en renderLayout(), que no es async. Requiere haber llamado getEmpresa() antes (ya ocurre en startApp()). */
+  getEmpresaSync() { return this._empresa; }
+
   /** Login con email y password */
   async login(email, password) {
     const client = this._getClient();
@@ -365,6 +491,20 @@ class Auth {
     this._session = null;
     this._profile = null;
     this._empresa = null;
+    this._plan = null;
+    this._planLoaded = false;
+    this._diasGracia = 0;
+    this._diasGraciaCargado = false;
+    this._readOnlyMode = false;
+
+    // El logo de empresa se cachea en sessionStorage/localStorage para no
+    // volver a pedirlo en cada navegación (ver services/config.js) — sin
+    // esto, quedaba pegado en el navegador después de cerrar sesión y se
+    // filtraba a la pantalla de login (compartida por todas las empresas)
+    // o al siguiente tenant que iniciara sesión en el mismo dispositivo.
+    sessionStorage.removeItem('JARAPP_LOGO');
+    localStorage.removeItem('GLOBAL_LOGO_URL');
+    window.JARAPP_LOGO = null;
   }
 
   /** Crear nuevo usuario (solo admin puede hacer esto desde el panel) */
@@ -372,6 +512,21 @@ class Auth {
     const client = this._getClient();
     if (!client) throw new Error('Supabase no configurado.');
     if (!this.isAdmin()) throw new Error('Solo el administrador puede crear usuarios.');
+
+    // Límite de usuarios del plan contratado — repetido acá (además del
+    // check en la UI de admin.js) porque este método es el que realmente
+    // escribe en la base de datos; la UI es solo la primera línea de
+    // defensa, no la única.
+    const plan = await this.getPlan();
+    if (plan?.max_usuarios != null) {
+      const { count, error: errCount } = await client
+        .from('user_profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('empresa_id', this.getEmpresaId());
+      if (!errCount && count >= plan.max_usuarios) {
+        throw new Error(`Tu plan (${plan.nombre}) permite hasta ${plan.max_usuarios} usuario(s). Actualiza tu plan para crear más.`);
+      }
+    }
 
     // 1. Validar que el correo no exista ya
     const { data: existingUser } = await client
@@ -483,8 +638,15 @@ class Auth {
     if (module === 'superadmin') return this._profile.role === 'superadmin';
     // Superadmin no opera ningún módulo de negocio — solo el panel de Fase D
     if (this._profile.role === 'superadmin') return false;
-    // Admin siempre tiene acceso total
-    if (this._profile.role === 'admin') return true;
+    // OJO: a propósito NO hay un atajo "role==='admin' => true" acá. Un
+    // admin de trial también tiene role='admin', y sus permisos vienen
+    // deliberadamente acotados por PoliticaTrial (netlify/functions/
+    // admin-empresas.js, crear_empresa_trial) — un bypass por rol anularía
+    // esa restricción y le daría acceso total a cualquier cuenta de prueba.
+    // El admin de una empresa paga sigue teniendo acceso total porque su
+    // `permissions` ya se guarda igual a ROLE_TEMPLATES.admin (ver
+    // ADMIN_PERMISSIONS en admin-empresas.js), así que el fallback de abajo
+    // produce el mismo resultado sin necesitar el atajo.
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
     const storedPerms = this._profile.permissions;
     const hasStoredPerms = storedPerms && typeof storedPerms === 'object' && Object.keys(storedPerms).length > 0;
@@ -497,8 +659,13 @@ class Auth {
     if (!this._profile || !this._profile.is_active) return false;
     if (module === 'superadmin') return this._profile.role === 'superadmin';
     if (this._profile.role === 'superadmin') return false;
-    // Admin siempre puede editar
-    if (this._profile.role === 'admin') return true;
+    // Modo solo-lectura por suscripción vencida (ver evaluarAccesoSuscripcion
+    // en main.js): nadie edita nada mientras esté activo, sin importar rol o
+    // permisos guardados — es la única persona que llegó a entrar (el resto
+    // de roles se bloquea por completo antes de esto), y solo puede consultar.
+    if (this._readOnlyMode) return false;
+    // Ver el comentario equivalente en canAccess() — mismo motivo para no
+    // tener un atajo "role==='admin' => true" acá.
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol
     const storedPerms = this._profile.permissions;
     const hasStoredPerms = storedPerms && typeof storedPerms === 'object' && Object.keys(storedPerms).length > 0;

@@ -1,31 +1,41 @@
 /* ============================================================
    JARAPP — Tokens de Diseño
-   "Manifiesto de Vidrio" — cielo de carga nocturno + vidrio esmerilado
-   Fuente única de verdad para colores, tipografía y espaciado
+   Paleta de marca EncargosPro (navy #01063B, magenta #EA168F,
+   violeta #912EE5, azul eléctrico #524FEE, coral #FD9779) sobre el
+   mismo sistema "Manifiesto de Vidrio" — cielo de carga nocturno +
+   vidrio esmerilado. Fuente única de verdad para colores, tipografía
+   y espaciado.
+
+   Excepciones deliberadas (acordadas explícitamente, no son un olvido):
+   - Verde de WhatsApp (#20BD5C) en los CTA de WhatsApp — reconocimiento
+     de marca del canal, vive directo en cada vista, no en estos tokens.
+   - --success/--warning quedan como semáforo de estado convencional
+     (verde/ámbar), no como color de marca — mismo criterio ya aplicado
+     en landing/index.html.
    ============================================================ */
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
 :root {
-  /* ── Brand Jarapo — etiqueta de carga ── */
-  --primary:       #FF8A3D;
-  --primary-dark:  #E8650F;
-  --primary-light: rgba(255,138,61,0.14);
-  --primary-ink:   #1A0F04;
-  --secondary:     #4E7FE0;
+  /* ── Brand EncargosPro — acentos y CTA ── */
+  --primary:       #EA168F;
+  --primary-dark:  #912EE5;
+  --primary-light: rgba(234,22,143,0.14);
+  --primary-ink:   #FFFFFF;
+  --secondary:     #524FEE;
 
-  /* ── Semánticos ── */
-  --success:  #2FE6C1;
-  --warning:  #FFD166;
+  /* ── Semánticos (semáforo de estado, no color de marca) ── */
+  --success:  #22C55E;
+  --warning:  #F59E0B;
   --danger:   #FF6B6B;
-  --info:     #4E7FE0;
+  --info:     #524FEE;
 
   /* ── Derivados semánticos ── */
-  --success-glow: rgba(47, 230, 193, 0.28);
-  --success-dim:  rgba(47, 230, 193, 0.10);
-  --warning-dim:  rgba(255, 209, 102, 0.12);
+  --success-glow: rgba(34, 197, 94, 0.28);
+  --success-dim:  rgba(34, 197, 94, 0.10);
+  --warning-dim:  rgba(245, 158, 11, 0.12);
   --danger-glow:  rgba(255, 107, 107, 0.28);
   --danger-dim:   rgba(255, 107, 107, 0.10);
-  --info-dim:     rgba(78, 127, 224, 0.12);
+  --info-dim:     rgba(82, 79, 238, 0.12);
 
   /* ── Superficies — dark mode (default): cielo nocturno de carga ── */
   --bg:            #10162A;
@@ -44,7 +54,7 @@
   --border-base:   rgba(255,255,255,0.10);
   --border-strong: rgba(255,255,255,0.18);
   --border-glaze:  rgba(255,255,255,0.10);
-  --border-accent: rgba(255, 138, 61, 0.22);
+  --border-accent: rgba(234, 22, 143, 0.22);
 
   --text-main:  #EAF0FF;
   --text-muted: #9AA6C4;
@@ -62,9 +72,9 @@
   --shadow-card:      0 16px 40px rgba(0,0,0,0.30);
   --shadow-module:    0 10px 26px rgba(0,0,0,0.22);
   --soft-shadow:      0 1px 3px rgba(0,0,0,0.12);
-  --shadow-glow-red:  0 2px 8px rgba(255,138,61,0.25);
-  --shadow-glow-teal: 0 2px 8px rgba(47,230,193,0.22);
-  --shadow-glow-pink: 0 2px 8px rgba(255,138,61,0.20);
+  --shadow-glow-red:  0 2px 8px rgba(234,22,143,0.25);
+  --shadow-glow-teal: 0 2px 8px rgba(34,197,94,0.22);
+  --shadow-glow-pink: 0 2px 8px rgba(234,22,143,0.20);
 
   /* ── Radios ── */
   --radius-sm: 6px;
@@ -76,7 +86,8 @@
   --sidebar-w:           260px;
   --sidebar-w-collapsed: 56px;
 
-  /* ── Roles ── */
+  /* ── Roles — color-coding para distinguir roles de un vistazo, no son
+     identidad de marca, se dejan tal cual ── */
   --role-admin:     #D91010;
   --role-gerente:   #7C3AED;
   --role-ventas:    #059669;
@@ -86,23 +97,23 @@
 
   /* ── Legacy aliases — compatibilidad con style.css existente ── */
   --brand-magenta:      var(--primary);
-  --brand-magenta-glow: rgba(255, 138, 61, 0.32);
-  --brand-magenta-dim:  rgba(255, 138, 61, 0.14);
+  --brand-magenta-glow: rgba(234, 22, 143, 0.32);
+  --brand-magenta-dim:  rgba(234, 22, 143, 0.14);
   --brand-green:        var(--secondary);
-  --brand-green-glow:   rgba(139, 124, 246, 0.28);
-  --brand-green-dim:    rgba(139, 124, 246, 0.12);
+  --brand-green-glow:   rgba(82, 79, 238, 0.28);
+  --brand-green-dim:    rgba(82, 79, 238, 0.12);
   --brand-red:          var(--danger);
   --brand-red-glow:     rgba(255, 107, 107, 0.30);
   --brand-red-dim:      rgba(255, 107, 107, 0.12);
   --primary-red:        var(--primary);
   --teal:               var(--success);
-  --teal-glow:          rgba(47, 230, 193, 0.28);
-  --teal-dim:           rgba(47, 230, 193, 0.10);
+  --teal-glow:          rgba(34, 197, 94, 0.28);
+  --teal-dim:           rgba(34, 197, 94, 0.10);
   --pink:               var(--primary);
-  --pink-glow:          rgba(255, 138, 61, 0.30);
-  --pink-dim:           rgba(255, 138, 61, 0.12);
-  --violet:             #4E7FE0;
-  --violet-dim:         rgba(78, 127, 224, 0.12);
+  --pink-glow:          rgba(234, 22, 143, 0.30);
+  --pink-dim:           rgba(234, 22, 143, 0.12);
+  --violet:             #912EE5;
+  --violet-dim:         rgba(145, 46, 229, 0.12);
   --success-green:      var(--success);
   --warning-orange:     var(--warning);
   --info-blue:          var(--info);
@@ -115,13 +126,13 @@
   --glass-blur-sm: blur(7px);
 
   /* ── Fondo ambiental (orbes de aurora) ── */
-  --orb-1:  rgba(255,138,61,0.22);
-  --orb-2:  rgba(47,230,193,0.19);
-  --orb-3:  rgba(139,124,246,0.19);
-  --stripe: rgba(255,138,61,0.05);
+  --orb-1:  rgba(234,22,143,0.20);
+  --orb-2:  rgba(82,79,238,0.18);
+  --orb-3:  rgba(145,46,229,0.19);
+  --stripe: rgba(234,22,143,0.05);
 
   /* ── Sidebar: sólido, con detalle sutil de borde ── */
-  --sidebar-edge-glow: rgba(255,138,61,0.10);
+  --sidebar-edge-glow: rgba(234,22,143,0.10);
 }
 
 /* ── LIGHT MODE ── */
@@ -142,7 +153,7 @@
   --border-base:   rgba(22,27,46,0.10);
   --border-strong: rgba(22,27,46,0.18);
   --border-glaze:  rgba(22,27,46,0.10);
-  --border-accent: rgba(217, 96, 14, 0.22);
+  --border-accent: rgba(145, 14, 89, 0.22);
 
   --text-main:  #161B2E;
   --text-muted: #5B6478;
@@ -155,50 +166,52 @@
   --shadow-card:      0 16px 36px rgba(30,40,70,0.09);
   --shadow-module:    0 10px 24px rgba(30,40,70,0.07);
   --soft-shadow:      0 1px 3px rgba(0,0,0,0.08);
-  --shadow-glow-red:  0 2px 6px rgba(217, 96, 14, 0.18);
-  --shadow-glow-teal: 0 2px 6px rgba(14, 156, 143, 0.14);
-  --shadow-glow-pink: 0 2px 6px rgba(217, 96, 14, 0.14);
+  --shadow-glow-red:  0 2px 6px rgba(145, 14, 89, 0.18);
+  --shadow-glow-teal: 0 2px 6px rgba(14, 156, 90, 0.14);
+  --shadow-glow-pink: 0 2px 6px rgba(145, 14, 89, 0.14);
 
-  /* Overrides de brand en light */
-  --primary:            #D9600E;
-  --primary-dark:       #B34D0B;
-  --primary-light:      #FDECD9;
-  --primary-ink:        #FFF7F0;
-  --secondary:          #1F3E85;
-  --brand-magenta:      #D9600E;
-  --brand-magenta-glow: rgba(217, 96, 14, 0.22);
-  --brand-magenta-dim:  rgba(217, 96, 14, 0.10);
-  --primary-red:        #D9600E;
+  /* Overrides de brand en light — magenta/violeta un poco más oscuros que
+     en dark mode para mantener buen contraste como texto sobre superficies
+     claras (mismo criterio que --brand-dark en landing/index.html). */
+  --primary:            #910E59;
+  --primary-dark:       #6B0C40;
+  --primary-light:      #FBE3F0;
+  --primary-ink:        #FFFFFF;
+  --secondary:          #3836A2;
+  --brand-magenta:      #910E59;
+  --brand-magenta-glow: rgba(145, 14, 89, 0.22);
+  --brand-magenta-dim:  rgba(145, 14, 89, 0.10);
+  --primary-red:        #910E59;
   --brand-red:          #C43D33;
   --brand-red-glow:     rgba(196, 61, 51, 0.22);
 
-  --success:      #0E9C8F;
-  --success-glow: rgba(14,156,143,0.15);
-  --success-dim:  rgba(14,156,143,0.08);
-  --warning:      #A16207;
-  --warning-dim:  rgba(161,98,7,0.09);
+  --success:      #16A34A;
+  --success-glow: rgba(22,163,74,0.15);
+  --success-dim:  rgba(22,163,74,0.08);
+  --warning:      #B45309;
+  --warning-dim:  rgba(180,83,9,0.09);
   --danger:       #C43D33;
   --danger-dim:   rgba(196,61,51,0.10);
-  --info:         #1F3E85;
-  --info-dim:     rgba(31,62,133,0.08);
+  --info:         #3836A2;
+  --info-dim:     rgba(56,54,162,0.08);
 
-  --brand-green:      #1F3E85;
-  --brand-green-glow: rgba(31,62,133,0.18);
-  --brand-green-dim:  rgba(31,62,133,0.08);
-  --teal:             #0E9C8F;
-  --teal-glow:        rgba(14,156,143,0.18);
-  --teal-dim:         rgba(14,156,143,0.08);
-  --violet:           #1F3E85;
-  --violet-dim:       rgba(31,62,133,0.08);
+  --brand-green:      #3836A2;
+  --brand-green-glow: rgba(56,54,162,0.18);
+  --brand-green-dim:  rgba(56,54,162,0.08);
+  --teal:             #16A34A;
+  --teal-glow:        rgba(22,163,74,0.18);
+  --teal-dim:         rgba(22,163,74,0.08);
+  --violet:           #6B1FB0;
+  --violet-dim:       rgba(107,31,176,0.08);
 
   --glass-bg:     rgba(255,255,255,0.65);
   --glass-border: rgba(22,27,46,0.10);
   --glass-hover:  rgba(255,255,255,0.82);
 
-  --orb-1:  rgba(217,96,14,0.05);
-  --orb-2:  rgba(14,156,143,0.04);
-  --orb-3:  rgba(100,73,214,0.02);
-  --stripe: rgba(217,96,14,0.025);
+  --orb-1:  rgba(145,14,89,0.05);
+  --orb-2:  rgba(56,54,162,0.04);
+  --orb-3:  rgba(107,31,176,0.03);
+  --stripe: rgba(145,14,89,0.025);
 
-  --sidebar-edge-glow: rgba(217,96,14,0.06);
+  --sidebar-edge-glow: rgba(145,14,89,0.06);
 }
