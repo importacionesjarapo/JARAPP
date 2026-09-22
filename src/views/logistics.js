@@ -22,7 +22,7 @@ const MAPA_FASE_PORTAL = {
   '4. En Camino a Colombia':                    { num: 4, nombre: 'En camino a Colombia' },
   '5. En Aduana Colombia':                      { num: 5, nombre: 'En aduana / trámites' },
   '6. Entregado a Cliente Final':               { num: 9, nombre: 'Entregado' },
-  '7. En Bodega Medellín':                      { num: 6, nombre: 'Llegó a bodega en Medellín' },
+  '7. En Bodega Medellín':                      { num: 6, nombre: 'Llegó a la bodega local' },
   '8. Notificado al Cliente':                   { num: 7, nombre: 'Pedido confirmado al cliente' },
   '9. Enviado Interno Colombia':                { num: 8, nombre: 'Enviado' },
 };

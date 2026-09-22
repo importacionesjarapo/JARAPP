@@ -2493,7 +2493,7 @@ const _exportCurrentReport = async () => {
       return obj;
     });
     const name = REPORT_RPT_MAP[_rptEx] || _rptEx;
-    downloadExcel(rows, `Jarapo_${name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}`);
+    downloadExcel(rows, `Reporte_${name.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}`);
   } catch(e) {
     showToast('Error exportando: ' + e.message, 'error');
   }

@@ -284,6 +284,15 @@ class Auth {
   }
 
   /**
+   * Nombre del tenant actual, listo para usar en textos de UI/PDF/WhatsApp
+   * sin tener que repetir "getEmpresaSync()?.nombre || 'EncargosPro'" en
+   * cada vista. Requiere haber llamado getEmpresa() antes (ya ocurre en
+   * startApp() para toda vista de negocio); "EncargosPro" es el genérico
+   * seguro para superadmin (sin empresa) o mientras aún no carga.
+   */
+  getEmpresaNombre() { return this._empresa?.nombre || 'EncargosPro'; }
+
+  /**
    * Fila de "Planes" (catálogo de suscripciones) correspondiente al plan
    * contratado por la empresa actual. null para superadmin, para una
    * empresa sin plan asignado, o si el id de plan no existe en el catálogo

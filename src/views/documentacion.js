@@ -11,7 +11,7 @@ export const renderDocumentacion = async (renderLayout, navigateTo) => {
       <div style="margin-bottom:24px;">
         <p style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-faint);">SISTEMA</p>
         <h1 style="font-size:24px;font-weight:600;margin-bottom:4px;">📚 Documentación</h1>
-        <p style="font-size:14px;color:var(--text-secondary);">Manuales oficiales de JARAPP · Importaciones Jarapo</p>
+        <p style="font-size:14px;color:var(--text-secondary);">Manuales oficiales de EncargosPro · ${auth.getEmpresaNombre()}</p>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px;">
@@ -97,7 +97,7 @@ export const renderDocumentacion = async (renderLayout, navigateTo) => {
       </div>
 
       <div style="margin-top:12px;text-align:center;font-size:11px;color:var(--text-faint);">
-        JARAPP v3.0 · Importaciones Jarapo · Documentación actualizada junio 2026
+        EncargosPro · ${auth.getEmpresaNombre()} · Documentación actualizada junio 2026
       </div>
     </div>
   `);

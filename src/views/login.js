@@ -31,13 +31,13 @@ export const renderLogin = (onSuccess) => {
         <div class="login-logo-zone">
           <div class="login-logo-ring">
             ${_logoUrl
-              ? `<img src="${_logoUrl}" class="app-logo-img" style="width:100%;height:100%;object-fit:contain;" alt="Importaciones Jarapo">`
+              ? `<img src="${_logoUrl}" class="app-logo-img" style="width:100%;height:100%;object-fit:contain;" alt="EncargosPro">`
               : `<div style="font-size:3rem;font-weight:900;color:var(--primary);display:flex;align-items:center;justify-content:center;width:100%;height:100%;">E</div>`
             }
           </div>
           <div class="login-brand">
             <h1 class="login-title">EncargosPro</h1>
-            <p class="login-subtitle">Importaciones Jarapo · Medellín</p>
+            <p class="login-subtitle">Gestión para personal shoppers</p>
           </div>
         </div>
 

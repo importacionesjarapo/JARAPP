@@ -69,7 +69,7 @@ window.openInventoryKPI = (kpiName) => {
         subtitle = 'Todos los productos registrados en el catálogo.';
     } else if (kpiName === 'Disponibles MDE') {
         productosFiltrados = productosFiltrados.filter(p => p.estado_producto === 'Disponible entrega inmediata');
-        subtitle = 'Productos listos para entrega inmediata en Medellín.';
+        subtitle = 'Productos listos para entrega inmediata en tu bodega local.';
     } else if (kpiName === 'En Tránsito/Encargo') {
         productosFiltrados = productosFiltrados.filter(p => p.estado_producto !== 'Disponible entrega inmediata');
         subtitle = 'Productos que vienen en camino o son por encargo.';
@@ -147,7 +147,7 @@ const renderViewGrid = (list) => `
                 ${badgeVenta}
                 <span style="position:absolute;top:15px;right:15px;background:${statusColor};font-size:0.55rem;padding:4px 8px;border-radius:15px;font-weight:700;text-transform:uppercase;color:#fff;max-width:140px;text-align:center;line-height:1.3;white-space:normal;">${statusLabel}</span>
                 <div style="height:150px;background:var(--glass-hover);display:flex;align-items:center;justify-content:center;margin-bottom:1rem;border-radius:8px;overflow:hidden;">
-                    ${p.url_imagen?`<img src="${p.url_imagen}" style="max-height:100%;object-fit:contain;">`:'<span style="opacity:0.1;font-weight:700;">JARAPO</span>'}
+                    ${p.url_imagen?`<img src="${p.url_imagen}" style="max-height:100%;object-fit:contain;">`:'<span style="opacity:0.15;font-weight:700;">SIN IMAGEN</span>'}
                 </div>
                 <span style="font-size:0.7rem;color:var(--primary-red);font-weight:700;text-transform:uppercase;">${p.marca}</span>
                 <h4 style="margin:5px 0 0.5rem;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${p.nombre_producto}">${p.nombre_producto}</h4>
@@ -514,7 +514,7 @@ export const renderInventory = async (renderLayout, navigateTo) => {
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.8rem;">
         <div>
             <span class="page-eyebrow">Control de Existencias</span>
-            <h2 class="page-title">Inventario Jarapo</h2>
+            <h2 class="page-title">Inventario</h2>
             <p style="opacity:0.5;font-size:0.82rem;margin-top:4px;">Productos, marcas, categorías y rentabilidad.</p>
         </div>
         <div style="display:flex;gap:10px;align-items:center;">

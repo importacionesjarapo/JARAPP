@@ -19,7 +19,7 @@ export const renderSettingsView = (renderLayout, navigateTo, msg = null) => {
         <p style="opacity:0.6; margin-bottom: 0.5rem; text-align:left; font-size:0.8rem;">Supabase Anon / Public API Key</p>
         <input type="password" id="supa-key" value="${supaKey}" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="width:100%; border-radius:12px; margin-bottom:1.5rem; background:var(--glass-hover);">
         
-        <button id="save-settings" class="btn-primary" style="width:100%;">Activar Conexión Medellín</button>
+        <button id="save-settings" class="btn-primary" style="width:100%;">Activar Conexión</button>
       </div>
     `);
     

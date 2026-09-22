@@ -34,7 +34,7 @@ document.documentElement.setAttribute('data-theme', savedTheme);
 
 window.auth = auth;
 /**
- * Jarapo Admin - Aplicación Operativa Medellín (v3.0.0 · Auth + RBAC)
+ * EncargosPro - Aplicación Operativa (v3.0.0 · Auth + RBAC)
  */
 
 const mainAppContent = document.querySelector('#app');
@@ -185,20 +185,21 @@ export const renderLayout = (contentHTML) => {
   const adminNavItem = ''; // incluido en NAV_GROUPS › Sistema
 
   const _logoUrl = window.JARAPP_LOGO || sessionStorage.getItem('JARAPP_LOGO') || null;
+  const _empresaNombre = auth.isSuperadmin() ? 'Panel Superadmin' : auth.getEmpresaNombre();
   const _logoZoneHtml = _logoUrl
     ? `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Logo Jarapo">
+         <img src="${_logoUrl}" style="width:100%;height:100%;object-fit:cover;" alt="Logo de ${_empresaNombre}">
        </div>
        <div class="sidebar-brand">
          <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
-         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
+         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">${_empresaNombre}</div>
        </div>`
     : `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
          <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">E</span>
        </div>
        <div class="sidebar-brand">
          <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
-         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">Importaciones Jarapo</div>
+         <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">${_empresaNombre}</div>
        </div>`;
 
   mainAppContent.innerHTML = `
@@ -252,7 +253,7 @@ export const renderLayout = (contentHTML) => {
       <header class="header">
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
           <div class="welcome-msg">
-            <p>Importaciones Jarapo</p>
+            <p>${_empresaNombre}</p>
             <h1>Gestión Operativa</h1>
           </div>
           <button id="mobile-menu-btn" style="display:none; background:var(--surface-2); border:1px solid var(--border-base); color:var(--text-main); padding:8px 12px; border-radius:8px; cursor:pointer;">

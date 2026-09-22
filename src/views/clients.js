@@ -589,7 +589,7 @@ export const renderClients = async (renderLayout, navigateTo) => {
     const html = `
     <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;">
         <div>
-            <span class="page-eyebrow">CRM · Medellín</span>
+            <span class="page-eyebrow">CRM</span>
             <h2 class="page-title">Mis Clientes</h2>
             <p style="opacity:0.5;font-size:0.82rem;margin-top:4px;">Gestión de contactos, LTV y cartera pendiente.</p>
         </div>
@@ -619,13 +619,16 @@ export const renderClients = async (renderLayout, navigateTo) => {
 };
 
 // ── Portal Cliente ─────────────────────────────────────────────────────────────
-const APP_URL = 'https://importacionesjarapo-jarapp.netlify.app'
+// Dominio del portal público — configurable vía VITE_APP_URL (Netlify → Site
+// settings → Environment variables) para cuando se apunte a un dominio propio;
+// el de acá queda solo como fallback del deploy actual.
+const APP_URL = import.meta.env?.VITE_APP_URL || 'https://importacionesjarapo-jarapp.netlify.app'
 
 function generarCodigoPortal() {
   const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
   const nums = Math.floor(1000 + Math.random() * 9000)
   const letra = letras[Math.floor(Math.random() * letras.length)]
-  return `JAR${letra}${nums}`
+  return `ENC${letra}${nums}`
 }
 
 window.generarPortalCliente = async function(clienteId) {
@@ -654,7 +657,8 @@ window.copiarLinkPortal = function(clienteId, token, nombre) {
 window.enviarPortalWhatsApp = function(clienteId, token, nombre, whatsapp) {
   const url = `${APP_URL}/portal?t=${token}`
   const primerNombre = nombre.split(' ')[0]
-  const mensaje = `Hola ${primerNombre} 👋\n\nTe compartimos tu link de seguimiento en *Importaciones Jarapo*:\n\n🔗 ${url}\n\nDesde aquí puedes consultar:\n📦 Todos tus pedidos activos y su estado actual\n✅ Historial de pedidos entregados\n❌ Pedidos cancelados (si aplica)\n\n¡Guarda este link, es tuyo y siempre podrás consultarlo! 🛍️\n\n_Importaciones Jarapo — 100% original, directo de USA_ ✈️`
+  const nombreEmpresa = auth.getEmpresaNombre();
+  const mensaje = `Hola ${primerNombre} 👋\n\nTe compartimos tu link de seguimiento en *${nombreEmpresa}*:\n\n🔗 ${url}\n\nDesde aquí puedes consultar:\n📦 Todos tus pedidos activos y su estado actual\n✅ Historial de pedidos entregados\n❌ Pedidos cancelados (si aplica)\n\n¡Guarda este link, es tuyo y siempre podrás consultarlo! 🛍️\n\n_${nombreEmpresa} — 100% original, directo de USA_ ✈️`
   navigator.clipboard.writeText(mensaje).then(() => {
     const allBtns = document.querySelectorAll('button')
     allBtns.forEach(btn => {
@@ -679,7 +683,7 @@ window.enviarPortalWhatsApp = function(clienteId, token, nombre, whatsapp) {
 // ─── Create Client Modal (unchanged) ──────────────────────────────────────────
 export const createClientModal = async (id, navigateTo) => {
     let mode = id ? 'UPDATE' : 'INSERT';
-    let data = { nombre:'', numero_identificacion:'', numero_lead_kommo:'', direccion:'', ciudad:'Medellín', whatsapp:'' };
+    let data = { nombre:'', numero_identificacion:'', numero_lead_kommo:'', direccion:'', ciudad:'', whatsapp:'' };
     const container = document.getElementById('modal-container');
     const content   = document.getElementById('modal-content');
 
@@ -731,7 +735,7 @@ export const createClientModal = async (id, navigateTo) => {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Ciudad de Residencia</label>
-                            <input type="text" name="ciu" value="${data.ciudad}" required placeholder="Ej. Medellín">
+                            <input type="text" name="ciu" value="${data.ciudad}" required placeholder="Ciudad del cliente">
                         </div>
                         <div class="form-group" style="grid-column: span 3;">
                             ${id ? `

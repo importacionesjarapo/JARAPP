@@ -1154,7 +1154,7 @@ window.calExportarSemana = async () => {
       pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [30, 30, 30, 40],
       defaultStyle: { font: 'Roboto', fontSize: 10, color: '#0F172A' },
       content: [
-        { text: 'Importaciones Jarapo', fontSize: 10, color: gris },
+        { text: auth.getEmpresaNombre(), fontSize: 10, color: gris },
         { text: 'Calendario de Contenido — Semana', fontSize: 18, bold: true, margin: [0, 2, 0, 2] },
         { text: `${formatFechaLarga(dias[0])} — ${formatFechaLarga(dias[6])}`, fontSize: 10, color: gris, margin: [0, 0, 0, 14] },
         { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 782, y2: 0, lineWidth: 1.5, lineColor: rojo }], margin: [0, 0, 0, 12] },

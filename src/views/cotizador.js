@@ -74,7 +74,7 @@ function generarMensajeWA(f, r) {
   msg += `⏳ Sujeto a disponibilidad y vigencia de la promoción\n`;
   msg += `\nPara apartar necesitamos:\n`;
   msg += `💳 *Anticipo 35%: ${fmt(r.anticipo35)} COP*\n\n`;
-  msg += `¡Escríbenos para confirmar! 🙌\n_Importaciones Jarapo_ ✈️🇨🇴`;
+  msg += `¡Escríbenos para confirmar! 🙌\n_${auth.getEmpresaNombre()}_ ✈️🇨🇴`;
   return msg;
 }
 
@@ -97,17 +97,18 @@ async function generarPDFCliente(f, r, params) {
   const lib = pdfmake.default || pdfmake;
   lib.vfs   = (pdfFonts.default || pdfFonts).pdfMake?.vfs || pdfFonts.vfs;
 
-  const rojo  = '#E63946';
+  const rojo  = '#EA168F';
   const gris  = '#64748B';
   const numCot = `COT-${String(Date.now()).slice(-6)}`;
   const imgData = await logoDataUrl();
+  const nombreEmpresa = auth.getEmpresaNombre();
 
   const headerLeft = imgData
-    ? { stack:[{ image:imgData, fit:[72,72] }, { text:'Importaciones Jarapo', fontSize:8, color:gris, margin:[0,4,0,0] }], alignment:'left' }
+    ? { stack:[{ image:imgData, fit:[72,72] }, { text:nombreEmpresa, fontSize:8, color:gris, margin:[0,4,0,0] }], alignment:'left' }
     : { stack:[
         { canvas:[{ type:'rect', x:0, y:0, w:56, h:56, r:10, color:rojo }] },
-        { text:'J', fontSize:28, bold:true, color:'#fff', margin:[18,-44,0,0] },
-        { text:'Importaciones Jarapo', fontSize:8, color:gris, margin:[0,10,0,0] },
+        { text:'E', fontSize:28, bold:true, color:'#fff', margin:[18,-44,0,0] },
+        { text:nombreEmpresa, fontSize:8, color:gris, margin:[0,10,0,0] },
       ], alignment:'left' };
 
   const docDef = {
@@ -218,17 +219,18 @@ async function generarPDFInterno(f, r, cfg, params) {
   const lib = pdfmake.default || pdfmake;
   lib.vfs   = (pdfFonts.default || pdfFonts).pdfMake?.vfs || pdfFonts.vfs;
 
-  const rojo  = '#E63946';
+  const rojo  = '#EA168F';
   const gris  = '#64748B';
   const numCot = `COT-${String(Date.now()).slice(-6)}`;
   const imgData = await logoDataUrl();
+  const nombreEmpresa = auth.getEmpresaNombre();
 
   const headerLeft = imgData
-    ? { stack:[{ image:imgData, fit:[72,72] }, { text:'Importaciones Jarapo', fontSize:8, color:gris, margin:[0,4,0,0] }], alignment:'left' }
+    ? { stack:[{ image:imgData, fit:[72,72] }, { text:nombreEmpresa, fontSize:8, color:gris, margin:[0,4,0,0] }], alignment:'left' }
     : { stack:[
         { canvas:[{ type:'rect', x:0, y:0, w:56, h:56, r:10, color:rojo }] },
-        { text:'J', fontSize:28, bold:true, color:'#fff', margin:[18,-44,0,0] },
-        { text:'Importaciones Jarapo', fontSize:8, color:gris, margin:[0,10,0,0] },
+        { text:'E', fontSize:28, bold:true, color:'#fff', margin:[18,-44,0,0] },
+        { text:nombreEmpresa, fontSize:8, color:gris, margin:[0,10,0,0] },
       ], alignment:'left' };
 
   const fRow = (label, valor, opts={}) => [
@@ -248,7 +250,7 @@ async function generarPDFInterno(f, r, cfg, params) {
           headerLeft,
           { stack:[
               { text:'COTIZACIÓN INTERNA', fontSize:20, bold:true },
-              { text:'Solo para uso del equipo Jarapo', fontSize:8, color:rojo, margin:[0,3,0,2] },
+              { text:`Solo para uso interno de ${nombreEmpresa}`, fontSize:8, color:rojo, margin:[0,3,0,2] },
               { text:[{ text:'N° ', color:gris }, numCot], fontSize:10, margin:[0,2,0,2] },
               { text:[{ text:'Fecha: ', color:gris }, hoy()], fontSize:10 },
             ], alignment:'right' },

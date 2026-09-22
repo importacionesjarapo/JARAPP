@@ -486,7 +486,7 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
                 </div>
                 <div class="form-group" style="grid-column: span 6;">
                   <label>Correo electrónico</label>
-                  <input type="email" id="new-user-email" placeholder="juan@jarapo.com" autocomplete="off" />
+                  <input type="email" id="new-user-email" placeholder="juan@empresa.com" autocomplete="off" />
                 </div>
                 <div class="form-group" style="grid-column: span 12;">
                   <label>Contraseña inicial</label>

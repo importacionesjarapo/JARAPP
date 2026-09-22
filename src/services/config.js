@@ -29,7 +29,7 @@ export const ConfigService = {
     window.JARAPP_LOGO = url;
     const logoMark = document.getElementById('sidebar-logo-letter');
     if (logoMark) {
-      logoMark.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;" alt="Logo Jarapo">`;
+      logoMark.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;" alt="Logo">`;
     }
     // Actualizar cualquier img con clase app-logo-img
     document.querySelectorAll('.app-logo-img').forEach(img => {

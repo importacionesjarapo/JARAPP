@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 
 const client = () => db.client;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -214,6 +215,7 @@ async function recolectarContexto() {
   });
 
   return {
+    nombre_empresa: auth.getEmpresaNombre(),
     fecha_hoy: hoy,
     trm_actual: trm.data?.valor || window.JARAPP_TRM || 3700,
     trm_fuente: trm.data?.fuente || 'manual',
@@ -260,9 +262,9 @@ async function recolectarContexto() {
   };
 }
 
-const SYSTEM_PROMPT = (ctx) => `Eres JaraBot, el asistente interno de Importaciones Jarapo.
-Conoces el negocio al 100%: importamos productos desde EEUU (calzado, ropa, accesorios, vitaminas, tecnología, perfumes, bolsos, relojes, electrónicos) para vender en Colombia.
-Modelo de negocio: 35% de anticipo para apartar productos. Viajes a EEUU 3 veces al año para comprar y traer mercancía.
+const SYSTEM_PROMPT = (ctx) => `Eres JaraBot, el asistente interno de ${ctx.nombre_empresa}.
+Conoces el negocio al 100%: importa productos desde EEUU (calzado, ropa, accesorios, vitaminas, tecnología, perfumes, bolsos, relojes, electrónicos) para vender en Colombia.
+Modelo de negocio: cobra un anticipo para apartar productos y organiza viajes periódicos a EEUU para comprar y traer mercancía.
 Canales: Instagram y WhatsApp. Clientes B2C (personas) y B2B (revendedores emprendedores).
 
 ═══ DATOS REALES DEL NEGOCIO · ${ctx.fecha_hoy} ═══
@@ -293,11 +295,11 @@ Total cartera: $${Number(ctx.ventas.cartera_total).toLocaleString('es-CO')} COP 
 
 📦 INVENTARIO:
 - Total productos catálogo: ${ctx.productos.total}
-- Disponibles en Bogotá: ${ctx.productos.disponibles_bogota}
+- Disponibles en bodega local: ${ctx.productos.disponibles_bogota}
 - En EEUU (bodega): ${ctx.productos.en_miami}
 - En tránsito: ${ctx.productos.en_transito}
 - Sin stock: ${ctx.productos.sin_stock}
-- Valor inventario Bogotá: $${Number(ctx.productos.valor_inventario_cop).toLocaleString('es-CO')} COP
+- Valor inventario bodega local: $${Number(ctx.productos.valor_inventario_cop).toLocaleString('es-CO')} COP
 - Margen promedio catálogo: ${ctx.productos.margen_promedio}%
 - Top categorías: ${ctx.productos.top_categorias}
 

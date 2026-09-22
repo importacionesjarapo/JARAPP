@@ -857,7 +857,7 @@ export const createSaleModal = async (navigateTo) => {
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Ciudad</label>
-                                    <input type="text" id="inl_cli_ciu" value="Medellín">
+                                    <input type="text" id="inl_cli_ciu" placeholder="Ciudad del cliente">
                                 </div>
                                 <div class="form-group full-width">
                                     <label class="form-label">Dirección (Opcional)</label>
@@ -1131,7 +1131,7 @@ export const createSaleModal = async (navigateTo) => {
                     const wa = document.getElementById('inl_cli_wa').value.trim();
                     const kommo = document.getElementById('inl_cli_kommo').value.trim();
                     const dir = document.getElementById('inl_cli_dir').value.trim();
-                    const ciu = document.getElementById('inl_cli_ciu').value.trim() || 'Medellín';
+                    const ciu = document.getElementById('inl_cli_ciu').value.trim();
 
                     const existing = list2.find(c => 
                         (nid && c.numero_identificacion === nid) || 
