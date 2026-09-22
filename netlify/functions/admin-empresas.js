@@ -33,6 +33,29 @@ const CORS = {
 
 const res = (statusCode, body) => ({ statusCode, headers: CORS, body: JSON.stringify(body) })
 
+// Métodos de pago comunes en el mercado LatAm/USA de este negocio — se
+// insertan como semilla en toda empresa nueva (#27) para que Ventas/Compras
+// no arranquen con el selector de método de pago vacío. El usuario los
+// puede editar o borrar libremente después desde Parametrización. Mismo
+// esquema que usa esa pantalla (src/views/params.js): id, nombre, color,
+// activo, orden, empresa_id.
+const METODOS_PAGO_SEMILLA = ['Efectivo', 'Transferencia', 'Nequi', 'Daviplata', 'Zelle', 'PayPal']
+
+async function sembrarDatosBase(empresaId) {
+  const filas = METODOS_PAGO_SEMILLA.map((nombre, i) => ({
+    id: (Date.now() + i).toString(), nombre, color: '#6B7280', activo: true, orden: i, empresa_id: empresaId,
+  }))
+  const { error } = await supabase.from('MetodosPago').insert(filas)
+  if (error) console.warn('[admin-empresas] No se pudo sembrar MetodosPago:', error.message)
+}
+
+/** Código de referido corto y legible a partir del slug — único por el
+ * sufijo aleatorio, no depende de que el slug ya lo sea. */
+function generarCodigoReferido(slug) {
+  const base = (slug || 'empresa').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'EMPRESA'
+  return `${base}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+}
+
 /** Verifica el JWT del caller y confirma que su perfil tiene role='superadmin'. */
 async function verificarSuperadmin(authHeader) {
   const token = (authHeader || '').replace(/^Bearer\s+/i, '')
@@ -129,9 +152,10 @@ export const handler = async (event) => {
 
     const { data: empresa, error: errEmpresa } = await supabase
       .from('Empresas')
-      .insert({ nombre, slug, plan: planId, estado_suscripcion: 'trial' })
+      .insert({ nombre, slug, plan: planId, estado_suscripcion: 'trial', codigo_referido: generarCodigoReferido(slug) })
       .select().single()
     if (errEmpresa) return res(400, { error: errEmpresa.message })
+    await sembrarDatosBase(empresa.id)
 
     const { data: authUser, error: errAuth } = await supabase.auth.admin.createUser({
       email: emailAdmin, password: passwordAdmin, email_confirm: true,
@@ -218,16 +242,61 @@ export const handler = async (event) => {
   // la app la consulta directo con la anon key. Solo la escritura pasa por
   // acá, exigiendo superadmin.
   if (accion === 'guardar_politica_suscripcion') {
-    const { dias_gracia_solo_lectura } = body
+    const { dias_gracia_solo_lectura, descuento_referido_pct, comision_referido_pct } = body
     if (dias_gracia_solo_lectura === undefined || dias_gracia_solo_lectura < 0) {
       return res(400, { error: 'dias_gracia_solo_lectura debe ser un número mayor o igual a 0.' })
     }
+    const updates = { dias_gracia_solo_lectura, updated_at: new Date().toISOString() }
+    if (descuento_referido_pct !== undefined) {
+      if (descuento_referido_pct < 0 || descuento_referido_pct > 100) {
+        return res(400, { error: 'descuento_referido_pct debe estar entre 0 y 100.' })
+      }
+      updates.descuento_referido_pct = descuento_referido_pct
+    }
+    if (comision_referido_pct !== undefined) {
+      if (comision_referido_pct < 0 || comision_referido_pct > 100) {
+        return res(400, { error: 'comision_referido_pct debe estar entre 0 y 100.' })
+      }
+      updates.comision_referido_pct = comision_referido_pct
+    }
     const { data, error } = await supabase
       .from('PoliticaSuscripcion')
-      .update({ dias_gracia_solo_lectura, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', 1).select().single()
     if (error) return res(500, { error: error.message })
     return res(200, { ok: true, politica: data })
+  }
+
+  // ── EXPORTAR TODOS LOS DATOS DE UNA EMPRESA (#30) ──
+  // Pensado para cuando una empresa cancela: le entregamos toda su
+  // información en un archivo antes de bloquearle el acceso. Trae cada
+  // tabla de negocio filtrada por empresa_id — el front (superadmin.js)
+  // arma el Excel con una hoja por tabla usando la librería xlsx que ya
+  // usa el resto de la app para exportar reportes.
+  if (accion === 'exportar_datos_empresa') {
+    const { empresa_id } = body
+    if (!empresa_id) return res(400, { error: 'empresa_id es obligatorio.' })
+
+    const TABLAS = [
+      'Ventas', 'Clientes', 'Productos', 'Logistica', 'Gastos', 'Compras',
+      'Abonos', 'GuiasInternacionales', 'MetodosPago', 'viajes', 'Configuracion',
+    ]
+    const { data: empresa, error: errEmpresa } = await supabase
+      .from('Empresas').select('*').eq('id', empresa_id).maybeSingle()
+    if (errEmpresa) return res(500, { error: errEmpresa.message })
+    if (!empresa) return res(404, { error: 'Empresa no encontrada.' })
+
+    const resultados = await Promise.all(
+      TABLAS.map(t => supabase.from(t).select('*').eq('empresa_id', empresa_id))
+    )
+    const datos = {}
+    for (let i = 0; i < TABLAS.length; i++) {
+      const { data, error } = resultados[i]
+      if (error) return res(500, { error: `Exportando ${TABLAS[i]}: ${error.message}` })
+      datos[TABLAS[i]] = data || []
+    }
+
+    return res(200, { ok: true, empresa, datos })
   }
 
   // ── MIGRAR IMÁGENES DEL BUCKET VIEJO "jarapo-images" (Tenant #1) ──
@@ -388,7 +457,7 @@ export const handler = async (event) => {
   // caller ya viene verificado como "cualquier usuario autenticado" más
   // arriba; acá solo falta que no tenga ya una empresa asociada.
   if (accion === 'crear_empresa_trial') {
-    const { nombreCompleto, nombreEmpresa } = body
+    const { nombreCompleto, nombreEmpresa, codigoReferido } = body
     if (!nombreCompleto || !nombreEmpresa) {
       return res(400, { error: 'nombreCompleto y nombreEmpresa son obligatorios.' })
     }
@@ -405,6 +474,20 @@ export const handler = async (event) => {
     if (errPlan) return res(500, { error: errPlan.message })
     const diasPrueba = planTrial?.dias_prueba ?? 7
 
+    // Código de referido opcional: si viene y existe, queda registrado en
+    // "referido_por" para que el superadmin sepa a quién aplicarle la
+    // comisión (PoliticaSuscripcion.comision_referido_pct) y al nuevo
+    // tenant el descuento (descuento_referido_pct) al facturarle — ambos
+    // se aplican a mano porque los pagos de esta app se registran a mano,
+    // no hay pasarela de cobro. Un código inválido no bloquea el registro,
+    // solo se ignora.
+    let referidoPorId = null
+    if (codigoReferido && codigoReferido.trim()) {
+      const { data: empresaReferente } = await supabase
+        .from('Empresas').select('id').eq('codigo_referido', codigoReferido.trim().toUpperCase()).maybeSingle()
+      referidoPorId = empresaReferente?.id || null
+    }
+
     // Slug único a partir del nombre — no puede depender de que el usuario
     // elija uno bueno (a diferencia de crear_empresa, que sí lo pide).
     const slugBase = nombreEmpresa.toLowerCase()
@@ -420,9 +503,11 @@ export const handler = async (event) => {
       .insert({
         nombre: nombreEmpresa, slug, plan: 'trial', estado_suscripcion: 'trial',
         fecha_vencimiento: fechaVencimiento.toISOString().split('T')[0],
+        codigo_referido: generarCodigoReferido(slug), referido_por: referidoPorId,
       })
       .select().single()
     if (errEmpresa) return res(400, { error: errEmpresa.message })
+    await sembrarDatosBase(empresa.id)
 
     // El usuario de trial recibe el mismo nivel de permisos "admin" que un
     // admin de empresa paga (ADMIN_PERMISSIONS) — es la única persona del

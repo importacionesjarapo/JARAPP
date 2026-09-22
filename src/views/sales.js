@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { formatCOP, formatUSD, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel } from '../utils.js';
+import { formatCOP, formatUSD, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel, readExcelFile, buscarColumna } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
@@ -709,6 +709,81 @@ export const renderSales = async (renderLayout, navigateTo) => {
         downloadExcel(dataToExport, `Reporte_Ventas_${new Date().toISOString().split('T')[0]}`);
     };
 
+    // ── Importar ventas desde Excel (#29) ───────────────────────────────────
+    // Alcance acotado a "Venta Directa" (stock local ya existente) — un
+    // "Encargo" implica crear también la ficha de producto y su flujo de
+    // compra en el exterior, con demasiadas decisiones de negocio para
+    // inferirlas de un archivo. Columnas esperadas: Cliente (identificación
+    // o nombre), Producto (SKU o nombre), Valor Total COP, Fecha (opcional),
+    // Abono Inicial (opcional).
+    window.importarVentasExcel = async (file) => {
+        if (!file) return;
+        const input = document.getElementById('sale-import-input');
+        try {
+            const filas = await readExcelFile(file);
+            if (!filas.length) { showToast('El archivo no tiene filas para importar.', 'error'); return; }
+
+            let creadas = 0, errores = [];
+            for (let i = 0; i < filas.length; i++) {
+                const fila = filas[i];
+                const clienteRef = buscarColumna(fila, 'Cliente', 'Identificación', 'Identificacion').toString().trim();
+                const productoRef = buscarColumna(fila, 'Producto', 'SKU').toString().trim();
+                const valorTotal = parseInt(buscarColumna(fila, 'Valor Total', 'Valor Total COP', 'Total')) || 0;
+
+                if (!clienteRef || !productoRef || valorTotal <= 0) {
+                    errores.push(`Fila ${i + 2}: faltan Cliente, Producto o Valor Total válido.`);
+                    continue;
+                }
+                const cliente = localClientesCache.find(c =>
+                    c.numero_identificacion === clienteRef || (c.nombre || '').toLowerCase() === clienteRef.toLowerCase());
+                if (!cliente) { errores.push(`Fila ${i + 2}: cliente "${clienteRef}" no encontrado.`); continue; }
+
+                const producto = localProductosCache.find(p =>
+                    (p.sku || '').toLowerCase() === productoRef.toLowerCase() || (p.nombre_producto || '').toLowerCase() === productoRef.toLowerCase());
+                if (!producto) { errores.push(`Fila ${i + 2}: producto "${productoRef}" no encontrado.`); continue; }
+                if (parseInt(producto.stock_medellin) <= 0) { errores.push(`Fila ${i + 2}: "${productoRef}" sin stock disponible.`); continue; }
+
+                const abonoIni = parseInt(buscarColumna(fila, 'Abono Inicial', 'Abono')) || 0;
+                const fecha = buscarColumna(fila, 'Fecha').toString().trim() || new Date().toLocaleDateString();
+                const pvId = (Date.now() + i).toString();
+
+                const pv = {
+                    id: pvId, cliente_id: cliente.id, producto_id: producto.id,
+                    tipo_venta: 'Venta Directa', fecha,
+                    valor_total_cop: valorTotal, ganancia_calculada: 0,
+                    abonos_acumulados: abonoIni, saldo_pendiente: valorTotal - abonoIni,
+                    comprobante_url: '', direccion_envio: '', peso_producto: 0, trm_cotizada: 0,
+                    valor_envio_internacional: 0, estado_orden: 'Completado Local',
+                    id_seguimiento: 'SG-' + Math.floor(Math.random() * 1000000),
+                    analista_id: auth.getProfile()?.id || null, empresa_id: auth.getEmpresaId(),
+                };
+                await db.postData('Ventas', pv, 'INSERT');
+
+                producto.stock_medellin = parseInt(producto.stock_medellin) - 1;
+                if (producto.stock_medellin === 0) producto.estado_producto = 'Producto Vendido (Sin Stock)';
+                await db.postData('Productos', producto, 'UPDATE');
+
+                if (abonoIni > 0) {
+                    await db.postData('Abonos', {
+                        id: (Date.now() + i + 1).toString(), venta_id: pvId, valor: abonoIni,
+                        metodo_pago: 'Importación Excel', fecha, comprobante_url: '', empresa_id: auth.getEmpresaId(),
+                    }, 'INSERT');
+                }
+                creadas++;
+            }
+
+            input.value = '';
+            let resumen = `✅ ${creadas} ventas importadas`;
+            if (errores.length) resumen += ` — ${errores.length} filas con error (revisa la consola).`;
+            if (errores.length) console.warn('[Importar Ventas] Filas omitidas:\n' + errores.join('\n'));
+            showToast(resumen, creadas ? 'success' : 'error');
+            if (creadas) { window.invalidateDashCache?.(); navigateTo('sales'); }
+        } catch (err) {
+            input.value = '';
+            showToast('Error importando el archivo: ' + err.message, 'error');
+        }
+    };
+
     const tabs = [
         { id:'tabla',      icon:'📋', label:'Tabla' },
         { id:'pendientes', icon:'⚠️', label:'Pendientes' },
@@ -735,7 +810,11 @@ export const renderSales = async (renderLayout, navigateTo) => {
             <button class="btn-excel" onclick="window.exportSalesExcel()">📥 Excel</button>
             <input type="text" id="find-sale" placeholder="Buscar cliente, producto..." style="background:var(--glass-hover);padding:10px 15px;border-radius:12px;color:var(--text-main);border:1px solid var(--glass-border);width:230px;outline:none;">
             <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="window._navigateTo('cotizador')">📋 Nueva cotización</button>
-            ${auth.canEdit('sales') ? `<button class="btn-primary" onclick="window.modalVenta()">+ Nueva Venta</button>` : ''}
+            ${auth.canEdit('sales') ? `
+                <input type="file" id="sale-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarVentasExcel(this.files[0])">
+                <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="document.getElementById('sale-import-input').click()">📤 Importar Excel</button>
+                <button class="btn-primary" onclick="window.modalVenta()">+ Nueva Venta</button>
+            ` : ''}
         </div>
     </div>
 

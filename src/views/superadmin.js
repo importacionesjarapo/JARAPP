@@ -6,6 +6,7 @@
  */
 import { auth } from '../auth.js';
 import { showToast } from '../utils.js';
+import * as XLSX from 'xlsx';
 
 let _superadminActiveTab = 'empresas'; // 'empresas' | 'planes'
 
@@ -95,7 +96,7 @@ function buildHTML(empresas, planes, error) {
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         ${_superadminActiveTab === 'empresas' ? `
-          <button class="btn-action" id="sa-gracia-btn">⏳ Días de gracia</button>
+          <button class="btn-action" id="sa-gracia-btn">⏳ Política de suscripción</button>
           <button class="btn-action" id="sa-migrar-imagenes-btn">🗂️ Migrar imágenes antiguas</button>
           <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
         ` : ''}
@@ -132,12 +133,15 @@ function buildHTML(empresas, planes, error) {
                 <th>Activación</th>
                 <th>Vence</th>
                 <th>Usuarios</th>
+                <th>Referido</th>
                 <th class="text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              ${empresas.length === 0 ? `<tr><td colspan="8" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
-              ${empresas.map(e => `
+              ${empresas.length === 0 ? `<tr><td colspan="9" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
+              ${empresas.map(e => {
+                const referente = e.referido_por ? empresas.find(x => x.id === e.referido_por) : null;
+                return `
                 <tr>
                   <td><strong>${e.nombre}</strong></td>
                   <td><code>${e.slug}</code></td>
@@ -146,14 +150,19 @@ function buildHTML(empresas, planes, error) {
                   <td>${e.fecha_activacion || '—'}</td>
                   <td>${e.fecha_vencimiento || '—'}</td>
                   <td>${e.num_usuarios}</td>
+                  <td style="font-size:0.75rem;">
+                    <div><code title="Código propio">${e.codigo_referido || '—'}</code></div>
+                    ${referente ? `<div style="color:var(--text-faint);margin-top:2px;">de ${referente.nombre}</div>` : ''}
+                  </td>
                   <td class="text-right">
                     <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
                       <button class="btn-action sa-btn-pagos" data-id="${e.id}" data-nombre="${e.nombre}">💳 Pagos</button>
                       <button class="btn-action sa-btn-estado" data-id="${e.id}" data-nombre="${e.nombre}" data-estado="${e.estado_suscripcion}" data-plan="${e.plan}" data-vencimiento="${e.fecha_vencimiento || ''}" data-activacion="${e.fecha_activacion || ''}">Cambiar estado / plan</button>
+                      <button class="btn-action sa-btn-exportar" data-id="${e.id}" data-nombre="${e.nombre}">⬇️ Exportar datos</button>
                     </div>
                   </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -221,6 +230,38 @@ function bindEvents(renderLayout, planes) {
   document.querySelectorAll('.sa-btn-pagos').forEach(btn => {
     btn.addEventListener('click', () => modalPagosEmpresa(btn.dataset.id, btn.dataset.nombre, renderLayout));
   });
+  document.querySelectorAll('.sa-btn-exportar').forEach(btn => {
+    btn.addEventListener('click', () => exportarDatosEmpresa(btn.dataset.id, btn.dataset.nombre, btn));
+  });
+}
+
+/** #30 — export completo de una empresa (típicamente antes de cancelarla),
+ * una hoja de Excel por tabla, para entregarle sus datos al salir. */
+async function exportarDatosEmpresa(empresaId, nombre, btn) {
+  const original = btn.innerText;
+  btn.disabled = true; btn.innerText = 'Exportando...';
+  try {
+    const { datos } = await callAdminEmpresas({ accion: 'exportar_datos_empresa', empresa_id: empresaId });
+    const wb = XLSX.utils.book_new();
+    let huboDatos = false;
+    for (const [tabla, filas] of Object.entries(datos)) {
+      if (!filas.length) continue;
+      huboDatos = true;
+      const ws = XLSX.utils.json_to_sheet(filas);
+      XLSX.utils.book_append_sheet(wb, ws, tabla.slice(0, 31));
+    }
+    if (!huboDatos) {
+      showToast('Esta empresa no tiene datos para exportar.', 'info');
+      return;
+    }
+    const slugArchivo = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-');
+    XLSX.writeFile(wb, `EncargosPro_${slugArchivo}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showToast('✅ Exportación lista', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.innerText = original;
+  }
 }
 
 function modalEditarPlan(plan, renderLayout) {
@@ -610,9 +651,9 @@ async function modalDiasGracia() {
   const container = document.getElementById('modal-container');
   const content = document.getElementById('modal-content');
   content.innerHTML = `
-    <div class="modal-content" style="max-width:440px;">
+    <div class="modal-content" style="max-width:460px;">
       <div class="modal-header">
-        <h2 class="modal-title">⏳ Días de gracia</h2>
+        <h2 class="modal-title">⏳ Política de suscripción</h2>
         <button onclick="window.closeModal()" class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
@@ -622,6 +663,20 @@ async function modalDiasGracia() {
         <div class="form-group">
           <label class="form-label">Días de gracia</label>
           <input type="number" id="dg-dias" class="form-input" min="0" style="max-width:160px;">
+        </div>
+        <hr style="border-color:var(--border-base);opacity:0.5;margin:1.2rem 0;">
+        <p style="color:var(--text-faint);font-size:0.85rem;margin-bottom:1.2rem;">
+          Cada empresa tiene su propio código de referido (visible en la tabla de Empresas) para compartir con nuevos clientes. Estos porcentajes son de referencia — al facturar manualmente, aplícalos tú mismo al registrar el pago o el plan de cada empresa involucrada.
+        </p>
+        <div style="display:flex;gap:1rem;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Descuento para el referido (%)</label>
+            <input type="number" id="dg-descuento" class="form-input" min="0" max="100" step="0.1">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Comisión para quien refiere (%)</label>
+            <input type="number" id="dg-comision" class="form-input" min="0" max="100" step="0.1">
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -633,21 +688,35 @@ async function modalDiasGracia() {
 
   try {
     const client = auth.getClient();
-    const { data } = await client.from('PoliticaSuscripcion').select('dias_gracia_solo_lectura').eq('id', 1).maybeSingle();
+    const { data } = await client.from('PoliticaSuscripcion')
+      .select('dias_gracia_solo_lectura, descuento_referido_pct, comision_referido_pct').eq('id', 1).maybeSingle();
     document.getElementById('dg-dias').value = data?.dias_gracia_solo_lectura ?? 3;
+    document.getElementById('dg-descuento').value = data?.descuento_referido_pct ?? 10;
+    document.getElementById('dg-comision').value = data?.comision_referido_pct ?? 10;
   } catch (_) {
     document.getElementById('dg-dias').value = 3;
+    document.getElementById('dg-descuento').value = 10;
+    document.getElementById('dg-comision').value = 10;
   }
 
   document.getElementById('dg-btn-save').addEventListener('click', async () => {
     const btn = document.getElementById('dg-btn-save');
     const dias = parseInt(document.getElementById('dg-dias').value, 10);
+    const descuento = parseFloat(document.getElementById('dg-descuento').value);
+    const comision = parseFloat(document.getElementById('dg-comision').value);
     if (isNaN(dias) || dias < 0) return showToast('Ingresa un número de días válido.', 'error');
+    if (isNaN(descuento) || descuento < 0 || descuento > 100) return showToast('El descuento debe estar entre 0 y 100.', 'error');
+    if (isNaN(comision) || comision < 0 || comision > 100) return showToast('La comisión debe estar entre 0 y 100.', 'error');
     btn.disabled = true; btn.textContent = 'Guardando...';
     try {
-      await callAdminEmpresas({ accion: 'guardar_politica_suscripcion', dias_gracia_solo_lectura: dias });
+      await callAdminEmpresas({
+        accion: 'guardar_politica_suscripcion',
+        dias_gracia_solo_lectura: dias,
+        descuento_referido_pct: descuento,
+        comision_referido_pct: comision,
+      });
       window.closeModal();
-      showToast('✅ Días de gracia actualizados', 'success');
+      showToast('✅ Política de suscripción actualizada', 'success');
     } catch (err) {
       showToast(err.message, 'error');
       btn.disabled = false; btn.textContent = 'Guardar';

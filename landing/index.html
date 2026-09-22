@@ -1097,6 +1097,13 @@
             </label>
             <input type="file" id="auth-onb-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none;">
           </div>
+          <div class="auth-field">
+            <div class="auth-field-head">
+              <label>Código de referido</label>
+              <span class="auth-hint">Opcional</span>
+            </div>
+            <input type="text" id="auth-onb-referido" placeholder="Ej: ACME-4F2B" style="text-transform:uppercase;">
+          </div>
           <button type="submit" class="auth-submit" id="auth-onb-btn">Comenzar prueba gratis →</button>
         </form>
       </div>
@@ -1111,7 +1118,12 @@
         <p>Tu prueba gratis ya está activa</p>
       </div>
       <div class="auth-body" style="text-align:center;">
-        <p style="color:var(--text-soft);font-size:.92rem;margin-bottom:24px;">Inicia sesión con el mismo correo para entrar a tu cuenta de EncargosPro.</p>
+        <p style="color:var(--text-soft);font-size:.92rem;margin-bottom:16px;">Inicia sesión con el mismo correo para entrar a tu cuenta de EncargosPro.</p>
+        <div id="auth-exito-referido" style="display:none;background:var(--surface-tint);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:20px;text-align:left;">
+          <p style="font-size:.78rem;font-weight:700;color:var(--text-soft);margin:0 0 6px;">TU CÓDIGO DE REFERIDO</p>
+          <p style="font-size:1.1rem;font-weight:800;color:var(--brand-dark);margin:0;font-family:var(--font-mono);" id="auth-exito-codigo">—</p>
+          <p style="font-size:.8rem;color:var(--text-soft);margin:8px 0 0;">Compártelo con otros negocios de importación — ambos reciben beneficios en su plan.</p>
+        </div>
         <a class="auth-submit" style="display:block;text-decoration:none;" id="auth-entrar-app" href="#">Entrar a EncargosPro →</a>
       </div>
     </div>
@@ -1283,7 +1295,7 @@
     }
   }
 
-  async function crearEmpresaTrial(nombreCompleto, nombreEmpresa){
+  async function crearEmpresaTrial(nombreCompleto, nombreEmpresa, codigoReferido){
     var { data: sessionData } = await supa.auth.getSession();
     var token = sessionData?.session?.access_token;
     if (!token) throw new Error('Tu sesión expiró. Cierra este cuadro e inicia el registro de nuevo.');
@@ -1291,7 +1303,7 @@
     var resp = await fetch(FUNC_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ accion: 'crear_empresa_trial', nombreCompleto: nombreCompleto, nombreEmpresa: nombreEmpresa }),
+      body: JSON.stringify({ accion: 'crear_empresa_trial', nombreCompleto: nombreCompleto, nombreEmpresa: nombreEmpresa, codigoReferido: codigoReferido || undefined }),
     });
     var data = await resp.json().catch(function(){ return {}; });
     if (!resp.ok) throw new Error(data.error || ('Error ' + resp.status));
@@ -1353,6 +1365,12 @@
     abrir('auth-screen-onboarding');
   }
 
+  // Link de referido compartido (ej. encargospro.com/?ref=ACME-4F2B):
+  // precarga el código en el formulario de onboarding sin obligar a nadie
+  // a escribirlo a mano.
+  var refParam = new URLSearchParams(window.location.search).get('ref');
+  if (refParam) document.getElementById('auth-onb-referido').value = refParam.toUpperCase();
+
   document.getElementById('btn-empezar-gratis')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-header')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
   document.getElementById('btn-empezar-gratis-precios')?.addEventListener('click', function(){ abrir('auth-screen-signup'); });
@@ -1403,11 +1421,16 @@
     setError('auth-onboarding-error', '');
     var nombreCompleto = document.getElementById('auth-onb-nombre').value.trim();
     var nombreEmpresa = document.getElementById('auth-onb-empresa').value.trim();
+    var codigoReferido = document.getElementById('auth-onb-referido').value.trim();
     var btn = document.getElementById('auth-onb-btn');
     btn.disabled = true; btn.textContent = 'Creando tu espacio...';
 
     try {
-      var resultado = await crearEmpresaTrial(nombreCompleto, nombreEmpresa);
+      var resultado = await crearEmpresaTrial(nombreCompleto, nombreEmpresa, codigoReferido);
+      if (resultado && resultado.empresa && resultado.empresa.codigo_referido) {
+        document.getElementById('auth-exito-codigo').textContent = resultado.empresa.codigo_referido;
+        document.getElementById('auth-exito-referido').style.display = 'block';
+      }
       if (onbLogoFile && resultado && resultado.empresa) {
         btn.textContent = 'Subiendo tu logo...';
         try { await subirLogoEmpresa(resultado.empresa.id, onbLogoFile); }

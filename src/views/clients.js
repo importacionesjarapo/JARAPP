@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { renderError, formatCOP, downloadExcel } from '../utils.js';
+import { renderError, formatCOP, downloadExcel, readExcelFile, buscarColumna, showToast } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
@@ -450,6 +450,64 @@ export const renderClients = async (renderLayout, navigateTo) => {
         downloadExcel(dataToExport, `Reporte_Clientes_${new Date().toISOString().split('T')[0]}`);
     };
 
+    // ── Importar clientes desde Excel (#29) ─────────────────────────────────
+    // Columnas esperadas (flexibles en nombre): Nombre, Identificación,
+    // WhatsApp, Ciudad, Dirección. Solo "Nombre" es obligatoria por fila.
+    // Un cliente ya existente (mismo número de identificación o WhatsApp) se
+    // omite en vez de duplicarse — igual que la detección de duplicados del
+    // formulario manual de arriba.
+    window.importarClientesExcel = async (file) => {
+        if (!file) return;
+        const input = document.getElementById('cli-import-input');
+        try {
+            const filas = await readExcelFile(file);
+            if (!filas.length) { showToast('El archivo no tiene filas para importar.', 'error'); return; }
+
+            const existentes = await db.fetchData('Clientes');
+            const listaActual = Array.isArray(existentes) ? existentes : [];
+
+            let creados = 0, omitidos = 0, sinNombre = 0;
+            for (let i = 0; i < filas.length; i++) {
+                const fila = filas[i];
+                const nombre = buscarColumna(fila, 'Nombre', 'Cliente').toString().trim();
+                if (!nombre) { sinNombre++; continue; }
+
+                const nid = buscarColumna(fila, 'Identificación', 'Identificacion', 'Cédula', 'Cedula', 'NIT').toString().trim();
+                const whatsapp = buscarColumna(fila, 'WhatsApp', 'Whatsapp', 'Celular', 'Teléfono', 'Telefono').toString().trim();
+                const ciudad = buscarColumna(fila, 'Ciudad').toString().trim();
+                const direccion = buscarColumna(fila, 'Dirección', 'Direccion').toString().trim();
+
+                const yaExiste = listaActual.some(c =>
+                    (nid && c.numero_identificacion === nid) ||
+                    (whatsapp && c.whatsapp && c.whatsapp.includes(whatsapp))
+                );
+                if (yaExiste) { omitidos++; continue; }
+
+                const payload = {
+                    id: (Date.now() + i).toString(),
+                    nombre, numero_identificacion: nid, whatsapp,
+                    ciudad, direccion: direccion && ciudad ? `${direccion} (${ciudad})` : direccion,
+                    numero_lead_kommo: '',
+                    fecha_registro: new Date().toLocaleDateString(),
+                    empresa_id: auth.getEmpresaId(),
+                };
+                await db.postData('Clientes', payload, 'INSERT');
+                listaActual.push(payload);
+                creados++;
+            }
+
+            input.value = '';
+            const resumen = `✅ ${creados} clientes importados` +
+                (omitidos ? `, ${omitidos} ya existían` : '') +
+                (sinNombre ? `, ${sinNombre} filas sin nombre omitidas` : '');
+            showToast(resumen, creados ? 'success' : 'info');
+            if (creados) navigateTo('clients');
+        } catch (err) {
+            input.value = '';
+            showToast('Error importando el archivo: ' + err.message, 'error');
+        }
+    };
+
     // ── Modal Detalle Cliente ──────────────────────────────────────────────────
     window.modalDetalleCliente = (id) => {
         const c = list.find(x => x.id.toString() === id.toString());
@@ -595,7 +653,11 @@ export const renderClients = async (renderLayout, navigateTo) => {
         </div>
         <div style="display:flex;gap:10px;align-items:center;">
             <button class="btn-excel" onclick="window.exportCliExcel()">📥 Excel</button>
-            ${auth.canEdit('clients') ? `<button class="btn-primary" onclick="window.modalCliente()">+ Nuevo Cliente</button>` : ''}
+            ${auth.canEdit('clients') ? `
+                <input type="file" id="cli-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarClientesExcel(this.files[0])">
+                <button class="btn-action" onclick="document.getElementById('cli-import-input').click()">📤 Importar Excel</button>
+                <button class="btn-primary" onclick="window.modalCliente()">+ Nuevo Cliente</button>
+            ` : ''}
         </div>
     </div>
 

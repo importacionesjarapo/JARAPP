@@ -3,6 +3,15 @@ import { auth } from '../auth.js';
 import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
 
+// Tiendas frecuentes en compras USA para personal shopping (#27, dato
+// semilla de referencia) — solo sugerencias del <datalist>, el campo sigue
+// siendo texto libre porque no hay catálogo real de tiendas por tenant.
+const TIENDAS_REFERENCIA = [
+    'Nike.com', 'Amazon', 'FootLocker', 'Sephora', 'Ulta Beauty', 'Macy\'s',
+    'Ross', 'Marshalls', 'TJ Maxx', 'Walmart', 'Target', 'Best Buy',
+    'Dick\'s Sporting Goods', 'Zara USA', 'Adidas.com', 'GNC',
+];
+
 // ─── Cached data (persists across view switches without re-fetching) ───────────
 let _cache = null;
 let _renderLayoutFn = null;
@@ -865,7 +874,8 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                     <div class="form-grid-3">
                         <div class="form-group">
                             <label class="form-label">Proveedor / Tienda *</label>
-                            <input type="text" id="pc-proveedor" placeholder="Ej: Nike.com, FootLocker..." required>
+                            <input type="text" id="pc-proveedor" list="pc-tiendas-referencia" placeholder="Ej: Nike.com, FootLocker..." required>
+                            <datalist id="pc-tiendas-referencia">${TIENDAS_REFERENCIA.map(t => `<option value="${t}">`).join('')}</datalist>
                         </div>
 
                         <div class="form-group">
