@@ -23,12 +23,12 @@ export const renderLogin = (onSuccess) => {
 
         <!-- Logo y branding — esta pantalla es compartida por todas las
              empresas (todavía no se sabe qué usuario va a ingresar), así
-             que nunca debe mostrar el logo subido por un tenant en
-             particular. Ese logo por-empresa solo aparece DESPUÉS de
-             iniciar sesión, en el sidebar (ver main.js). -->
+             que siempre muestra la marca EncargosPro, nunca el logo que
+             un tenant en particular subió. Ese logo por-empresa solo
+             aparece DESPUÉS de iniciar sesión, en el sidebar (main.js). -->
         <div class="login-logo-zone">
           <div class="login-logo-ring">
-            <div style="font-size:3rem;font-weight:900;color:var(--primary);display:flex;align-items:center;justify-content:center;width:100%;height:100%;">E</div>
+            <img src="/logo-encargospro.png" style="width:100%;height:100%;object-fit:contain;" alt="EncargosPro">
           </div>
           <div class="login-brand">
             <h1 class="login-title">EncargosPro</h1>
