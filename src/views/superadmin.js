@@ -95,6 +95,7 @@ function buildHTML(empresas, planes, error) {
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         ${_superadminActiveTab === 'empresas' ? `
+          <button class="btn-action" id="sa-gracia-btn">⏳ Días de gracia</button>
           <button class="btn-action" id="sa-migrar-imagenes-btn">🗂️ Migrar imágenes antiguas</button>
           <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
         ` : ''}
@@ -128,22 +129,29 @@ function buildHTML(empresas, planes, error) {
                 <th>Slug</th>
                 <th>Plan</th>
                 <th>Estado</th>
+                <th>Activación</th>
                 <th>Vence</th>
                 <th>Usuarios</th>
                 <th class="text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              ${empresas.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
+              ${empresas.length === 0 ? `<tr><td colspan="8" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
               ${empresas.map(e => `
                 <tr>
                   <td><strong>${e.nombre}</strong></td>
                   <td><code>${e.slug}</code></td>
                   <td>${e.plan}</td>
                   <td><span style="background:${ESTADO_COLORS[e.estado_suscripcion]}22;color:${ESTADO_COLORS[e.estado_suscripcion]};padding:2px 10px;border-radius:99px;font-size:0.78rem;font-weight:600;">${ESTADO_LABELS[e.estado_suscripcion] || e.estado_suscripcion}</span></td>
+                  <td>${e.fecha_activacion || '—'}</td>
                   <td>${e.fecha_vencimiento || '—'}</td>
                   <td>${e.num_usuarios}</td>
-                  <td class="text-right"><button class="btn-action sa-btn-estado" data-id="${e.id}" data-nombre="${e.nombre}" data-estado="${e.estado_suscripcion}" data-plan="${e.plan}">Cambiar estado / plan</button></td>
+                  <td class="text-right">
+                    <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
+                      <button class="btn-action sa-btn-pagos" data-id="${e.id}" data-nombre="${e.nombre}">💳 Pagos</button>
+                      <button class="btn-action sa-btn-estado" data-id="${e.id}" data-nombre="${e.nombre}" data-estado="${e.estado_suscripcion}" data-plan="${e.plan}" data-vencimiento="${e.fecha_vencimiento || ''}" data-activacion="${e.fecha_activacion || ''}">Cambiar estado / plan</button>
+                    </div>
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -199,12 +207,19 @@ function bindEvents(renderLayout, planes) {
   });
   document.getElementById('sa-new-empresa-btn')?.addEventListener('click', () => modalCrearEmpresa(renderLayout, planes));
   document.getElementById('sa-migrar-imagenes-btn')?.addEventListener('click', () => modalMigrarImagenes());
+  document.getElementById('sa-gracia-btn')?.addEventListener('click', () => modalDiasGracia());
   document.querySelectorAll('.sa-btn-editar-plan').forEach(btn => {
     const plan = planes.find(p => p.id === btn.dataset.id);
     btn.addEventListener('click', () => modalEditarPlan(plan, renderLayout));
   });
   document.querySelectorAll('.sa-btn-estado').forEach(btn => {
-    btn.addEventListener('click', () => modalCambiarEstado(btn.dataset.id, btn.dataset.nombre, btn.dataset.estado, btn.dataset.plan, planes, renderLayout));
+    btn.addEventListener('click', () => modalCambiarEstado(
+      btn.dataset.id, btn.dataset.nombre, btn.dataset.estado, btn.dataset.plan,
+      btn.dataset.vencimiento, btn.dataset.activacion, planes, renderLayout
+    ));
+  });
+  document.querySelectorAll('.sa-btn-pagos').forEach(btn => {
+    btn.addEventListener('click', () => modalPagosEmpresa(btn.dataset.id, btn.dataset.nombre, renderLayout));
   });
 }
 
@@ -423,7 +438,7 @@ function modalCrearEmpresa(renderLayout, planes) {
   };
 }
 
-function modalCambiarEstado(empresaId, nombre, estadoActual, planActual, planes, renderLayout) {
+function modalCambiarEstado(empresaId, nombre, estadoActual, planActual, vencimientoActual, activacionActual, planes, renderLayout) {
   const container = document.getElementById('modal-container');
   const content = document.getElementById('modal-content');
   content.innerHTML = `
@@ -446,9 +461,15 @@ function modalCambiarEstado(empresaId, nombre, estadoActual, planActual, planes,
               ${ESTADOS.map(s => `<option value="${s}" ${s === estadoActual ? 'selected' : ''}>${ESTADO_LABELS[s]}</option>`).join('')}
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Fecha de vencimiento</label>
-            <input type="date" id="ce-fecha-vencimiento" class="form-input">
+          <div style="display:flex;gap:1rem;">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">Fecha de activación</label>
+              <input type="date" id="ce-fecha-activacion" class="form-input" value="${activacionActual || ''}">
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">Fecha de vencimiento</label>
+              <input type="date" id="ce-fecha-vencimiento" class="form-input" value="${vencimientoActual || ''}">
+            </div>
           </div>
         </form>
       </div>
@@ -465,12 +486,14 @@ function modalCambiarEstado(empresaId, nombre, estadoActual, planActual, planes,
     btn.disabled = true; btn.innerText = 'Guardando...';
     try {
       const fecha = document.getElementById('ce-fecha-vencimiento').value;
+      const activacion = document.getElementById('ce-fecha-activacion').value;
       const plan = document.getElementById('ce-plan-estado').value;
       await callAdminEmpresas({
         accion: 'actualizar_suscripcion',
         empresa_id: empresaId,
         estado_suscripcion: document.getElementById('ce-estado').value,
         ...(fecha ? { fecha_vencimiento: fecha } : {}),
+        ...(activacion !== (activacionActual || '') ? { fecha_activacion: activacion || null } : {}),
         ...(plan !== planActual ? { plan } : {}),
       });
       window.closeModal();
@@ -481,6 +504,141 @@ function modalCambiarEstado(empresaId, nombre, estadoActual, planActual, planes,
       btn.disabled = false; btn.innerText = 'Guardar';
     }
   };
+}
+
+function modalPagosEmpresa(empresaId, nombre, renderLayout) {
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">💳 Pagos — ${nombre}</h2>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-nuevo-pago" style="display:flex; flex-direction:row; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:1.5rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border-base);">
+          <div class="form-group" style="margin-bottom:0; flex:1; min-width:120px;">
+            <label class="form-label">Monto (COP)</label>
+            <input type="number" id="pg-monto" class="form-input" min="1" step="1" required>
+          </div>
+          <div class="form-group" style="margin-bottom:0; flex:1; min-width:140px;">
+            <label class="form-label">Fecha de pago</label>
+            <input type="date" id="pg-fecha" class="form-input" required value="${new Date().toISOString().split('T')[0]}">
+          </div>
+          <div class="form-group" style="margin-bottom:0; flex:1; min-width:130px;">
+            <label class="form-label">Método</label>
+            <input type="text" id="pg-metodo" class="form-input" placeholder="Transferencia">
+          </div>
+          <button type="submit" class="btn-primary" id="pg-btn-agregar" style="height:44px;">+ Registrar</button>
+        </form>
+        <div id="pg-lista">
+          <div class="admin-loading"><div class="loader"></div><p>Cargando pagos...</p></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="window.closeModal()">Cerrar</button>
+      </div>
+    </div>`;
+  container.style.display = 'flex';
+
+  async function cargarPagos() {
+    const lista = document.getElementById('pg-lista');
+    try {
+      const { pagos } = await callAdminEmpresas({ accion: 'listar_pagos', empresa_id: empresaId });
+      lista.innerHTML = !pagos.length
+        ? `<p style="text-align:center;color:var(--text-faint);padding:1rem 0;">Sin pagos registrados todavía.</p>`
+        : `
+          <table class="data-table" style="width:100%;">
+            <thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Periodo</th></tr></thead>
+            <tbody>
+              ${pagos.map(p => `
+                <tr>
+                  <td>${p.fecha_pago}</td>
+                  <td>$${Number(p.monto).toLocaleString('es-CO')} ${p.moneda}</td>
+                  <td>${p.metodo_pago || '—'}</td>
+                  <td>${p.periodo_desde && p.periodo_hasta ? `${p.periodo_desde} → ${p.periodo_hasta}` : '—'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`;
+    } catch (err) {
+      lista.innerHTML = `<div class="admin-error-banner">⚠ ${err.message}</div>`;
+    }
+  }
+  cargarPagos();
+
+  document.getElementById('form-nuevo-pago').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('pg-btn-agregar');
+    btn.disabled = true; btn.innerText = 'Guardando...';
+    try {
+      await callAdminEmpresas({
+        accion: 'registrar_pago',
+        empresa_id: empresaId,
+        monto: Number(document.getElementById('pg-monto').value),
+        fecha_pago: document.getElementById('pg-fecha').value,
+        metodo_pago: document.getElementById('pg-metodo').value.trim() || undefined,
+      });
+      document.getElementById('form-nuevo-pago').reset();
+      document.getElementById('pg-fecha').value = new Date().toISOString().split('T')[0];
+      showToast('✅ Pago registrado', 'success');
+      cargarPagos();
+      renderSuperadmin(renderLayout); // refresca fecha_ultimo_pago en la tabla de empresas de fondo
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      btn.disabled = false; btn.innerText = '+ Registrar';
+    }
+  };
+}
+
+async function modalDiasGracia() {
+  const container = document.getElementById('modal-container');
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `
+    <div class="modal-content" style="max-width:440px;">
+      <div class="modal-header">
+        <h2 class="modal-title">⏳ Días de gracia</h2>
+        <button onclick="window.closeModal()" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-faint);font-size:0.85rem;margin-bottom:1.2rem;">
+          Al vencer la suscripción de una empresa, solo su administrador puede seguir entrando (en modo de solo consulta, sin crear ni editar nada) durante estos días. Los demás usuarios de esa empresa se bloquean de inmediato. Pasados estos días, se bloquea también el administrador.
+        </p>
+        <div class="form-group">
+          <label class="form-label">Días de gracia</label>
+          <input type="number" id="dg-dias" class="form-input" min="0" style="max-width:160px;">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+        <button type="button" class="btn-primary" id="dg-btn-save">Guardar</button>
+      </div>
+    </div>`;
+  container.style.display = 'flex';
+
+  try {
+    const client = auth.getClient();
+    const { data } = await client.from('PoliticaSuscripcion').select('dias_gracia_solo_lectura').eq('id', 1).maybeSingle();
+    document.getElementById('dg-dias').value = data?.dias_gracia_solo_lectura ?? 3;
+  } catch (_) {
+    document.getElementById('dg-dias').value = 3;
+  }
+
+  document.getElementById('dg-btn-save').addEventListener('click', async () => {
+    const btn = document.getElementById('dg-btn-save');
+    const dias = parseInt(document.getElementById('dg-dias').value, 10);
+    if (isNaN(dias) || dias < 0) return showToast('Ingresa un número de días válido.', 'error');
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+      await callAdminEmpresas({ accion: 'guardar_politica_suscripcion', dias_gracia_solo_lectura: dias });
+      window.closeModal();
+      showToast('✅ Días de gracia actualizados', 'success');
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Guardar';
+    }
+  });
 }
 
 export default renderSuperadmin;

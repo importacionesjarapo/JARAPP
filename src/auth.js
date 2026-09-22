@@ -117,6 +117,9 @@ class Auth {
     this._empresa = null;
     this._plan = null;
     this._planLoaded = false;
+    this._diasGracia = 0;
+    this._diasGraciaCargado = false;
+    this._readOnlyMode = false;
   }
 
   _getClient() {
@@ -330,6 +333,68 @@ class Auth {
     return !modulos[moduleKey];
   }
 
+  /**
+   * Días de gracia en modo solo-lectura tras vencer la suscripción —
+   * parámetro global configurado por el superadmin (tabla
+   * "PoliticaSuscripcion", SELECT público). Se cachea igual que getPlan();
+   * si falla la consulta, se asume 0 días de gracia (el criterio más
+   * conservador: nunca deja pasar de largo un bloqueo por un error de red).
+   */
+  async getDiasGraciaSuscripcion() {
+    if (this._diasGraciaCargado) return this._diasGracia;
+    this._diasGraciaCargado = true;
+    const client = this._getClient();
+    if (!client) { this._diasGracia = 0; return 0; }
+    try {
+      const { data, error } = await withTimeout(
+        client.from('PoliticaSuscripcion').select('dias_gracia_solo_lectura').eq('id', 1).maybeSingle(),
+        8000, 'Timeout al cargar la política de suscripción'
+      );
+      this._diasGracia = (!error && data) ? data.dias_gracia_solo_lectura : 0;
+    } catch (e) {
+      console.error('[Auth] getDiasGraciaSuscripcion exception:', e.message);
+      this._diasGracia = 0;
+    }
+    return this._diasGracia;
+  }
+
+  /**
+   * Evalúa el acceso de la empresa actual contra fecha_vencimiento +
+   * estado_suscripcion + los días de gracia configurados. Devuelve
+   * { bloqueado, soloLectura } — nunca ambos true a la vez.
+   * - 'cancelada' corta de inmediato, sin gracia (decisión manual del
+   *   superadmin, no depende de fechas).
+   * - 'activa' nunca bloquea.
+   * - 'trial'/'vencida' se rigen por fecha_vencimiento: antes de esa fecha,
+   *   acceso normal; dentro de los N días de gracia después, solo lectura;
+   *   pasada la gracia, bloqueado.
+   * Sin empresa (superadmin) o sin fecha_vencimiento: nunca bloquea.
+   */
+  async evaluarAccesoSuscripcion() {
+    const empresa = await this.getEmpresa();
+    if (!empresa) return { bloqueado: false, soloLectura: false };
+    if (empresa.estado_suscripcion === 'cancelada') return { bloqueado: true, soloLectura: false };
+    if (empresa.estado_suscripcion === 'activa') return { bloqueado: false, soloLectura: false };
+    if (!empresa.fecha_vencimiento) return { bloqueado: false, soloLectura: false };
+
+    const diasGracia = await this.getDiasGraciaSuscripcion();
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const vencimiento = new Date(empresa.fecha_vencimiento + 'T00:00:00');
+    if (hoy <= vencimiento) return { bloqueado: false, soloLectura: false };
+
+    const finGracia = new Date(vencimiento);
+    finGracia.setDate(finGracia.getDate() + diasGracia);
+    if (hoy <= finGracia) return { bloqueado: false, soloLectura: true };
+    return { bloqueado: true, soloLectura: false };
+  }
+
+  /** Activa/consulta el modo solo-lectura global — ver evaluarAccesoSuscripcion() en main.js. */
+  setReadOnlyMode(activo) { this._readOnlyMode = !!activo; }
+  isReadOnlyMode() { return this._readOnlyMode; }
+
+  /** Empresa ya cacheada en memoria (sin consultar la BD) — para usar en renderLayout(), que no es async. Requiere haber llamado getEmpresa() antes (ya ocurre en startApp()). */
+  getEmpresaSync() { return this._empresa; }
+
   /** Login con email y password */
   async login(email, password) {
     const client = this._getClient();
@@ -419,6 +484,9 @@ class Auth {
     this._empresa = null;
     this._plan = null;
     this._planLoaded = false;
+    this._diasGracia = 0;
+    this._diasGraciaCargado = false;
+    this._readOnlyMode = false;
   }
 
   /** Crear nuevo usuario (solo admin puede hacer esto desde el panel) */
@@ -573,6 +641,11 @@ class Auth {
     if (!this._profile || !this._profile.is_active) return false;
     if (module === 'superadmin') return this._profile.role === 'superadmin';
     if (this._profile.role === 'superadmin') return false;
+    // Modo solo-lectura por suscripción vencida (ver evaluarAccesoSuscripcion
+    // en main.js): nadie edita nada mientras esté activo, sin importar rol o
+    // permisos guardados — es la única persona que llegó a entrar (el resto
+    // de roles se bloquea por completo antes de esto), y solo puede consultar.
+    if (this._readOnlyMode) return false;
     // Ver el comentario equivalente en canAccess() — mismo motivo para no
     // tener un atajo "role==='admin' => true" acá.
     // Resolver permisos: preferir los guardados en BD, si no usar el template del rol

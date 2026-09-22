@@ -248,6 +248,7 @@ export const renderLayout = (contentHTML) => {
     <div id="sidebar-overlay"></div>
 
     <main class="main-content">
+      ${auth.isReadOnlyMode() ? bannerSoloLectura(auth.getEmpresaSync()) : ''}
       <header class="header">
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
           <div class="welcome-msg">
@@ -663,14 +664,6 @@ async function bootApp() {
     return;
   }
 
-  // Guard: suscripción de la empresa vencida/cancelada → bloquear navegación.
-  // El superadmin no tiene empresa propia (getEmpresa() da null) y no pasa por este guard.
-  const empresa = await auth.getEmpresa();
-  if (empresa && ['vencida', 'cancelada'].includes(empresa.estado_suscripcion)) {
-    renderSuscripcionVencida(empresa);
-    return;
-  }
-
   // Ya autenticado → arrancar directamente
   startApp();
 }
@@ -816,24 +809,38 @@ async function abrirModalUpgradePlan(moduleKey, label) {
   container.style.display = 'flex';
 }
 
-function renderSuscripcionVencida(empresa) {
+function renderSuscripcionVencida(empresa, motivo) {
   // Configurable vía variable de entorno VITE_WHATSAPP_COMERCIAL (Netlify →
   // Site settings → Environment variables), sin tocar código. El número de
   // Jarapo queda solo como fallback de desarrollo si no está configurada.
   const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
   const mensaje = encodeURIComponent(`Hola, mi suscripción a EncargosPro (${empresa.nombre}) está ${empresa.estado_suscripcion}. Quiero renovarla.`);
+  const textoDefault = `El acceso de <strong>${empresa.nombre}</strong> a EncargosPro está pausado. Contáctanos por WhatsApp para reactivar tu suscripción.`;
   document.querySelector('#app').innerHTML = `
     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; gap:1rem; text-align:center; padding:2rem;">
       <div style="font-size:3rem;">⏸️</div>
       <h2 style="color:var(--text-main);">Suscripción ${empresa.estado_suscripcion === 'cancelada' ? 'cancelada' : 'vencida'}</h2>
       <p style="color:var(--text-faint); max-width:380px;">
-        El acceso de <strong>${empresa.nombre}</strong> a EncargosPro está pausado.
-        Contáctanos por WhatsApp para reactivar tu suscripción.
+        ${motivo || textoDefault}
       </p>
       <a class="btn-primary" href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener">
         💬 Reactivar por WhatsApp
       </a>
       <button class="btn-secondary" onclick="window.location.reload()">Ya renové — Recargar</button>
+    </div>
+  `;
+}
+
+/** Banner persistente cuando el admin está operando en modo solo-lectura (gracia post-vencimiento). */
+function bannerSoloLectura(empresa) {
+  const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
+  const mensaje = encodeURIComponent(`Hola, mi suscripción a EncargosPro (${empresa?.nombre || ''}) venció y estoy en modo de solo lectura. Quiero renovarla.`);
+  return `
+    <div id="banner-solo-lectura" style="background:#7C1D1D; color:#fff; padding:10px 20px; display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; font-size:0.82rem; text-align:center;">
+      <span>🔒 Tu suscripción venció — estás en modo de <strong>solo consulta</strong>. No puedes crear ni editar información.</span>
+      <a href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener" style="background:#20BD5C; color:#fff; padding:5px 14px; border-radius:8px; font-weight:700; text-decoration:none; white-space:nowrap;">
+        💬 Renovar ahora
+      </a>
     </div>
   `;
 }
@@ -855,6 +862,24 @@ async function startApp() {
   // por el resto de bootApp) — antes solo se precargaba en el primero, así
   // que un login recién hecho nunca veía los candados hasta refrescar.
   await auth.getPlan();
+
+  // Guard de suscripción: bloqueo total, modo solo-lectura (solo admin,
+  // durante los días de gracia configurados), o acceso normal. El
+  // superadmin no tiene empresa propia y evaluarAccesoSuscripcion() nunca
+  // lo bloquea (ver auth.js). Va acá y no en bootApp por el mismo motivo
+  // que auth.getPlan() arriba: este es el único punto por el que pasan
+  // todos los caminos de login.
+  const acceso = await auth.evaluarAccesoSuscripcion();
+  const empresaActual = auth.getEmpresaSync();
+  if (acceso.bloqueado) {
+    renderSuscripcionVencida(empresaActual);
+    return;
+  }
+  if (acceso.soloLectura && !auth.isAdmin()) {
+    renderSuscripcionVencida(empresaActual, `El acceso de <strong>${empresaActual?.nombre || ''}</strong> venció. Solo el administrador puede consultar información durante el periodo de gracia — contacta a tu administrador o renueven la suscripción.`);
+    return;
+  }
+  auth.setReadOnlyMode(acceso.soloLectura && auth.isAdmin());
 
   // Cargar logo en background
   ConfigService.getLogo().then(url => {

@@ -155,7 +155,7 @@ export const handler = async (event) => {
 
   // ── RENOVAR / SUSPENDER SUSCRIPCIÓN ──
   if (accion === 'actualizar_suscripcion') {
-    const { empresa_id, estado_suscripcion, fecha_vencimiento, plan } = body
+    const { empresa_id, estado_suscripcion, fecha_vencimiento, fecha_activacion, plan } = body
     const validos = ['activa', 'vencida', 'trial', 'cancelada']
     if (!empresa_id || !validos.includes(estado_suscripcion)) {
       return res(400, { error: `empresa_id requerido y estado_suscripcion debe ser uno de: ${validos.join(', ')}` })
@@ -163,6 +163,7 @@ export const handler = async (event) => {
 
     const updates = { estado_suscripcion }
     if (fecha_vencimiento !== undefined) updates.fecha_vencimiento = fecha_vencimiento
+    if (fecha_activacion !== undefined) updates.fecha_activacion = fecha_activacion
     if (plan !== undefined) {
       const { data: planExiste, error: errPlanExiste } = await supabase
         .from('Planes').select('id').eq('id', plan).maybeSingle()
@@ -174,6 +175,59 @@ export const handler = async (event) => {
     const { data, error } = await supabase.from('Empresas').update(updates).eq('id', empresa_id).select().single()
     if (error) return res(400, { error: error.message })
     return res(200, { ok: true, empresa: data })
+  }
+
+  // ── PAGOS DE SUSCRIPCIÓN (cada empresa hacia EncargosPro) ──
+
+  if (accion === 'listar_pagos') {
+    const { empresa_id } = body
+    if (!empresa_id) return res(400, { error: 'empresa_id es obligatorio.' })
+    const { data, error } = await supabase
+      .from('PagosSuscripciones').select('*').eq('empresa_id', empresa_id).order('fecha_pago', { ascending: false })
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true, pagos: data })
+  }
+
+  if (accion === 'registrar_pago') {
+    const { empresa_id, monto, fecha_pago, metodo_pago, periodo_desde, periodo_hasta, notas } = body
+    if (!empresa_id || !monto || !fecha_pago) {
+      return res(400, { error: 'empresa_id, monto y fecha_pago son obligatorios.' })
+    }
+    if (Number(monto) <= 0) return res(400, { error: 'El monto debe ser mayor a 0.' })
+
+    const { data: pago, error: errPago } = await supabase
+      .from('PagosSuscripciones')
+      .insert({ empresa_id, monto, fecha_pago, metodo_pago: metodo_pago || null, periodo_desde: periodo_desde || null, periodo_hasta: periodo_hasta || null, notas: notas || null })
+      .select().single()
+    if (errPago) return res(500, { error: errPago.message })
+
+    // fecha_ultimo_pago es un espejo de conveniencia — el historial real
+    // vive en PagosSuscripciones. Solo se avanza (nunca retrocede) para no
+    // pisar un pago posterior con uno cargado tarde/retroactivo.
+    const { data: empresaActual } = await supabase.from('Empresas').select('fecha_ultimo_pago').eq('id', empresa_id).maybeSingle()
+    if (!empresaActual?.fecha_ultimo_pago || fecha_pago > empresaActual.fecha_ultimo_pago) {
+      await supabase.from('Empresas').update({ fecha_ultimo_pago: fecha_pago }).eq('id', empresa_id)
+    }
+
+    return res(200, { ok: true, pago })
+  }
+
+  // ── POLÍTICA DE SOLO-LECTURA AL VENCER ──
+  // La lectura (obtener_politica_suscripcion) no hace falta acá — la tabla
+  // "PoliticaSuscripcion" tiene SELECT público (ver migración 022), así que
+  // la app la consulta directo con la anon key. Solo la escritura pasa por
+  // acá, exigiendo superadmin.
+  if (accion === 'guardar_politica_suscripcion') {
+    const { dias_gracia_solo_lectura } = body
+    if (dias_gracia_solo_lectura === undefined || dias_gracia_solo_lectura < 0) {
+      return res(400, { error: 'dias_gracia_solo_lectura debe ser un número mayor o igual a 0.' })
+    }
+    const { data, error } = await supabase
+      .from('PoliticaSuscripcion')
+      .update({ dias_gracia_solo_lectura, updated_at: new Date().toISOString() })
+      .eq('id', 1).select().single()
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true, politica: data })
   }
 
   // ── MIGRAR IMÁGENES DEL BUCKET VIEJO "jarapo-images" (Tenant #1) ──
