@@ -7,6 +7,8 @@
 import { auth } from '../auth.js';
 import { showToast } from '../utils.js';
 
+let _superadminActiveTab = 'empresas'; // 'empresas' | 'planes'
+
 const ESTADOS = ['trial', 'activa', 'vencida', 'cancelada'];
 const ESTADO_LABELS = { trial: 'Trial', activa: 'Activa', vencida: 'Vencida', cancelada: 'Cancelada' };
 const ESTADO_COLORS = { trial: '#7C3AED', activa: '#059669', vencida: '#DC6803', cancelada: '#DC2626' };
@@ -92,81 +94,109 @@ function buildHTML(empresas, planes, error) {
         <h2 class="module-title">Empresas</h2>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-secondary" id="sa-migrar-imagenes-btn">🗂️ Migrar imágenes antiguas</button>
-        <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
+        ${_superadminActiveTab === 'empresas' ? `
+          <button class="btn-action" id="sa-migrar-imagenes-btn">🗂️ Migrar imágenes antiguas</button>
+          <button class="btn-primary" id="sa-new-empresa-btn">+ Crear Empresa</button>
+        ` : ''}
       </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="purchase-view-switcher" style="margin-bottom:1.5rem;">
+      <button class="pv-tab ${_superadminActiveTab === 'empresas' ? 'active' : ''}" id="sa-tab-empresas">
+        🏢 Empresas
+      </button>
+      <button class="pv-tab ${_superadminActiveTab === 'planes' ? 'active' : ''}" id="sa-tab-planes">
+        📋 Planes
+      </button>
     </div>
 
     ${error ? `<div class="admin-error-banner">⚠ ${error}</div>` : ''}
 
-    <div class="module-header" style="margin-top:0.5rem;">
-      <div>
-        <p class="module-tag">CATÁLOGO</p>
-        <h3 class="module-title" style="font-size:1.15rem;">Planes</h3>
+    <!-- Panel Empresas -->
+    <div id="sa-panel-empresas" style="display:${_superadminActiveTab === 'empresas' ? 'block' : 'none'}">
+      <div class="glass-card" style="padding:0; overflow:hidden;">
+        <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border-base);">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:2px;">Empresas registradas</h3>
+          <p style="font-size:0.72rem; color:var(--text-faint);">${empresas.length} empresas</p>
+        </div>
+        <div class="table-wrapper" style="border-radius:0; border:none; box-shadow:none;">
+          <table class="data-table" style="width:100%;">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Slug</th>
+                <th>Plan</th>
+                <th>Estado</th>
+                <th>Vence</th>
+                <th>Usuarios</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${empresas.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
+              ${empresas.map(e => `
+                <tr>
+                  <td><strong>${e.nombre}</strong></td>
+                  <td><code>${e.slug}</code></td>
+                  <td>${e.plan}</td>
+                  <td><span style="background:${ESTADO_COLORS[e.estado_suscripcion]}22;color:${ESTADO_COLORS[e.estado_suscripcion]};padding:2px 10px;border-radius:99px;font-size:0.78rem;font-weight:600;">${ESTADO_LABELS[e.estado_suscripcion] || e.estado_suscripcion}</span></td>
+                  <td>${e.fecha_vencimiento || '—'}</td>
+                  <td>${e.num_usuarios}</td>
+                  <td class="text-right"><button class="btn-action sa-btn-estado" data-id="${e.id}" data-nombre="${e.nombre}" data-estado="${e.estado_suscripcion}" data-plan="${e.plan}">Cambiar estado / plan</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-    <div style="overflow-x:auto;margin-bottom:1.5rem;">
-      <table class="data-table" style="width:100%;">
-        <thead>
-          <tr>
-            <th>Plan</th>
-            <th>Usuarios máx.</th>
-            <th>Días de prueba</th>
-            <th>Módulos incluidos</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${planes.map(p => `
-            <tr>
-              <td><strong>${p.nombre}</strong> <code style="opacity:0.6;">${p.id}</code></td>
-              <td>${p.max_usuarios ?? 'Sin límite'}</td>
-              <td>${p.id === 'trial' ? (p.dias_prueba ?? '—') : '—'}</td>
-              <td>${Object.entries(p.modulos || {}).filter(([k, v]) => v && k !== 'dashboard').length} de ${MODULOS_PLAN_TOGGLES.length}</td>
-              <td>
-                <button class="btn-secondary sa-btn-editar-plan" data-id="${p.id}" style="padding:4px 10px;font-size:0.8rem;">Editar</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
 
-    <div style="overflow-x:auto;">
-      <table class="data-table" style="width:100%;">
-        <thead>
-          <tr>
-            <th>Empresa</th>
-            <th>Slug</th>
-            <th>Plan</th>
-            <th>Estado</th>
-            <th>Vence</th>
-            <th>Usuarios</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${empresas.length === 0 ? `<tr><td colspan="7" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
-          ${empresas.map(e => `
-            <tr>
-              <td><strong>${e.nombre}</strong></td>
-              <td><code>${e.slug}</code></td>
-              <td>${e.plan}</td>
-              <td><span style="background:${ESTADO_COLORS[e.estado_suscripcion]}22;color:${ESTADO_COLORS[e.estado_suscripcion]};padding:2px 10px;border-radius:99px;font-size:0.78rem;font-weight:600;">${ESTADO_LABELS[e.estado_suscripcion] || e.estado_suscripcion}</span></td>
-              <td>${e.fecha_vencimiento || '—'}</td>
-              <td>${e.num_usuarios}</td>
-              <td style="display:flex;gap:6px;flex-wrap:wrap;">
-                <button class="btn-secondary sa-btn-estado" data-id="${e.id}" data-nombre="${e.nombre}" data-estado="${e.estado_suscripcion}" data-plan="${e.plan}" style="padding:4px 10px;font-size:0.8rem;">Cambiar estado / plan</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+    <!-- Panel Planes -->
+    <div id="sa-panel-planes" style="display:${_superadminActiveTab === 'planes' ? 'block' : 'none'}">
+      <div class="glass-card" style="padding:0; overflow:hidden;">
+        <div style="padding:1.2rem 1.5rem; border-bottom:1px solid var(--border-base);">
+          <h3 style="font-size:0.95rem; font-weight:700; margin-bottom:2px;">Catálogo de planes</h3>
+          <p style="font-size:0.72rem; color:var(--text-faint);">Módulos y límites de cada plan — Prueba, Básico, Pro y Empresarial</p>
+        </div>
+        <div class="table-wrapper" style="border-radius:0; border:none; box-shadow:none;">
+          <table class="data-table" style="width:100%;">
+            <thead>
+              <tr>
+                <th>Plan</th>
+                <th>Usuarios máx.</th>
+                <th>Días de prueba</th>
+                <th>Módulos incluidos</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${planes.map(p => `
+                <tr>
+                  <td><strong>${p.nombre}</strong> <code style="opacity:0.6;">${p.id}</code></td>
+                  <td>${p.max_usuarios ?? 'Sin límite'}</td>
+                  <td>${p.id === 'trial' ? (p.dias_prueba ?? '—') : '—'}</td>
+                  <td>${Object.entries(p.modulos || {}).filter(([k, v]) => v && k !== 'dashboard').length} de ${MODULOS_PLAN_TOGGLES.length}</td>
+                  <td class="text-right"><button class="btn-action sa-btn-editar-plan" data-id="${p.id}">Editar</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   `;
 }
 
 function bindEvents(renderLayout, planes) {
+  document.getElementById('sa-tab-empresas')?.addEventListener('click', () => {
+    _superadminActiveTab = 'empresas';
+    renderSuperadmin(renderLayout);
+  });
+  document.getElementById('sa-tab-planes')?.addEventListener('click', () => {
+    _superadminActiveTab = 'planes';
+    renderSuperadmin(renderLayout);
+  });
   document.getElementById('sa-new-empresa-btn')?.addEventListener('click', () => modalCrearEmpresa(renderLayout, planes));
   document.getElementById('sa-migrar-imagenes-btn')?.addEventListener('click', () => modalMigrarImagenes());
   document.querySelectorAll('.sa-btn-editar-plan').forEach(btn => {

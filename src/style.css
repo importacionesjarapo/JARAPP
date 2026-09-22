@@ -513,6 +513,27 @@ nav {
   transform: scale(1.03);
 }
 
+/* .btn-secondary — usado en ~10 vistas (Cancelar de modales, botones de
+   utilidad) pero nunca tuvo regla propia: quedaba con el estilo por
+   defecto del navegador. Mismo tamaño/tipografía que .btn-primary, en
+   versión neutra/ghost. */
+.btn-secondary {
+  background: var(--surface-2);
+  border: 1px solid var(--border-base);
+  color: var(--text-main);
+  padding: 10px 22px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.22s ease;
+}
+.btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--text-faint);
+}
+
 /* ════════════════════════════════════════════════
    LOADING
    ════════════════════════════════════════════════ */
@@ -990,6 +1011,34 @@ input:focus, select:focus, textarea:focus {
   font-weight: 800;
   letter-spacing: -0.4px;
   line-height: 1.1;
+}
+
+/* .module-header/.module-tag/.module-title — mismo patrón que .page-eyebrow/
+   .page-title, usado por admin.js y superadmin.js. Nunca tuvieron regla
+   propia (quedaban como texto plano sin estilo). */
+.module-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 1.5rem;
+}
+.module-tag {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  display: block;
+  margin: 0 0 4px;
+}
+.module-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  line-height: 1.1;
+  margin: 0;
 }
 
 /* Inventory grid view helpers */
