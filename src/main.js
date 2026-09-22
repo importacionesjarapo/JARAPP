@@ -671,11 +671,6 @@ async function bootApp() {
     return;
   }
 
-  // Precargar el plan contratado ANTES de construir el sidebar por primera
-  // vez — renderLayout() arma el menú de forma síncrona (auth.getPlanModules()),
-  // así que el catálogo ya tiene que estar en caché para esa primera llamada.
-  await auth.getPlan();
-
   // Ya autenticado → arrancar directamente
   startApp();
 }
@@ -737,6 +732,16 @@ async function startApp() {
     renderLogin(() => startApp());
     return;
   }
+
+  // Precargar el plan contratado ANTES de construir el sidebar por primera
+  // vez — renderLayout() arma el menú de forma síncrona (auth.getPlanModules()),
+  // así que el catálogo ya tiene que estar en caché para esa primera llamada.
+  // Va acá (y no en bootApp) porque este es el único punto por el que pasan
+  // TODOS los caminos: sesión ya activa al recargar Y login recién hecho
+  // (los callbacks de renderLogin() llaman directo a startApp(), sin pasar
+  // por el resto de bootApp) — antes solo se precargaba en el primero, así
+  // que un login recién hecho nunca veía los candados hasta refrescar.
+  await auth.getPlan();
 
   // Cargar logo en background
   ConfigService.getLogo().then(url => {
