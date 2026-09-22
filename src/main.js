@@ -195,7 +195,7 @@ export const renderLayout = (contentHTML) => {
          <div style="font-size:10px;color:var(--text-faint);letter-spacing:0.06em;text-transform:uppercase;margin-top:2px;">${_empresaNombre}</div>
        </div>`
     : `<div id="sidebar-logo-letter" class="sidebar-logo-mark">
-         <span style="color:var(--primary);font-size:46px;font-weight:800;line-height:1;">E</span>
+         <img src="/logo-encargospro.png" style="width:100%;height:100%;object-fit:contain;" alt="EncargosPro">
        </div>
        <div class="sidebar-brand">
          <div style="font-size:14px;font-weight:700;letter-spacing:0.04em;">EncargosPro</div>
