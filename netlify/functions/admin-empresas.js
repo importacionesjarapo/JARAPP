@@ -33,20 +33,42 @@ const CORS = {
 
 const res = (statusCode, body) => ({ statusCode, headers: CORS, body: JSON.stringify(body) })
 
-// Métodos de pago comunes en el mercado LatAm/USA de este negocio — se
-// insertan como semilla en toda empresa nueva (#27) para que Ventas/Compras
-// no arranquen con el selector de método de pago vacío. El usuario los
-// puede editar o borrar libremente después desde Parametrización. Mismo
-// esquema que usa esa pantalla (src/views/params.js): id, nombre, color,
-// activo, orden, empresa_id.
-const METODOS_PAGO_SEMILLA = ['Efectivo', 'Transferencia', 'Nequi', 'Daviplata', 'Zelle', 'PayPal']
+// Categorías del catálogo de datos semilla editable (tabla
+// "DatosSemillaGlobal", ver migración 024) — el superadmin las administra
+// desde el panel ("🌱 Datos semilla") en vez de que queden fijas en código.
+const CATEGORIAS_SEMILLA = ['MetodosPago', 'Marca', 'Tienda', 'Categoria', 'Genero']
 
+// Copia el catálogo global a una empresa nueva (#27): "MetodosPago" se
+// inserta tal cual en la tabla del mismo nombre (mismo esquema que usa
+// Parametrización: id, nombre, color, activo, orden, empresa_id); el resto
+// de categorías (Marca, Tienda, Categoria, Genero) se insertan en
+// "Configuracion" con clave = categoria, que es la misma tabla/clave que ya
+// usa Parametrización (src/views/params.js) para esas listas desplegables
+// — así lo que sembramos aquí es indistinguible de lo que el usuario
+// hubiera agregado a mano, y lo puede editar o borrar libremente después.
 async function sembrarDatosBase(empresaId) {
-  const filas = METODOS_PAGO_SEMILLA.map((nombre, i) => ({
-    id: (Date.now() + i).toString(), nombre, color: '#6B7280', activo: true, orden: i, empresa_id: empresaId,
-  }))
-  const { error } = await supabase.from('MetodosPago').insert(filas)
-  if (error) console.warn('[admin-empresas] No se pudo sembrar MetodosPago:', error.message)
+  const { data: semillas, error } = await supabase
+    .from('DatosSemillaGlobal').select('categoria, valor').order('orden')
+  if (error) { console.warn('[admin-empresas] No se pudo leer DatosSemillaGlobal:', error.message); return }
+
+  const metodosPago = (semillas || []).filter(s => s.categoria === 'MetodosPago')
+  const configuracion = (semillas || []).filter(s => s.categoria !== 'MetodosPago')
+
+  if (metodosPago.length) {
+    const filas = metodosPago.map((s, i) => ({
+      id: (Date.now() + i).toString(), nombre: s.valor, color: '#6B7280', activo: true, orden: i, empresa_id: empresaId,
+    }))
+    const { error: errMP } = await supabase.from('MetodosPago').insert(filas)
+    if (errMP) console.warn('[admin-empresas] No se pudo sembrar MetodosPago:', errMP.message)
+  }
+
+  if (configuracion.length) {
+    const filas = configuracion.map((s, i) => ({
+      id: (Date.now() + 10000 + i).toString(), clave: s.categoria, valor: s.valor, empresa_id: empresaId,
+    }))
+    const { error: errCfg } = await supabase.from('Configuracion').insert(filas)
+    if (errCfg) console.warn('[admin-empresas] No se pudo sembrar Configuracion:', errCfg.message)
+  }
 }
 
 /** Código de referido corto y legible a partir del slug — único por el
@@ -297,6 +319,37 @@ export const handler = async (event) => {
     }
 
     return res(200, { ok: true, empresa, datos })
+  }
+
+  // ── CATÁLOGO DE DATOS SEMILLA (#27) — editable desde Superadmin ──
+  if (accion === 'listar_datos_semilla') {
+    const { data, error } = await supabase
+      .from('DatosSemillaGlobal').select('*').order('categoria').order('orden')
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true, items: data || [] })
+  }
+
+  if (accion === 'guardar_dato_semilla') {
+    const { categoria, valor } = body
+    if (!CATEGORIAS_SEMILLA.includes(categoria)) {
+      return res(400, { error: `categoria debe ser una de: ${CATEGORIAS_SEMILLA.join(', ')}` })
+    }
+    if (!valor || !valor.trim()) return res(400, { error: 'valor es obligatorio.' })
+
+    const { count } = await supabase
+      .from('DatosSemillaGlobal').select('id', { count: 'exact', head: true }).eq('categoria', categoria)
+    const { data, error } = await supabase
+      .from('DatosSemillaGlobal').insert({ categoria, valor: valor.trim(), orden: count || 0 }).select().single()
+    if (error) return res(400, { error: error.message.includes('duplicate') ? `"${valor}" ya existe en ${categoria}.` : error.message })
+    return res(200, { ok: true, item: data })
+  }
+
+  if (accion === 'eliminar_dato_semilla') {
+    const { id } = body
+    if (!id) return res(400, { error: 'id es obligatorio.' })
+    const { error } = await supabase.from('DatosSemillaGlobal').delete().eq('id', id)
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true })
   }
 
   // ── MIGRAR IMÁGENES DEL BUCKET VIEJO "jarapo-images" (Tenant #1) ──

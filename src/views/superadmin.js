@@ -8,7 +8,15 @@ import { auth } from '../auth.js';
 import { showToast } from '../utils.js';
 import * as XLSX from 'xlsx';
 
-let _superadminActiveTab = 'empresas'; // 'empresas' | 'planes'
+let _superadminActiveTab = 'empresas'; // 'empresas' | 'planes' | 'semillas'
+
+const CATEGORIAS_SEMILLA = [
+  { id: 'MetodosPago', label: 'Métodos de pago', hint: 'Se copian a la tabla "MetodosPago" de la empresa nueva.' },
+  { id: 'Marca', label: 'Marcas', hint: 'Aparecen en el selector de Marca de Encargos/Inventario (Configuracion, clave "Marca").' },
+  { id: 'Tienda', label: 'Tiendas', hint: 'Aparecen en "Tienda a Cotizar" de Encargos (Configuracion, clave "Tienda").' },
+  { id: 'Categoria', label: 'Categorías', hint: 'Aparecen en el selector de Categoría de productos (Configuracion, clave "Categoria").' },
+  { id: 'Genero', label: 'Géneros', hint: 'Aparecen en el selector de Género de productos (Configuracion, clave "Genero").' },
+];
 
 const ESTADOS = ['trial', 'activa', 'vencida', 'cancelada'];
 const ESTADO_LABELS = { trial: 'Trial', activa: 'Activa', vencida: 'Vencida', cancelada: 'Cancelada' };
@@ -71,23 +79,26 @@ export const renderSuperadmin = async (renderLayout) => {
 
   let empresas = [];
   let planes = [];
+  let semillas = [];
   let loadError = null;
   try {
-    const [dataEmpresas, dataPlanes] = await Promise.all([
+    const [dataEmpresas, dataPlanes, dataSemillas] = await Promise.all([
       callAdminEmpresas({ accion: 'listar_empresas' }),
       callAdminEmpresas({ accion: 'listar_planes' }),
+      callAdminEmpresas({ accion: 'listar_datos_semilla' }),
     ]);
     empresas = dataEmpresas.empresas || [];
     planes = dataPlanes.planes || [];
+    semillas = dataSemillas.items || [];
   } catch (err) {
     loadError = err.message;
   }
 
-  renderLayout(buildHTML(empresas, planes, loadError));
-  bindEvents(renderLayout, planes);
+  renderLayout(buildHTML(empresas, planes, semillas, loadError));
+  bindEvents(renderLayout, planes, semillas);
 };
 
-function buildHTML(empresas, planes, error) {
+function buildHTML(empresas, planes, semillas, error) {
   return `
     <div class="module-header">
       <div>
@@ -110,6 +121,9 @@ function buildHTML(empresas, planes, error) {
       </button>
       <button class="pv-tab ${_superadminActiveTab === 'planes' ? 'active' : ''}" id="sa-tab-planes">
         📋 Planes
+      </button>
+      <button class="pv-tab ${_superadminActiveTab === 'semillas' ? 'active' : ''}" id="sa-tab-semillas">
+        🌱 Datos semilla
       </button>
     </div>
 
@@ -202,16 +216,51 @@ function buildHTML(empresas, planes, error) {
         </div>
       </div>
     </div>
+
+    <!-- Panel Datos semilla -->
+    <div id="sa-panel-semillas" style="display:${_superadminActiveTab === 'semillas' ? 'block' : 'none'}">
+      <p style="font-size:0.82rem;color:var(--text-faint);margin-bottom:1.2rem;max-width:640px;">
+        Estos valores se copian automáticamente a toda empresa nueva (de prueba o creada por ti) para que no arranque con los selectores vacíos. Edítalos aquí — el cambio solo afecta a las empresas que se registren de ahora en adelante, no a las que ya existen.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+        ${CATEGORIAS_SEMILLA.map(cat => {
+          const items = semillas.filter(s => s.categoria === cat.id);
+          return `
+            <div class="glass-card" style="padding:1.1rem;">
+              <h3 style="font-size:0.9rem;font-weight:700;margin-bottom:2px;">${cat.label}</h3>
+              <p style="font-size:0.7rem;color:var(--text-faint);margin-bottom:0.8rem;">${cat.hint}</p>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:0.9rem;min-height:26px;">
+                ${items.length === 0 ? `<span style="font-size:0.75rem;color:var(--text-faint);">Sin valores todavía.</span>` : ''}
+                ${items.map(it => `
+                  <span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border-base);border-radius:99px;padding:3px 6px 3px 10px;font-size:0.78rem;">
+                    ${it.valor}
+                    <button class="sa-btn-del-semilla" data-id="${it.id}" title="Eliminar" style="background:none;border:none;cursor:pointer;color:var(--text-faint);font-size:0.9rem;line-height:1;padding:2px;">&times;</button>
+                  </span>
+                `).join('')}
+              </div>
+              <form class="sa-form-add-semilla" data-categoria="${cat.id}" style="display:flex;gap:6px;">
+                <input type="text" class="form-input" placeholder="Agregar valor..." required style="flex:1;padding:7px 10px;font-size:0.8rem;">
+                <button type="submit" class="btn-action" style="padding:7px 12px;font-size:0.78rem;">+</button>
+              </form>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
   `;
 }
 
-function bindEvents(renderLayout, planes) {
+function bindEvents(renderLayout, planes, semillas) {
   document.getElementById('sa-tab-empresas')?.addEventListener('click', () => {
     _superadminActiveTab = 'empresas';
     renderSuperadmin(renderLayout);
   });
   document.getElementById('sa-tab-planes')?.addEventListener('click', () => {
     _superadminActiveTab = 'planes';
+    renderSuperadmin(renderLayout);
+  });
+  document.getElementById('sa-tab-semillas')?.addEventListener('click', () => {
+    _superadminActiveTab = 'semillas';
     renderSuperadmin(renderLayout);
   });
   document.getElementById('sa-new-empresa-btn')?.addEventListener('click', () => modalCrearEmpresa(renderLayout, planes));
@@ -232,6 +281,33 @@ function bindEvents(renderLayout, planes) {
   });
   document.querySelectorAll('.sa-btn-exportar').forEach(btn => {
     btn.addEventListener('click', () => exportarDatosEmpresa(btn.dataset.id, btn.dataset.nombre, btn));
+  });
+  document.querySelectorAll('.sa-btn-del-semilla').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        await callAdminEmpresas({ accion: 'eliminar_dato_semilla', id: btn.dataset.id });
+        renderSuperadmin(renderLayout);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  });
+  document.querySelectorAll('.sa-form-add-semilla').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = form.querySelector('input');
+      const valor = input.value.trim();
+      if (!valor) return;
+      const btn = form.querySelector('button');
+      btn.disabled = true;
+      try {
+        await callAdminEmpresas({ accion: 'guardar_dato_semilla', categoria: form.dataset.categoria, valor });
+        renderSuperadmin(renderLayout);
+      } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+      }
+    });
   });
 }
 
