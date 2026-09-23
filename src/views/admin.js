@@ -4,10 +4,11 @@
  */
 
 import { auth, ROLE_TEMPLATES, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from '../auth.js';
-import { loadCalcConfig, saveCalcConfig, CALC_DEFAULT_CONFIG } from './calculadora.js';
+import { loadCalcConfig, saveCalcConfig, CALC_DEFAULT_CONFIG, sumarGastosAdministrativos } from './calculadora.js';
 import { showToast } from '../utils.js';
 
 let _adminActiveTab = 'usuarios'; // 'usuarios' | 'calculadora'
+let _conceptosDraft = null; // borrador en memoria de "conceptosAdmin" mientras se edita la pestaña Calculadora (#15)
 
 export const renderAdmin = async (renderLayout, navigateTo) => {
   renderLayout(`<div class="admin-loading"><div class="loader"></div><p>Cargando panel administrativo...</p></div>`);
@@ -209,10 +210,42 @@ function buildUsersRows(users) {
 
 // ── Panel Administración Calculadora ──────────────────────────
 
+/** Filas editables de _conceptosDraft — inputs sin controlar (no re-renderizan
+ * en cada tecla) para no perder el foco; solo agregar/quitar filas dispara render. */
+function buildConceptosAdminRows() {
+  if (!_conceptosDraft.length) {
+    return `<p style="font-size:0.8rem;color:var(--text-faint);padding:0.5rem 0;">Sin conceptos configurados todavía.</p>`;
+  }
+  return `
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${_conceptosDraft.map((c, i) => `
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="text" id="concepto-nombre-${i}" value="${c.nombre || ''}" placeholder="Ej: Bolsa de empaque"
+            style="flex:1;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px;border-radius:10px;font-weight:600;outline:none;">
+          <div style="position:relative;width:150px;">
+            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:0.85rem;">$</span>
+            <input type="number" id="concepto-valor-${i}" value="${c.valor || 0}" min="0"
+              style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px 9px 24px;border-radius:10px;font-weight:700;outline:none;">
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-faint);white-space:nowrap;cursor:pointer;">
+            <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}> Activo
+          </label>
+          <button type="button" class="concepto-admin-del-btn" data-idx="${i}" title="Eliminar" style="background:none;border:none;color:var(--primary-red);cursor:pointer;font-size:1.1rem;padding:4px;">🗑</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function buildCalcAdminPanel(config) {
   if (!config) return `<div class="admin-error-banner">⚠ No se pudo cargar la configuración.</div>`;
   const refTrm = parseFloat(localStorage.getItem('CALC_TRM') || '4200');
   const valLibraCopCalc = ((config.valorLibraUsd || 0) * refTrm).toLocaleString('es-CO');
+  // El borrador se inicializa una sola vez por render de la pestaña — así
+  // agregar/quitar filas no pierde lo que el usuario ya escribió en las
+  // demás mientras no le dé "Guardar".
+  if (!_conceptosDraft) _conceptosDraft = (config.conceptosAdmin || []).map(c => ({ ...c }));
+  const totalGastosAdmin = sumarGastosAdministrativos({ conceptosAdmin: _conceptosDraft });
 
   return `
     <div style="display:flex;flex-direction:column;gap:1.5rem;">
@@ -237,6 +270,11 @@ function buildCalcAdminPanel(config) {
           <p class="card-label">Domicilio</p>
           <p class="card-value" style="color:var(--success-green);font-size:1.2rem;">$${(config.costoDomicilio||0).toLocaleString('es-CO')}</p>
           <p class="card-trend">COP costo envío local</p>
+        </div>
+        <div class="kpi-card">
+          <p class="card-label">Gastos Admin.</p>
+          <p class="card-value" style="color:var(--warning-orange);font-size:1.2rem;">$${totalGastosAdmin.toLocaleString('es-CO')}</p>
+          <p class="card-trend">${_conceptosDraft.filter(c => c.activo).length} concepto(s) activo(s)</p>
         </div>
       </div>
 
@@ -299,10 +337,22 @@ function buildCalcAdminPanel(config) {
       </div>
 
 
+      <!-- Gastos administrativos (#15/#16) -->
+      <div class="glass-card" style="padding:1.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem;">
+          <div>
+            <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">2. Gastos Administrativos</h3>
+            <p style="font-size:0.72rem;color:var(--text-faint);margin-top:2px;">Conceptos que se suman al total de la Calculadora (dulces, bolsas, papelería, suscripciones, etc). Solo los marcados como activos cuentan.</p>
+          </div>
+          <button type="button" id="concepto-admin-add-btn" class="btn-action">+ Agregar concepto</button>
+        </div>
+        <div id="conceptos-admin-list">${buildConceptosAdminRows()}</div>
+      </div>
+
       <!-- Matriz categorías -->
       <div class="glass-card" style="padding:0;overflow:hidden;">
         <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border-base);">
-          <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">2. Matriz de Pesos y Ganancias</h3>
+          <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">3. Matriz de Pesos y Ganancias</h3>
         </div>
         <div class="table-wrapper" style="border-radius:0;border:none;box-shadow:none;">
           <table class="data-table">
@@ -395,12 +445,44 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
     openLogsModal(userId, userName);
   };
 
+  // ── Gastos administrativos (#15): agregar/quitar filas ──────
+  // Antes de tocar el array hay que leer del DOM lo que ya se escribió en
+  // las filas existentes — si no, agregar/quitar una fila reconstruye el
+  // HTML desde _conceptosDraft y se pierde lo tecleado en las demás.
+  const syncConceptosDraftFromDOM = () => {
+    _conceptosDraft.forEach((c, i) => {
+      c.nombre = document.getElementById(`concepto-nombre-${i}`)?.value ?? c.nombre;
+      c.valor  = parseFloat(document.getElementById(`concepto-valor-${i}`)?.value) || 0;
+      c.activo = document.getElementById(`concepto-activo-${i}`)?.checked ?? c.activo;
+    });
+  };
+  const rerenderConceptos = () => {
+    document.getElementById('conceptos-admin-list').innerHTML = buildConceptosAdminRows();
+    bindConceptosRowEvents();
+  };
+  function bindConceptosRowEvents() {
+    document.querySelectorAll('.concepto-admin-del-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        syncConceptosDraftFromDOM();
+        _conceptosDraft.splice(parseInt(btn.dataset.idx, 10), 1);
+        rerenderConceptos();
+      });
+    });
+  }
+  bindConceptosRowEvents();
+  document.getElementById('concepto-admin-add-btn')?.addEventListener('click', () => {
+    syncConceptosDraftFromDOM();
+    _conceptosDraft.push({ nombre: '', valor: 0, activo: true });
+    rerenderConceptos();
+  });
+
   // ── Guardar config calculadora ──────────────────────────────
   document.getElementById('calc-cfg-save-btn')?.addEventListener('click', async () => {
     const btn = document.getElementById('calc-cfg-save-btn');
     btn.disabled = true;
     btn.textContent = 'Guardando...';
     try {
+      syncConceptosDraftFromDOM();
       const valorLibraUsd = parseFloat(document.getElementById('calc-cfg-valorLibraUsd')?.value) || 0;
       const refTrm        = parseFloat(document.getElementById('calc-cfg-refTrm')?.value) || 4200;
       const newConfig = {
@@ -409,6 +491,7 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
         valorLibraUsd,
         valorLibra:     valorLibraUsd * refTrm,   // COP calculado = USD × TRM referencia
         costoDomicilio: parseFloat(document.getElementById('calc-cfg-costoDomicilio')?.value) || 0,
+        conceptosAdmin: _conceptosDraft.filter(c => c.nombre.trim()),
         categorias: {}
       };
       Object.keys(calcConfig.categorias).forEach(key => {
@@ -419,6 +502,7 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
         };
       });
       await saveCalcConfig(newConfig);
+      _conceptosDraft = null; // fuerza recargar desde lo recién guardado
       showToast('✅ Configuración de calculadora guardada exitosamente', 'success');
       setTimeout(() => renderAdmin(renderLayout, navigateTo), 800);
     } catch (err) {
