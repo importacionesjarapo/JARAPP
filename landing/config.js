@@ -15,5 +15,8 @@ window.ENCARGOSPRO_CONFIG = {
   // URL real de la app (sitio de Netlify aparte, dominio distinto a esta
   // landing) — ahí termina el registro y ahí debe loguearse el usuario
   // después. La función admin-empresas.js vive en ese mismo sitio.
-  appUrl: 'https://importaciones-jarapo.netlify.app',
+  // Subdominio propio (app.encargospro.com) apuntando por CNAME al mismo
+  // sitio de Netlify (importaciones-jarapo.netlify.app) — así "Iniciar
+  // sesión" y el registro no saltan a un dominio .netlify.app distinto.
+  appUrl: 'https://app.encargospro.com',
 };
