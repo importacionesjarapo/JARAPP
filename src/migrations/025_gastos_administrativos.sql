@@ -1,0 +1,16 @@
+-- Fase 4 (#15-#16-#17): conceptos administrativos configurables en la
+-- Calculadora ("dulces, bolsas de empaque, papel mantilla, papelería de
+-- envío, suscripciones IA, Canva, etc"), sumados como "Gastos
+-- administrativos" al precio final, y ahora también discriminados al
+-- registrar una venta.
+--
+-- Los conceptos en sí NO necesitan tabla propia: viven como un array dentro
+-- del mismo JSON que ya usa la Calculadora (Configuracion.CALC_CONFIG →
+-- clave "conceptosAdmin", ver src/views/calculadora.js) — mismo patrón que
+-- taxUsa/comisionTC/categorias, editable desde Admin → Calculadora.
+--
+-- Lo único que sí necesita columna nueva es la VENTA: para poder discriminar
+-- después cuánto de esa venta puntual fue a gastos administrativos, se
+-- guarda como una foto del total activo en el momento de la venta (si los
+-- conceptos cambian después, las ventas viejas no se alteran).
+ALTER TABLE "Ventas" ADD COLUMN IF NOT EXISTS gastos_administrativos_cop NUMERIC DEFAULT 0;

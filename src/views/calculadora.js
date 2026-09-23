@@ -14,6 +14,10 @@ export const CALC_DEFAULT_CONFIG = {
   valorLibraUsd: 3,
   valorLibra: 11100,
   costoDomicilio: 20000,
+  // Conceptos administrativos configurables (#15) — dulces, bolsas de
+  // empaque, papelería, suscripciones, etc. Cada uno suma su "valor" al
+  // total si está activo=true; ver sumarGastosAdministrativos() abajo.
+  conceptosAdmin: [],
   categorias: {
     calzado:  { label: 'Calzado',   icon: 'footprints', ganancia: 100000, peso: 4 },
     botas:    { label: 'Botas',     icon: 'mountain',   ganancia: 100000, peso: 6 },
@@ -64,6 +68,15 @@ export async function saveCalcConfig(config) {
   await db.postData('Configuracion', payload, existing ? 'UPDATE' : 'INSERT');
 }
 
+// ── Gastos administrativos (#15/#16) ────────────────────────────────────────────
+// Suma de los conceptos activos configurados en Admin → Calculadora. Se
+// reutiliza tal cual desde sales.js para discriminar la venta (#17).
+export function sumarGastosAdministrativos(config) {
+  return (config.conceptosAdmin || [])
+    .filter(c => c.activo)
+    .reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
+}
+
 // ── Fórmula de cálculo ─────────────────────────────────────────────────────────
 function calcular(config, mode, valorUsd, trm, conDomicilio) {
   const conf = config.categorias[mode] || config.categorias.general;
@@ -71,6 +84,7 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
   const nTrm = parseFloat(trm) || 0;
   const peso = parseFloat(conf.peso) || 0;
   const ganancia = parseFloat(conf.ganancia) || 0;
+  const gastosAdmin = sumarGastosAdministrativos(config);
 
   // Costo libra: si hay valorLibraUsd, se multiplica por TRM actual (dinámico)
   const valorLibraCOP = config.valorLibraUsd
@@ -82,14 +96,15 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
   const pesosConComis  = pesosBase * (1 + config.comisionTC / 100);
   const costoLogistica = peso * valorLibraCOP;
   const costoEnvio     = conDomicilio ? config.costoDomicilio : 0;
-  const total          = pesosConComis + ganancia + costoLogistica + costoEnvio;
+  const total          = pesosConComis + ganancia + costoLogistica + costoEnvio + gastosAdmin;
 
   return {
     total,
     pesosConTax: pesosBase,
     comisionVal: pesosConComis - pesosBase,
     logisticaTotal: costoLogistica + costoEnvio,
-    ganancia
+    ganancia,
+    gastosAdmin
   };
 }
 
@@ -292,10 +307,11 @@ function buildBreakdown(res, isAdminUser) {
   const allRows = [
     { label: 'Costo Base + Tax USA',       value: res.pesosConTax,    color: 'var(--text-muted)' },
     { label: 'Comisión Pasarela de Pago',  value: res.comisionVal,    color: 'var(--text-muted)' },
+    { label: 'Gastos administrativos',     value: res.gastosAdmin,    color: 'var(--warning-orange)' },
     { label: 'Logística (flete + envío)',  value: res.logisticaTotal, color: 'var(--info-blue)' },
     { label: 'Ganancia configurada',       value: res.ganancia,       color: 'var(--success-green)', bold: true },
   ];
-  const rows = isAdminUser ? allRows : [allRows[2], allRows[3]];
+  const rows = isAdminUser ? allRows : [allRows[3], allRows[4]];
 
   return `
     <h4 style="font-size:0.72rem;font-weight:800;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-bottom:1rem;">

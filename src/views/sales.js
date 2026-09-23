@@ -855,6 +855,16 @@ export const createSaleModal = async (navigateTo) => {
         db.fetchData('Productos'),
         db.fetchData('Configuracion'),
     ]);
+    // #17 — misma fórmula que sumarGastosAdministrativos() en calculadora.js,
+    // reimplementada acá para no cargar Configuracion dos veces (ya se pidió
+    // arriba junto a clientes/productos).
+    let gastosAdminTotal = 0;
+    try {
+        const calcCfgRow = Array.isArray(configList) ? configList.find(c => c.clave === 'CALC_CONFIG') : null;
+        const conceptos = calcCfgRow ? (JSON.parse(calcCfgRow.valor).conceptosAdmin || []) : [];
+        gastosAdminTotal = conceptos.filter(c => c.activo).reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0);
+    } catch (_) { /* sin config de calculadora todavía — 0 gastos administrativos */ }
+
     if (clientsList.error || productsList.error) {
         content.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--primary-red);">Error al cargar dependencias.</div>`;
         setTimeout(() => window.closeModal(), 3000);
@@ -1069,7 +1079,13 @@ export const createSaleModal = async (navigateTo) => {
                         <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
                     </div>
-                    
+                    <div class="form-group">
+                        <label class="form-label">Gastos Administrativos (COP)</label>
+                        <input type="text" value="${formatCOP(gastosAdminTotal)}" disabled style="opacity:0.7;">
+                        <input type="hidden" name="gastos_administrativos_cop" value="${gastosAdminTotal}">
+                        <p style="font-size:0.68rem;opacity:0.5;margin-top:4px;">Suma de conceptos activos en Admin → Calculadora. Se guarda con la venta para poder discriminarlo después.</p>
+                    </div>
+
                     <div class="form-group full-width" style="background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px; border:1px solid var(--brand-magenta-glow); display:grid; grid-template-columns:1fr 1fr; gap:2rem; align-items:center;">
                         <div class="form-group" style="margin:0;">
                             <label class="form-label" style="color:var(--brand-magenta);">Abono Inicial (COP)</label>
@@ -1410,9 +1426,10 @@ export const createSaleModal = async (navigateTo) => {
                 producto_id:finalProductId, 
                 tipo_venta:tipoVenta, 
                 fecha:fd.get('fecha_real_venta') || new Date().toLocaleDateString(), 
-                valor_total_cop:valorTotal, 
+                valor_total_cop:valorTotal,
                 ganancia_calculada:gananciaCalc,
-                abonos_acumulados:abonoIni, 
+                gastos_administrativos_cop: cleanNum(fd.get('gastos_administrativos_cop')),
+                abonos_acumulados:abonoIni,
                 saldo_pendiente:saldoP, 
                 comprobante_url:comprobanteUrl, 
                 direccion_envio: fd.get('direccion_envio') || '',
@@ -1549,7 +1566,29 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                 <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--violet-dim); border-radius:22px; border:1px solid rgba(139,124,246,0.3); font-weight:700; color:var(--violet); white-space:nowrap;">
                     ✈️ ${formatCOP(v.valor_envio_internacional)} envío
                 </span>` : ''}
+                ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') && v.gastos_administrativos_cop ? `
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:rgba(255,159,10,0.1); border-radius:22px; border:1px solid rgba(255,159,10,0.3); font-weight:700; color:var(--warning-orange); white-space:nowrap;">
+                    🧾 ${formatCOP(v.gastos_administrativos_cop)} gastos admin.
+                </span>` : ''}
             </div>
+
+            <!-- #17 — Desglose del valor total (solo admin/gerente/finanzas) -->
+            ${(auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas') ? (() => {
+                const gastosAdmin = parseFloat(v.gastos_administrativos_cop) || 0;
+                const envio = parseFloat(v.valor_envio_internacional) || 0;
+                const ganancia = parseFloat(v.ganancia_calculada) || 0;
+                const valorProducto = total - ganancia - gastosAdmin - envio;
+                return `
+                <div style="background:var(--surface-2); border-radius:14px; border:1px solid var(--border-base); padding:1rem 1.2rem; margin-bottom:1.2rem;">
+                    <p style="font-size:0.68rem; text-transform:uppercase; letter-spacing:1px; opacity:0.5; margin-bottom:0.6rem;">Desglose del valor cobrado</p>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.8rem;">
+                        <div><span style="font-size:0.7rem;opacity:0.6;display:block;">Producto</span><strong>${formatCOP(valorProducto)}</strong></div>
+                        <div><span style="font-size:0.7rem;opacity:0.6;display:block;">Ganancia</span><strong style="color:var(--success-green);">${formatCOP(ganancia)}</strong></div>
+                        <div><span style="font-size:0.7rem;opacity:0.6;display:block;">Gastos admin.</span><strong style="color:var(--warning-orange);">${formatCOP(gastosAdmin)}</strong></div>
+                        <div><span style="font-size:0.7rem;opacity:0.6;display:block;">Envío USA→COL</span><strong style="color:var(--violet);">${formatCOP(envio)}</strong></div>
+                    </div>
+                </div>`;
+            })() : ''}
 
 
             <div class="abono-history-section" style="background:var(--surface-2); border-radius:14px; padding:1.2rem; margin-bottom:1.2rem; border:1px solid var(--border-base);">
