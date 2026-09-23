@@ -14,6 +14,9 @@ export const CALC_DEFAULT_CONFIG = {
   valorLibraUsd: 3,
   valorLibra: 11100,
   costoDomicilio: 20000,
+  // % de anticipo que se pide para apartar un encargo (#22) — usado por el
+  // Cotizador para calcular y mostrar el anticipo, antes fijo en 35%.
+  pctEncargo: 35,
   // Conceptos administrativos configurables (#15) — dulces, bolsas de
   // empaque, papelería, suscripciones, etc. Cada uno suma su "valor" al
   // total si está activo=true; ver sumarGastosAdministrativos() abajo.

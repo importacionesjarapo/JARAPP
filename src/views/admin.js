@@ -276,6 +276,11 @@ function buildCalcAdminPanel(config) {
           <p class="card-value" style="color:var(--warning-orange);font-size:1.2rem;">$${totalGastosAdmin.toLocaleString('es-CO')}</p>
           <p class="card-trend">${_conceptosDraft.filter(c => c.activo).length} concepto(s) activo(s)</p>
         </div>
+        <div class="kpi-card">
+          <p class="card-label">% Anticipo Encargo</p>
+          <p class="card-value" style="color:var(--violet);font-size:1.4rem;">${config.pctEncargo ?? 35}%</p>
+          <p class="card-trend">Mostrado en el Cotizador</p>
+        </div>
       </div>
 
       <!-- Valores globales -->
@@ -293,6 +298,13 @@ function buildCalcAdminPanel(config) {
             <label style="font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Comisión Pasarela (%)</label>
             <input type="number" id="calc-cfg-comisionTC" value="${config.comisionTC || 0}"
               style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;">
+          </div>
+
+          <div>
+            <label style="font-size:0.72rem;font-weight:700;color:var(--violet);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">% Anticipo de Encargo</label>
+            <input type="number" id="calc-cfg-pctEncargo" value="${config.pctEncargo ?? 35}" min="0" max="100"
+              style="width:100%;background:var(--input-bg);border:1px solid var(--violet);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:1rem;font-weight:700;outline:none;">
+            <p style="font-size:0.68rem;color:var(--text-faint);margin-top:4px;">Porcentaje del total que se pide de anticipo para apartar un encargo — se muestra en el Cotizador</p>
           </div>
 
           <!-- Valor Libra USD — editable -->
@@ -488,6 +500,7 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
       const newConfig = {
         taxUsa:         parseFloat(document.getElementById('calc-cfg-taxUsa')?.value) || 0,
         comisionTC:     parseFloat(document.getElementById('calc-cfg-comisionTC')?.value) || 0,
+        pctEncargo:     parseFloat(document.getElementById('calc-cfg-pctEncargo')?.value) || 0,
         valorLibraUsd,
         valorLibra:     valorLibraUsd * refTrm,   // COP calculado = USD × TRM referencia
         costoDomicilio: parseFloat(document.getElementById('calc-cfg-costoDomicilio')?.value) || 0,
