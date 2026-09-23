@@ -1,4 +1,4 @@
-import { loadCalcConfig, CALC_DEFAULT_CONFIG } from './calculadora.js';
+import { loadCalcConfig, CALC_DEFAULT_CONFIG, sumarGastosAdministrativos } from './calculadora.js';
 import { db } from '../db.js';
 import { auth } from '../auth.js';
 
@@ -38,8 +38,9 @@ function calcular(inputs, cfg) {
     ? parseFloat(valorLibraUsd) * (trm || 4200)
     : (parseFloat(valorLibra) || 0);
   const costoLogistica = (pesoLbs || 0) * valorLibraCOP;
+  const gastosAdmin    = sumarGastosAdministrativos(cfg);
 
-  const subtotal       = pesosConComis + gananciaFija + costoLogistica;
+  const subtotal       = pesosConComis + gananciaFija + costoLogistica + gastosAdmin;
   const valorProducto  = Math.ceil(subtotal / 1000) * 1000;
   const domicilioCOP   = conDomicilio ? (costoDomicilio || 20000) : 0;
   const totalFinal     = valorProducto + domicilioCOP;
@@ -51,6 +52,7 @@ function calcular(inputs, cfg) {
     pesosBase:      Math.round(pesosBase),
     comisionCOP:    Math.round(comisionCOP),
     costoLogistica: Math.round(costoLogistica),
+    gastosAdmin,
     gananciaFija,
     subtotal:       Math.round(subtotal),
     valorProducto,
@@ -286,6 +288,7 @@ async function generarPDFInterno(f, r, cfg, params) {
             fRow('= Base en COP', fmt(r.pesosBase)),
             fRow(`+ Comisión TC (${cfg.comisionTC||3}%)`, fmt(r.comisionCOP)),
             fRow(`+ Flete aéreo (${f.pesoLbs} lbs × $${(cfg.valorLibraUsd||3).toFixed(2)} USD)`, fmt(r.costoLogistica)),
+            ...(r.gastosAdmin > 0 ? [fRow('+ Gastos administrativos', fmt(r.gastosAdmin))] : []),
             fRow(`+ Ganancia fija (${catLabel})`, fmt(r.gananciaFija)),
             fRow('= Subtotal (pre-redondeo)', fmt(r.subtotal)),
             fRow('VALOR PRODUCTO', fmt(r.valorProducto), { big:true, color:'#0F172A' }),
@@ -592,6 +595,11 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
           <span style="color:var(--text-muted);">+ Flete (${f.pesoLbs}lbs × $${vLibra})</span>
           <span style="color:var(--text-main);">+${fmt(r.costoLogistica)}</span>
         </div>
+        ${r.gastosAdmin > 0 ? `
+        <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-base);padding:4px 0;">
+          <span style="color:var(--text-muted);">+ Gastos administrativos</span>
+          <span style="color:var(--text-main);">+${fmt(r.gastosAdmin)}</span>
+        </div>` : ''}
         <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-base);padding:4px 0;">
           <span style="color:var(--text-muted);">+ Ganancia (${cats[f.categoria]?.label || f.categoria})</span>
           <span style="color:var(--text-main);">+${fmt(r.gananciaFija)}</span>
