@@ -86,7 +86,7 @@ function buildContratoTexto({ nombreCompleto, nombreEmpresa, email }) {
 
 Entre los suscritos a saber:
 
-1. [RAZÓN SOCIAL DE ENCARGOS PRO], sociedad identificada con NIT [NIT DE ENCARGOS PRO], con domicilio principal en [CIUDAD DE DOMICILIO DE ENCARGOS PRO], representada legalmente por [NOMBRE DEL REPRESENTANTE LEGAL], quien para efectos del presente contrato se denominará "ENCARGOS PRO" o "EL PRESTADOR".
+1. [RAZÓN SOCIAL DE ENCARGOS PRO], sociedad identificada con NIT 901.950.310-2, con domicilio principal en Bello (Antioquia), representada legalmente por Cristian Alexander Jaramillo Jaramillo, quien para efectos del presente contrato se denominará "ENCARGOS PRO" o "EL PRESTADOR".
 2. ${nombreCompleto}, actuando en nombre de ${nombreEmpresa}, identificado con el correo electrónico ${email}, quien para efectos del presente contrato se denominará "EL SUSCRIPTOR" o "EL CLIENTE".
 
 Ambas partes han decidido celebrar el presente Contrato de Suscripción (en adelante "el Contrato"), el cual se regirá por la legislación colombiana (en especial las Leyes 23 de 1982, 527 de 1999, 1480 de 2011, 1581 de 2012 y demás normas concordantes) y por las siguientes cláusulas, previas las siguientes:
@@ -213,7 +213,7 @@ CLÁUSULA DÉCIMA SÉPTIMA. MEJORAS Y SOLICITUDES PERSONALIZADAS
 ENCARGOS PRO trabajará continuamente en actualizaciones y mejoras de la Plataforma basadas en los planes de suscripción para proporcionar mayor valor. En caso de que EL SUSCRIPTOR solicite modificaciones personalizadas o funcionalidades dedicadas para su empresa, estas deberán ser evaluadas por las directivas de ENCARGOS PRO para determinar su viabilidad técnica, alineación con la hoja de ruta (roadmap) y los posibles costos adicionales que dichas solicitudes puedan generar.
 
 CLÁUSULA DÉCIMA OCTAVA. LEY APLICABLE Y JURISDICCIÓN
-El presente Contrato se regirá e interpretará bajo las leyes de la República de Colombia. Cualquier controversia será sometida en primera instancia a arreglo directo entre las partes dentro de un plazo de quince (15) días hábiles. De no llegar a un acuerdo, las partes acudirán a los jueces ordinarios de la ciudad de [CIUDAD DE DOMICILIO DE ENCARGOS PRO], Colombia.
+El presente Contrato se regirá e interpretará bajo las leyes de la República de Colombia. Cualquier controversia será sometida en primera instancia a arreglo directo entre las partes dentro de un plazo de quince (15) días hábiles. De no llegar a un acuerdo, las partes acudirán a los jueces ordinarios de la ciudad de Bello (Antioquia), Colombia.
 
 Leído, entendido y aceptado electrónicamente por el SUSCRIPTOR al momento de crear su cuenta o realizar el pago en la plataforma "Encargos Pro".`
 }
