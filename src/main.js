@@ -662,6 +662,15 @@ async function bootApp() {
     return;
   }
 
+  // Enlace de recuperación vencido o ya usado: Supabase redirige con un
+  // error en el hash en vez del token — avisar en vez de dejar el login
+  // en silencio sin explicación.
+  const recoveryError = auth.getPasswordRecoveryError();
+  if (recoveryError) {
+    renderLogin(() => startApp(), { message: recoveryError, type: 'warning' });
+    return;
+  }
+
   if (!session || !profile) {
     // No autenticado → pantalla de login
     renderLogin((userProfile) => {

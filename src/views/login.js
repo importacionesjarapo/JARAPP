@@ -6,7 +6,7 @@
 
 import { auth } from '../auth.js';
 
-export const renderLogin = (onSuccess) => {
+export const renderLogin = (onSuccess, initialAlert) => {
   const appEl = document.querySelector('#app');
   
   appEl.innerHTML = `
@@ -212,6 +212,7 @@ export const renderLogin = (onSuccess) => {
     if (emailInp) { emailInp.value = ''; emailInp.focus(); }
     if (passInp)  passInp.value = '';
     document.querySelector('.login-card')?.classList.add('login-card-visible');
+    if (initialAlert) showLoginAlert(initialAlert.message, initialAlert.type || 'warning');
   }, 80);
 };
 

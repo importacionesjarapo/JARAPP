@@ -528,6 +528,22 @@ class Auth {
     return /type=recovery/.test(window.location.hash);
   }
 
+  /** Cuando el enlace de recuperación llegó vencido o ya usado, Supabase
+   * redirige igual pero con "error=...&error_code=..." en el hash en vez
+   * del token — sin este chequeo, el usuario solo veía el login en
+   * silencio, sin saber por qué no lo dejó entrar. Devuelve un mensaje en
+   * español listo para mostrar, o null si no hay error en la URL. */
+  getPasswordRecoveryError() {
+    const hash = window.location.hash;
+    if (!/error=/.test(hash)) return null;
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    window.history.replaceState(null, '', window.location.pathname);
+    if (params.get('error_code') === 'otp_expired') {
+      return 'Este enlace para restablecer tu contraseña ya expiró o ya fue usado. Solicita uno nuevo con "¿Olvidaste tu contraseña?".';
+    }
+    return 'No se pudo procesar el enlace del correo. Solicita uno nuevo con "¿Olvidaste tu contraseña?".';
+  }
+
   /** Aplica la nueva contraseña usando la sesión de recuperación ya activa
    * (Supabase la establece solo al detectar el token en la URL). Requiere
    * haber llamado a init() antes para que esa sesión quede lista. */
