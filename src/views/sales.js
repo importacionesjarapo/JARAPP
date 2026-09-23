@@ -1083,6 +1083,7 @@ export const createSaleModal = async (navigateTo) => {
                     <div class="form-group">
                         <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
+                        <p id="sale-ganancia-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Gastos Administrativos (COP)</label>
@@ -1215,9 +1216,11 @@ export const createSaleModal = async (navigateTo) => {
         });
         const pSel=document.getElementById('sel-producto-text'),pHide=document.getElementById('sel-producto-id');
         const vTot=document.getElementById('sale-total'),vAb=document.getElementById('sale-abono'),lblS=document.getElementById('lbl-saldo');
+        const vGan=document.getElementById('sale-ganancia-calc'),hintGan=document.getElementById('sale-ganancia-hint');
         const encCant=document.getElementById('enc_cantidad'),hintTot=document.getElementById('sale-total-hint');
-        // #26 — en Encargo, "Valor Venta" es el unitario; el saldo/total mostrado
-        // ya refleja unitario × cantidad, no solo lo que se tecleó.
+        // #26 — en Encargo, "Valor Venta" y "Ganancia Calculada" son
+        // unitarios; el saldo/total/ganancia mostrados ya reflejan
+        // unitario × cantidad, no solo lo que se tecleó.
         const updS=()=>{
             const tipoActual = document.querySelector('input[name="tipo_venta"]:checked')?.value;
             const cant = tipoActual === 'Encargo' ? (parseInt(encCant?.value) || 1) : 1;
@@ -1229,9 +1232,15 @@ export const createSaleModal = async (navigateTo) => {
                 if (cant > 1) { hintTot.style.display='block'; hintTot.textContent = `Total a cobrar (${cant} × ${formatCOP(unit)}) = ${formatCOP(t)}`; }
                 else hintTot.style.display='none';
             }
+            if (hintGan) {
+                const unitGan = parseInt(vGan?.value||0);
+                if (cant > 1) { hintGan.style.display='block'; hintGan.textContent = `Ganancia total (${cant} × ${formatCOP(unitGan)}) = ${formatCOP(unitGan * cant)}`; }
+                else hintGan.style.display='none';
+            }
         };
         if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); if(pr){vTot.value=pr;vAb.value=pr;updS();}} }); });
         if(vTot&&vAb){vTot.addEventListener('input',updS);vAb.addEventListener('input',updS);}
+        if(vGan) vGan.addEventListener('input',updS);
         if(encCant) encCant.addEventListener('input',updS);
         const encTipo = document.getElementById('enc_tipo');
         if (encTipo) encTipo.onchange = () => window.updateEncargoRequirements();
@@ -1412,11 +1421,12 @@ export const createSaleModal = async (navigateTo) => {
         
         fd.set('cliente_id',cliHidden);
         if(tipoVenta==='Stock'){ const prodH=document.getElementById('sel-producto-id').value; if(!prodH) return window.showToast('Debes seleccionar un Producto válido.','error'); fd.set('producto_id',prodH); }
-        // #26 — en Encargo, "Valor Venta" es el valor UNITARIO; el sistema
-        // multiplica por la cantidad en vez de que el vendedor lo calcule a mano.
+        // #26 — en Encargo, "Valor Venta" y "Ganancia Calculada" son
+        // valores UNITARIOS; el sistema multiplica por la cantidad en vez
+        // de que el vendedor haga la cuenta a mano.
         const cantidadEnc = tipoVenta === 'Encargo' ? (parseInt(document.getElementById('enc_cantidad')?.value) || 1) : 1;
         const valorTotal=parseInt(fd.get('valor_total_cop')||0) * cantidadEnc;
-        const gananciaCalc=parseInt(fd.get('ganancia_calculada')||0);
+        const gananciaCalc=parseInt(fd.get('ganancia_calculada')||0) * cantidadEnc;
         
         if (valorTotal <= 0) return window.showToast('El Valor Total debe ser mayor a 0.', 'error');
         if (gananciaCalc <= 0) return window.showToast('La Ganancia Calculada debe ser mayor a 0.', 'error');
