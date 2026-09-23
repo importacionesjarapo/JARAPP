@@ -170,30 +170,14 @@ export const renderLogin = (onSuccess, initialAlert) => {
     }
   });
 
-  // "¿Olvidaste tu contraseña?" — reusa el campo de correo ya escrito, sin
-  // necesidad de una pantalla aparte. Muestra siempre el mismo mensaje de
-  // éxito exista o no esa cuenta, para no confirmarle a nadie qué correos
-  // están registrados.
+  // "¿Olvidaste tu contraseña?" — flujo por código de 6 dígitos (no por
+  // enlace: el enlace resultó poco confiable, ver forgotPassword.js).
   document.getElementById('login-forgot-btn').addEventListener('click', async () => {
-    const email = document.getElementById('login-email').value.trim();
-    if (!email) {
-      showLoginAlert('Escribe tu correo arriba y luego haz clic en "¿Olvidaste tu contraseña?".', 'warning');
-      document.getElementById('login-email').focus();
-      return;
-    }
-    const btn = document.getElementById('login-forgot-btn');
-    btn.disabled = true;
-    const textoOriginal = btn.textContent;
-    btn.textContent = 'Enviando...';
-    try {
-      await auth.sendPasswordReset(email);
-      showLoginAlert('Si ese correo tiene una cuenta, te enviamos un enlace para restablecer la contraseña.', 'success');
-    } catch (err) {
-      showLoginAlert(err.message, 'error');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = textoOriginal;
-    }
+    const { renderForgotPassword } = await import('./forgotPassword.js');
+    renderForgotPassword(
+      () => renderLogin(onSuccess, { message: 'Tu contraseña fue actualizada. Inicia sesión con la nueva.', type: 'success' }),
+      () => renderLogin(onSuccess),
+    );
   });
 
   // Enter focus manejo

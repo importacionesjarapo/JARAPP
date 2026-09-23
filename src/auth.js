@@ -521,6 +521,23 @@ class Auth {
     if (error) throw new Error(this._translateError(error.message));
   }
 
+  /** Verifica el código de 6 dígitos que trae el mismo correo de "Reset
+   * Password" (junto al enlace) y deja activa la sesión de recuperación —
+   * sin depender de ningún enlace/hash de URL, así que es inmune a
+   * escáneres de correo que consumen enlaces de un solo uso, a que una PWA
+   * ya abierta reutilice una pestaña vieja, o a que un proxy de correo
+   * pierda el fragmento de la URL. */
+  async verifyPasswordResetCode(email, code) {
+    const client = this._getClient();
+    if (!client) throw new Error('Supabase no configurado.');
+    const { error } = await withTimeout(
+      client.auth.verifyOtp({ email, token: code, type: 'recovery' }),
+      12000,
+      'Tiempo de espera agotado. Verifica tu conexión a internet.'
+    );
+    if (error) throw new Error(this._translateError(error.message));
+  }
+
   /** true si la URL actual trae el token de recuperación de contraseña que
    * Supabase agrega al enlace del correo (flow implícito: va en el hash,
    * no en query params, para que nunca llegue a los logs del servidor). */
@@ -742,6 +759,7 @@ class Auth {
       'Unable to validate email address: invalid format': 'Formato de email inválido.',
       'signup is disabled': 'El registro público está deshabilitado.',
       'User not allowed': 'No tienes permisos para esta operación.',
+      'Token has expired or is invalid': 'El código venció o es incorrecto. Verifica que lo hayas escrito bien, o pide uno nuevo.',
     };
     return map[msg] || msg;
   }
