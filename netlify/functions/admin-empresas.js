@@ -71,6 +71,180 @@ async function sembrarDatosBase(empresaId) {
   }
 }
 
+// Fase 3 (#11): texto del contrato de suscripción mostrado y aceptado
+// durante el registro del trial. Se duplica en landing/index.html porque
+// esa página es un sitio estático aparte que no pasa por este bundle de
+// Netlify Functions ni por el de Vite — igual que ADMIN_PERMISSIONS arriba,
+// cualquier cambio en el contrato debe replicarse a mano en ambos lugares.
+//
+// NOTA: los datos de identificación de ENCARGOS PRO (NIT, domicilio,
+// representante legal) quedan como placeholders entre corchetes hasta que
+// se confirmen — reemplazar antes de que un cliente real acepte este texto.
+const CONTRATO_VERSION = 'v1-2026-09'
+function buildContratoTexto({ nombreCompleto, nombreEmpresa, email }) {
+  return `CONTRATO DE SUSCRIPCIÓN Y LICENCIA DE USO DE SOFTWARE COMO SERVICIO (SaaS) — PLATAFORMA "ENCARGOS PRO"
+
+Entre los suscritos a saber:
+
+1. [RAZÓN SOCIAL DE ENCARGOS PRO], sociedad identificada con NIT [NIT DE ENCARGOS PRO], con domicilio principal en [CIUDAD DE DOMICILIO DE ENCARGOS PRO], representada legalmente por [NOMBRE DEL REPRESENTANTE LEGAL], quien para efectos del presente contrato se denominará "ENCARGOS PRO" o "EL PRESTADOR".
+2. ${nombreCompleto}, actuando en nombre de ${nombreEmpresa}, identificado con el correo electrónico ${email}, quien para efectos del presente contrato se denominará "EL SUSCRIPTOR" o "EL CLIENTE".
+
+Ambas partes han decidido celebrar el presente Contrato de Suscripción (en adelante "el Contrato"), el cual se regirá por la legislación colombiana (en especial las Leyes 23 de 1982, 527 de 1999, 1480 de 2011, 1581 de 2012 y demás normas concordantes) y por las siguientes cláusulas, previas las siguientes:
+
+CONSIDERACIONES PREVIAS
+
+1. Que ENCARGOS PRO es titular, desarrollador y/o licenciatario exclusivo de la plataforma tecnológica de software como servicio (SaaS) denominada "Encargos Pro" (en adelante "la Plataforma"), destinada a la gestión, control y administración de encargos, pedidos, operaciones logísticas y/o tareas operativas.
+2. Que ENCARGOS PRO presta, como parte integral e indivisible del servicio, el alojamiento (hosting) de la información del SUSCRIPTOR tanto en bases de datos como en infraestructura de almacenamiento en la nube (storage).
+3. Que EL SUSCRIPTOR requiere acceder y utilizar la Plataforma bajo la modalidad de suscripción recurrente, manifestando haber leído, entendido y aceptado de manera voluntaria las condiciones técnicas, comerciales, legales y de precios aquí establecidas, bien sea mediante firma física o mediante mecanismos de aceptación electrónica en la Plataforma.
+
+CLÁUSULA PRIMERA. OBJETO DEL CONTRATO
+El presente Contrato tiene por objeto regular el otorgamiento de una licencia de uso no exclusiva, limitada, temporal y revocable sobre la Plataforma "Encargos Pro", así como la prestación del servicio de alojamiento (hosting) de datos y archivos en bases de datos y servicios de storage administrados por ENCARGOS PRO, a cambio del pago periódico y recurrente de una tarifa de suscripción, estableciendo de manera integral los derechos, responsabilidades, políticas de confidencialidad, seguridad y protección de propiedad intelectual de ambas partes.
+
+CLÁUSULA SEGUNDA. PERIODO DE PRUEBA GRATUITO (FREE TRIAL)
+Los nuevos suscriptores tendrán un periodo de prueba gratuito de veinte (20) días calendario para explorar y probar las funcionalidades de la Plataforma. Si al finalizar este plazo de 20 días el suscriptor no ha adquirido una suscripción de pago, el acceso a la Plataforma será suspendido automáticamente. Durante este periodo de prueba, todas las políticas de confidencialidad, seguridad, protección de datos y propiedad intelectual establecidas en este contrato aplican de manera estricta y vinculante.
+
+CLÁUSULA TERCERA. DEFINICIONES
+
+* Plataforma: El software, aplicaciones web, aplicaciones móviles, interfaces de programación (API), algoritmos, código fuente y objeto, bases de datos, diseños e infraestructura digital que componen "Encargos Pro".
+* Suscripción: La modalidad contractual mediante la cual EL SUSCRIPTOR obtiene acceso temporal y no exclusivo a la Plataforma mediante el pago previo y recurrente de un precio.
+* Información del Suscriptor / Datos del Cliente: Todo archivo, documento, base de datos, registro de clientes, pedidos, datos personales o contenido que EL SUSCRIPTOR o sus Usuarios Autorizados carguen, generen, procesen o almacenen en la Plataforma.
+* Credenciales de Acceso: Nombre de usuario, contraseña, llaves de API, códigos de verificación y cualquier otro mecanismo de autenticación otorgado a EL SUSCRIPTOR para ingresar a la Plataforma.
+* Usuarios Autorizados: Las personas naturales (empleados, colaboradores o contratistas) expresamente designadas por EL SUSCRIPTOR para acceder a la Plataforma dentro de los límites y cupos del plan contratado.
+* SLA (Service Level Agreement): El compromiso del nivel de disponibilidad mensual del servicio ofrecido por ENCARGOS PRO.
+
+CLÁUSULA CUARTA. LICENCIA DE USO Y RESTRICCIONES A LA DISTRIBUCIÓN
+4.1. Otorgamiento: ENCARGOS PRO concede a EL SUSCRIPTOR, durante la vigencia del Contrato y sujeto al pago oportuno del precio, una licencia de uso limitada, no exclusiva, personal, intransferible, no sublicenciable y revocable para utilizar la Plataforma únicamente en el giro ordinario de sus actividades internas.
+
+4.2. Prohibiciones expresas y protección de distribución: Queda estrictamente prohibido a EL SUSCRIPTOR y a sus Usuarios Autorizados:
+
+* Distribuir, ceder, sublicenciar, arrendar, comercializar, revender o poner a disposición de terceros no autorizados el acceso a la Plataforma o sus funcionalidades.
+* Copiar, reproducir, modificar, descompilar, realizar ingeniería inversa, desensamblar, traducir o intentar descubrir el código fuente, patrones de diseño o arquitectura de la Plataforma.
+* Utilizar la Plataforma o sus contenidos para crear, desarrollar o alimentar productos o servicios competidores directos o indirectos de ENCARGOS PRO.
+* Compartir las Credenciales de Acceso con personas ajenas a la organización o superar el número de usuarios permitidos en el plan contratado.
+* Emplear herramientas automatizadas, bots, web scraping, o métodos masivos de extracción no autorizada de datos sobre la infraestructura de la Plataforma.
+* Cargar o almacenar archivos con virus, código malicioso, malware, o datos ilegales que afecten la seguridad o estabilidad de la Plataforma.
+
+4.3. Consecuencias del incumplimiento: Cualquier violación a esta cláusula facultará a ENCARGOS PRO a suspender o terminar de manera inmediata el contrato por justa causa, bloquear los accesos e iniciar las acciones penales y civiles correspondientes para la indemnización total de los daños y perjuicios causados.
+
+CLÁUSULA QUINTA. PROPIEDAD INTELECTUAL, DERECHOS DE AUTOR E INDEMNIDAD
+5.1. Titularidad de ENCARGOS PRO: La Plataforma, sus marcas, logotipos, nombres comerciales, código fuente y objeto, interfaces gráficas, documentación técnica, bases de datos y desarrollos derivados son de propiedad exclusiva de ENCARGOS PRO, protegidos por las Leyes 23 de 1982 y 1915 de 2018, la Decisión Andina 351 de 1993 y tratados internacionales. Nada en este Contrato transfiere titularidad de propiedad intelectual a EL SUSCRIPTOR.
+
+5.2. Propiedad de la Información del Suscriptor: EL SUSCRIPTOR conserva en todo momento la propiedad y titularidad exclusiva sobre la Información y Datos que cargue o procese en la Plataforma. ENCARGOS PRO únicamente actúa como custodio y encargado del alojamiento.
+
+5.3. Cláusula de Indemnidad por Contenidos: EL SUSCRIPTOR declara y garantiza que cuenta con todos los derechos de autor, licencias y autorizaciones sobre los documentos, imágenes o archivos que almacene en la Plataforma. EL SUSCRIPTOR mantendrá indemne a ENCARGOS PRO frente a cualquier reclamación, sanción, demanda o pleito judicial presentado por terceros o autoridades, derivado de la supuesta o real infracción de derechos de autor, marcas o propiedad intelectual de los archivos cargados por EL SUSCRIPTOR.
+
+CLÁUSULA SEXTA. CONFIDENCIALIDAD
+6.1. Definición: Constituye "Información Confidencial" toda información técnica, financiera, comercial, operativa, de clientes, códigos, secretos industriales o datos personales compartidos o alojados en virtud de este Contrato.
+
+6.2. Obligaciones: Ambas partes se obligan a guardar estricta reserva de la Información Confidencial recibida de la otra parte, utilizando como mínimo el mismo grado de cuidado que aplican a su propia información confidencial (nunca inferior a un estándar razonable de la industria).
+
+6.3. Duración: La obligación de confidencialidad se mantendrá vigente durante la ejecución del Contrato y por un término de cinco (5) años contados a partir de su terminación por cualquier causa.
+
+CLÁUSULA SÉPTIMA. RESPONSABILIDADES Y GARANTÍAS DE ENCARGOS PRO
+ENCARGOS PRO se compromete a:
+
+1. Disponibilidad y Nivel de Servicio (SLA): Garantizar un nivel de disponibilidad mensual de la Plataforma del noventa y nueve por ciento (99.0% SLA), salvo mantenimientos programados informados previamente o eventos de fuerza mayor.
+2. Infraestructura de Alojamiento: Proveer la capacidad de bases de datos y storage acordada en el plan contratado.
+3. Copias de Respaldo (Backups): Ejecutar copias de seguridad periódicas de la información almacenada para garantizar la recuperabilidad en caso de contingencia técnica.
+4. Seguridad y Confidencialidad: Proteger la información del cliente mediante controles de acceso y cifrado, no vendiendo ni divulgando la información a ningún tercero no autorizado.
+5. Soporte Técnico: Atender requerimientos de soporte técnico dentro de los horarios e itinerarios definidos en la Plataforma.
+
+CLÁUSULA OCTAVA. RESPONSABILIDADES Y DEBERES DEL SUSCRIPTOR
+EL SUSCRIPTOR se compromete a:
+
+1. Pagar oportunamente el valor de la Suscripción según el plan y tarifa vigentes.
+2. Custodiar bajo estricta reserva sus Credenciales de Acceso y ser el único responsable por el uso que sus Usuarios Autorizados hagan del sistema.
+3. Garantizar que la información cargada sea lícita, veraz y cuente con la autorización de los titulares de los datos.
+4. Respetar los límites de uso de almacenamiento (storage), ancho de banda y cantidad de usuarios. ENCARGOS PRO podrá restringir o cobrar tarifas adicionales si el suscriptor supera desproporcionadamente el consumo estipulado.
+5. Notificar a ENCARGOS PRO en un plazo no mayor a 24 horas sobre cualquier sospecha de vulneración a sus credenciales de acceso.
+
+CLÁUSULA NOVENA. PRECIOS, MODIFICACIÓN DE TARIFAS Y FORMA DE PAGO
+9.1. Planes y Tarifas: EL SUSCRIPTOR pagará a ENCARGOS PRO el valor correspondiente al plan seleccionado en la Plataforma o en el formulario de contratación (Básico, Profesional o Empresarial).
+
+9.2. Modalidad y Cobro Anticipado: Los pagos se realizarán por adelantado de manera recurrente (mensual o anual) mediante los canales de pago autorizados (pasarelas de pago, tarjeta de crédito, PSE o transferencia). La renovación del servicio es automática salvo notificación en contrario.
+
+9.3. Facultad de Ajuste y Modificación de Precios: ENCARGOS PRO se reserva el derecho de ajustar o modificar los precios de las suscripciones en cualquier momento durante la vigencia del contrato. Para que el ajuste sea efectivo, ENCARGOS PRO notificará a EL SUSCRIPTOR con una antelación mínima de quince (15) días calendario a través del correo electrónico registrado o mediante un aviso destacado en la Plataforma. Si EL SUSCRIPTOR no acepta el nuevo precio, podrá cancelar su suscripción antes de la fecha de entrada en vigencia del reajuste, sin sanción alguna. El uso continuado del servicio o el pago del siguiente período constituirá la aceptación expresa del nuevo valor.
+
+9.4. Suspensión por Mora: El no pago oportuno de la Suscripción facultará a ENCARGOS PRO para suspender el acceso de los usuarios generales a la medianoche (12:00 AM) de la fecha de vencimiento. La cuenta del administrador conservará permisos de solo lectura ("permisos de lectura") por un periodo máximo de tres (3) días calendario posteriores al vencimiento para revisión de información. Transcurridos estos 3 días, el acceso será restringido totalmente y comenzará el periodo de exportación de 30 días.
+
+CLÁUSULA DÉCIMA. VIGENCIA
+El presente contrato tendrá una duración igual al período de suscripción contratado (mensual o anual) y se renovará automáticamente por períodos idénticos de manera sucesiva, a menos que cualquiera de las partes manifieste su decisión de cancelarlo conforme a la Cláusula Décima Primera.
+
+CLÁUSULA DÉCIMA PRIMERA. POLÍTICA DE CANCELACIÓN Y RETIRO
+11.1. Cancelación Voluntaria: EL SUSCRIPTOR podrá cancelar su suscripción en cualquier momento desde el panel de configuración de la Plataforma o mediante solicitud escrita enviada al soporte técnico.
+
+11.2. Efectos del Retiro: La cancelación detendrá la renovación del siguiente ciclo de facturación. EL SUSCRIPTOR mantendrá el acceso al servicio hasta la finalización del período ya pagado. No habrá lugar a reembolsos ni devoluciones de dinero por períodos parciales transcurridos, salvo lo previsto para el derecho de retracto.
+
+11.3. Derecho de Retracto Legal: De conformidad con el artículo 47 de la Ley 1480 de 2011 (Estatuto del Consumidor de Colombia), cuando la contratación se realice por medios electrónicos, EL SUSCRIPTOR podrá ejercer el derecho de retracto dentro de los cinco (5) días hábiles siguientes a la compra, siempre y cuando no haya hecho uso efectivo de las funcionalidades operativas de la Plataforma, procediendo la devolución íntegra del dinero.
+
+CLÁUSULA DÉCIMA SEGUNDA. SEGURIDAD DE LA INFORMACIÓN EN BASE DE DATOS Y STORAGE
+12.1. Alojamiento y Proveedores de Nube: La información se alojará en servidores seguros (propios o de terceros internacionales reconocidos como AWS, Google Cloud o Microsoft Azure) bajo estándares de seguridad reconocidos en la industria.
+
+12.2. Medidas Técnicas Implementadas:
+
+* Cifrado de datos en tránsito (Protocolo HTTPS / TLS) y en reposo cuando aplique.
+* Segregación lógica de datos entre cuentas de suscriptores para evitar acceso cruzado.
+* Autenticación restringida basada en roles.
+* Copias de respaldo (backups) automáticas periódicas.
+
+12.3. Notificación de Incidentes: En caso de detectarse un incidente de seguridad que comprometa la confidencialidad de la información, ENCARGOS PRO notificará a EL SUSCRIPTOR dentro de las setenta y dos (72) horas siguientes a la confirmación técnica del evento, detallando las medidas correctivas adoptadas.
+
+CLÁUSULA DÉCIMA TERCERA. TRATAMIENTO DE LA INFORMACIÓN EN CASO DE RETIRO O TERMINACIÓN
+13.1. Período de Gracia para Exportación (30 Días): Finalizada la suscripción por cualquier causa, la cuenta entrará en modo de deshabilitación operativa, concediendo a EL SUSCRIPTOR un plazo improrrogable de treinta (30) días calendario para descargar e exportar la totalidad de su información y archivos desde la Plataforma.
+
+13.2. Eliminación Definitiva de Datos: Transcurridos los treinta (30) días de gracia sin que la cuenta haya sido reactivada o los datos descargados, ENCARGOS PRO procederá a la eliminación segura y permanente de toda la información, bases de datos y archivos almacenados en el storage, sin que conserve copias activas y liberando a ENCARGOS PRO de cualquier responsabilidad por la pérdida de datos subsiguiente.
+
+13.3. Certificación de Supresión: A solicitud expresa de EL SUSCRIPTOR dentro del término legal, ENCARGOS PRO emitirá una certificación escrita confirmando la destrucción de los datos personales y archivos de sus servidores.
+
+CLÁUSULA DÉCIMA CUARTA. PROTECCIÓN DE DATOS PERSONALES (HABEAS DATA)
+14.1. En cumplimiento de la Ley 1581 de 2012 y el Decreto 1377 de 2013 de la República de Colombia, EL SUSCRIPTOR actúa en calidad de Responsable del Tratamiento de los datos personales cargados en la Plataforma, y ENCARGOS PRO actúa como Encargado del Tratamiento.
+
+14.2. ENCARGOS PRO únicamente tratará los datos conforme a las instrucciones del SUSCRIPTOR y para la ejecución de los servicios del software, absteniéndose de aplicarlos con fines propios de comercialización a terceros. EL SUSCRIPTOR garantiza expresamente que cuenta con la autorización previa e informada de los titulares de los datos cargados.
+
+CLÁUSULA DÉCIMA QUINTA. LIMITACIÓN DE RESPONSABILIDAD
+15.1. ENCARGOS PRO no será responsable por lucro cesante, pérdidas indirectas, daños emergentes, pérdida de negocios o interrupción de actividades comerciales derivadas del mal uso de la Plataforma por parte de EL SUSCRIPTOR.
+
+15.2. La responsabilidad total acumulada de ENCARGOS PRO frente a EL SUSCRIPTOR por cualquier concepto estará limitada como máximo a la suma efectivamente pagada por EL SUSCRIPTOR a ENCARGOS PRO en los últimos seis (6) meses anteriores al hecho generador de la reclamación.
+
+CLÁUSULA DÉCIMA SEXTA. ACEPTACIÓN ELECTRÓNICA (VALIDEZ LEGAL CLICKWRAP)
+De conformidad con la Ley 527 de 1999 de Comercio Electrónico de Colombia, la aceptación de este Contrato mediante mecanismos digitales, tales como marcar la casilla "Acepto Términos y Condiciones", presionar el botón de registro/pago, o la utilización continuada del servicio, producirá los mismos efectos jurídicos y vinculantes que la firma manuscrita, constituyendo plena prueba de la voluntad de las partes.
+
+CLÁUSULA DÉCIMA SÉPTIMA. MEJORAS Y SOLICITUDES PERSONALIZADAS
+ENCARGOS PRO trabajará continuamente en actualizaciones y mejoras de la Plataforma basadas en los planes de suscripción para proporcionar mayor valor. En caso de que EL SUSCRIPTOR solicite modificaciones personalizadas o funcionalidades dedicadas para su empresa, estas deberán ser evaluadas por las directivas de ENCARGOS PRO para determinar su viabilidad técnica, alineación con la hoja de ruta (roadmap) y los posibles costos adicionales que dichas solicitudes puedan generar.
+
+CLÁUSULA DÉCIMA OCTAVA. LEY APLICABLE Y JURISDICCIÓN
+El presente Contrato se regirá e interpretará bajo las leyes de la República de Colombia. Cualquier controversia será sometida en primera instancia a arreglo directo entre las partes dentro de un plazo de quince (15) días hábiles. De no llegar a un acuerdo, las partes acudirán a los jueces ordinarios de la ciudad de [CIUDAD DE DOMICILIO DE ENCARGOS PRO], Colombia.
+
+Leído, entendido y aceptado electrónicamente por el SUSCRIPTOR al momento de crear su cuenta o realizar el pago en la plataforma "Encargos Pro".`
+}
+
+/** Envía por correo (Resend API) la copia del contrato aceptado. No lanza
+ * si falla — el registro de la empresa/perfil ya se hizo y no debe
+ * revertirse por un problema de envío; el error queda logueado en la fila
+ * de ContratosAceptados para poder reintentar/revisar manualmente. */
+async function enviarCorreoContrato({ email, nombreCompleto, textoContrato }) {
+  if (!process.env.RESEND_API_KEY) return { enviado: false, error: 'RESEND_API_KEY no configurada' }
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'EncargosPro <no-reply@mail.encargospro.com>',
+        to: [email],
+        subject: 'Tu contrato de suscripción a EncargosPro',
+        html: `<p>Hola ${nombreCompleto || ''},</p><p>Gracias por registrarte en EncargosPro. Adjunto va la copia del contrato de suscripción que aceptaste al crear tu cuenta.</p><pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.5;">${textoContrato.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
+      }),
+    })
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}))
+      return { enviado: false, error: data.message || `Resend respondió ${resp.status}` }
+    }
+    return { enviado: true }
+  } catch (err) {
+    return { enviado: false, error: err.message }
+  }
+}
+
 /** Código de referido corto y legible a partir del slug — único por el
  * sufijo aleatorio, no depende de que el slug ya lo sea. */
 function generarCodigoReferido(slug) {
@@ -510,9 +684,15 @@ export const handler = async (event) => {
   // caller ya viene verificado como "cualquier usuario autenticado" más
   // arriba; acá solo falta que no tenga ya una empresa asociada.
   if (accion === 'crear_empresa_trial') {
-    const { nombreCompleto, nombreEmpresa, codigoReferido } = body
+    const { nombreCompleto, nombreEmpresa, codigoReferido, contratoAceptado } = body
     if (!nombreCompleto || !nombreEmpresa) {
       return res(400, { error: 'nombreCompleto y nombreEmpresa son obligatorios.' })
+    }
+    // #11: sin aceptación explícita del contrato de suscripción no se crea
+    // la empresa — el checkbox de la landing solo se habilita tras hacer
+    // scroll hasta el final del texto (ver auth-screen-contrato).
+    if (contratoAceptado !== true) {
+      return res(400, { error: 'Debes leer y aceptar el contrato de suscripción para continuar.' })
     }
 
     const { data: perfilExistente, error: errPerfil } = await supabase
@@ -582,6 +762,26 @@ export const handler = async (event) => {
       await supabase.from('Empresas').delete().eq('id', empresa.id)
       return res(500, { error: errProfile.message })
     }
+
+    // #11: registrar la aceptación (con snapshot exacto del texto mostrado)
+    // y enviarle al suscriptor una copia por correo. Un fallo acá no debe
+    // tumbar el registro que ya se completó — la empresa y el perfil ya
+    // existen — así que solo se loguea en la fila de auditoría.
+    const textoContrato = buildContratoTexto({ nombreCompleto, nombreEmpresa, email: caller.email })
+    const ipAceptacion = (event.headers['x-nf-client-connection-ip'] || event.headers['client-ip'] || '').split(',')[0].trim() || null
+    const userAgent = event.headers['user-agent'] || null
+    const { enviado, error: errorEnvio } = await enviarCorreoContrato({ email: caller.email, nombreCompleto, textoContrato })
+
+    const { error: errContrato } = await supabase.from('ContratosAceptados').insert({
+      id: Date.now().toString(),
+      empresa_id: empresa.id, user_id: caller.id,
+      version_contrato: CONTRATO_VERSION, texto_contrato: textoContrato,
+      nombre_completo: nombreCompleto, email: caller.email,
+      ip_aceptacion: ipAceptacion, user_agent: userAgent,
+      email_enviado: enviado, email_enviado_en: enviado ? new Date().toISOString() : null,
+      email_error: errorEnvio || null,
+    })
+    if (errContrato) console.warn('[admin-empresas] No se pudo registrar ContratosAceptados:', errContrato.message)
 
     return res(200, { ok: true, empresa })
   }
