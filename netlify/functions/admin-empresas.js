@@ -86,7 +86,7 @@ function buildContratoTexto({ nombreCompleto, nombreEmpresa, email }) {
 
 Entre los suscritos a saber:
 
-1. [RAZÓN SOCIAL DE ENCARGOS PRO], sociedad identificada con NIT 901.950.310-2, con domicilio principal en Bello (Antioquia), representada legalmente por Cristian Alexander Jaramillo Jaramillo, quien para efectos del presente contrato se denominará "ENCARGOS PRO" o "EL PRESTADOR".
+1. Jarapo Asociados SAS, sociedad identificada con NIT 901.950.310-2, con domicilio principal en Bello (Antioquia), representada legalmente por Cristian Alexander Jaramillo Jaramillo, quien para efectos del presente contrato se denominará "ENCARGOS PRO" o "EL PRESTADOR".
 2. ${nombreCompleto}, actuando en nombre de ${nombreEmpresa}, identificado con el correo electrónico ${email}, quien para efectos del presente contrato se denominará "EL SUSCRIPTOR" o "EL CLIENTE".
 
 Ambas partes han decidido celebrar el presente Contrato de Suscripción (en adelante "el Contrato"), el cual se regirá por la legislación colombiana (en especial las Leyes 23 de 1982, 527 de 1999, 1480 de 2011, 1581 de 2012 y demás normas concordantes) y por las siguientes cláusulas, previas las siguientes:
