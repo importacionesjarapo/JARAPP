@@ -647,14 +647,23 @@ async function bootApp() {
     console.error("Error cargando logo global:", e);
   }
 
+  // Hay que leer el hash de recuperación ANTES de auth.init(): la librería
+  // de Supabase lo procesa y lo limpia de la URL apenas la inicializamos
+  // (adentro de esa misma llamada), así que revisarlo después siempre lo
+  // encuentra vacío — eso hacía que un enlace de "restablecer contraseña"
+  // terminara abriendo la sesión directo, como un login cualquiera, en vez
+  // de pedir la contraseña nueva.
+  const wasPasswordRecovery = auth.isPasswordRecoveryUrl();
+  const recoveryError = auth.getPasswordRecoveryError();
+
   // Inicializar auth (verifica sesión existente)
   const { session, profile } = await auth.init();
 
   // Enlace de "restablecer contraseña" del correo: Supabase ya estableció
-  // la sesión de recuperación (session llega con valor), pero antes de
-  // dejarlo entrar a la app hay que pedirle la contraseña nueva — si no,
-  // quedaría logueado con la contraseña VIEJA sin que nadie se la cambiara.
-  if (auth.isPasswordRecoveryUrl()) {
+  // la sesión de recuperación, pero antes de dejarlo entrar a la app hay
+  // que pedirle la contraseña nueva — si no, quedaría logueado con la
+  // contraseña VIEJA sin que nadie se la cambiara.
+  if (wasPasswordRecovery) {
     const { renderResetPassword } = await import('./views/resetPassword.js');
     renderResetPassword(() => {
       renderLogin(() => startApp());
@@ -665,7 +674,6 @@ async function bootApp() {
   // Enlace de recuperación vencido o ya usado: Supabase redirige con un
   // error en el hash en vez del token — avisar en vez de dejar el login
   // en silencio sin explicación.
-  const recoveryError = auth.getPasswordRecoveryError();
   if (recoveryError) {
     renderLogin(() => startApp(), { message: recoveryError, type: 'warning' });
     return;
