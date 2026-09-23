@@ -6,7 +6,7 @@
 
 import { auth } from '../auth.js';
 
-export const renderLogin = (onSuccess) => {
+export const renderLogin = (onSuccess, initialAlert) => {
   const appEl = document.querySelector('#app');
   
   appEl.innerHTML = `
@@ -97,6 +97,9 @@ export const renderLogin = (onSuccess) => {
           </button>
 
           <p class="login-footer-note">
+            <button type="button" id="login-forgot-btn" class="link" style="background:none;border:none;padding:0;font:inherit;color:inherit;text-decoration:underline;cursor:pointer;">¿Olvidaste tu contraseña?</button>
+          </p>
+          <p class="login-footer-note">
             ¿Sin acceso? Contacta al administrador del sistema.
           </p>
         </form>
@@ -167,6 +170,32 @@ export const renderLogin = (onSuccess) => {
     }
   });
 
+  // "¿Olvidaste tu contraseña?" — reusa el campo de correo ya escrito, sin
+  // necesidad de una pantalla aparte. Muestra siempre el mismo mensaje de
+  // éxito exista o no esa cuenta, para no confirmarle a nadie qué correos
+  // están registrados.
+  document.getElementById('login-forgot-btn').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) {
+      showLoginAlert('Escribe tu correo arriba y luego haz clic en "¿Olvidaste tu contraseña?".', 'warning');
+      document.getElementById('login-email').focus();
+      return;
+    }
+    const btn = document.getElementById('login-forgot-btn');
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Enviando...';
+    try {
+      await auth.sendPasswordReset(email);
+      showLoginAlert('Si ese correo tiene una cuenta, te enviamos un enlace para restablecer la contraseña.', 'success');
+    } catch (err) {
+      showLoginAlert(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    }
+  });
+
   // Enter focus manejo
   document.getElementById('login-email').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -183,6 +212,7 @@ export const renderLogin = (onSuccess) => {
     if (emailInp) { emailInp.value = ''; emailInp.focus(); }
     if (passInp)  passInp.value = '';
     document.querySelector('.login-card')?.classList.add('login-card-visible');
+    if (initialAlert) showLoginAlert(initialAlert.message, initialAlert.type || 'warning');
   }, 80);
 };
 

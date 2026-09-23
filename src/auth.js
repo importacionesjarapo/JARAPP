@@ -507,6 +507,60 @@ class Auth {
     window.JARAPP_LOGO = null;
   }
 
+  /** Envía el correo de "restablecer contraseña" (plantilla "Reset Password"
+   * de Supabase Auth) — redirectTo usa el origen actual (app.encargospro.com
+   * en producción) para que el enlace del correo vuelva a esta misma app. */
+  async sendPasswordReset(email) {
+    const client = this._getClient();
+    if (!client) throw new Error('Supabase no configurado. Ve a Configuración primero.');
+    const { error } = await withTimeout(
+      client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname }),
+      12000,
+      'Tiempo de espera agotado. Verifica tu conexión a internet.'
+    );
+    if (error) throw new Error(this._translateError(error.message));
+  }
+
+  /** true si la URL actual trae el token de recuperación de contraseña que
+   * Supabase agrega al enlace del correo (flow implícito: va en el hash,
+   * no en query params, para que nunca llegue a los logs del servidor). */
+  isPasswordRecoveryUrl() {
+    return /type=recovery/.test(window.location.hash);
+  }
+
+  /** Cuando el enlace de recuperación llegó vencido o ya usado, Supabase
+   * redirige igual pero con "error=...&error_code=..." en el hash en vez
+   * del token — sin este chequeo, el usuario solo veía el login en
+   * silencio, sin saber por qué no lo dejó entrar. Devuelve un mensaje en
+   * español listo para mostrar, o null si no hay error en la URL. */
+  getPasswordRecoveryError() {
+    const hash = window.location.hash;
+    if (!/error=/.test(hash)) return null;
+    const params = new URLSearchParams(hash.replace(/^#/, ''));
+    window.history.replaceState(null, '', window.location.pathname);
+    if (params.get('error_code') === 'otp_expired') {
+      return 'Este enlace para restablecer tu contraseña ya expiró o ya fue usado. Solicita uno nuevo con "¿Olvidaste tu contraseña?".';
+    }
+    return 'No se pudo procesar el enlace del correo. Solicita uno nuevo con "¿Olvidaste tu contraseña?".';
+  }
+
+  /** Aplica la nueva contraseña usando la sesión de recuperación ya activa
+   * (Supabase la establece solo al detectar el token en la URL). Requiere
+   * haber llamado a init() antes para que esa sesión quede lista. */
+  async updatePasswordFromRecovery(newPassword) {
+    const client = this._getClient();
+    if (!client) throw new Error('Supabase no configurado.');
+    const { error } = await withTimeout(
+      client.auth.updateUser({ password: newPassword }),
+      12000,
+      'Tiempo de espera agotado. Verifica tu conexión a internet.'
+    );
+    if (error) throw new Error(this._translateError(error.message));
+    // Limpia el token de la URL para que no quede visible ni se reutilice
+    // si el usuario recarga la página.
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+
   /** Crear nuevo usuario (solo admin puede hacer esto desde el panel) */
   async createUser(email, password, fullName, role, permissions) {
     const client = this._getClient();
