@@ -1218,51 +1218,6 @@ export const createLogisticsModal = async (id, navigateTo) => {
             return nuevoId;
         };
 
-        // Registra (o actualiza) el costo de flete/guía internacional (USD + su
-        // equivalente COP) como un Egreso en Finanzas, en moneda USD. Idempotente:
-        // el vínculo vive en GuiasInternacionales.gasto_id — como la guía puede ser
-        // compartida por varios productos consolidados, el gasto se registra UNA
-        // sola vez por guía, no por cada producto.
-        const registrarEgresoFleteGuia = async (valorUSD, valorCOP, numeroGuia, gastoIdExistente, fechaFlete) => {
-            const vCOP = parseFloat(valorCOP || 0);
-            const vUSD = parseFloat(valorUSD || 0);
-            if (!vCOP || vCOP <= 0) return gastoIdExistente || null;
-
-            const concepto = `Flete / Guía Internacional${numeroGuia ? ' - ' + numeroGuia : ''}`;
-            const trmImplicita = vUSD > 0 ? (vCOP / vUSD) : null;
-
-            if (gastoIdExistente) {
-                await db.postData('Gastos', {
-                    id: gastoIdExistente,
-                    tipo_gasto: 'Logística Externa / Envíos',
-                    concepto,
-                    moneda: 'USD',
-                    valor_origen: vUSD,
-                    trm: trmImplicita,
-                    valor_cop: vCOP,
-                    fecha_real_factura: fechaFlete || null,
-                }, 'UPDATE');
-                return gastoIdExistente;
-            }
-
-            const nuevoId = Date.now().toString() + Math.floor(Math.random()*1000);
-            await db.postData('Gastos', {
-                id: nuevoId,
-                tipo_gasto: 'Logística Externa / Envíos',
-                concepto,
-                numero_factura: null,
-                fecha_real_factura: fechaFlete || null,
-                moneda: 'USD',
-                valor_origen: vUSD,
-                trm: trmImplicita,
-                valor_cop: vCOP,
-                fecha: new Date().toLocaleDateString(),
-                comprobante_url: '',
-                empresa_id: auth.getEmpresaId()
-            }, 'INSERT');
-            return nuevoId;
-        };
-
         window._saveLogistica = async () => {
             const e = { target: formEl, preventDefault: () => {} };
         const fd = new FormData(e.target);
@@ -1535,6 +1490,53 @@ export const createLogisticsModal = async (id, navigateTo) => {
 // cargados en esa función — este módulo no mantiene cachés a nivel de módulo
 // como los demás (cada cambio de tab vuelve a llamar renderLogistics completo).
 
+// Registra (o actualiza) el costo de flete/guía internacional (USD + su
+// equivalente COP) como un Egreso en Finanzas, en moneda USD. Idempotente:
+// el vínculo vive en GuiasInternacionales.gasto_id — como la guía puede ser
+// compartida por varios productos consolidados, el gasto se registra UNA
+// sola vez por guía, no por cada producto. A nivel de módulo (no anidada
+// dentro del formulario de avance de fase) para poder reutilizarla también
+// desde "Editar Guía" en el detalle de guía (#18).
+async function registrarEgresoFleteGuia(valorUSD, valorCOP, numeroGuia, gastoIdExistente, fechaFlete) {
+    const vCOP = parseFloat(valorCOP || 0);
+    const vUSD = parseFloat(valorUSD || 0);
+    if (!vCOP || vCOP <= 0) return gastoIdExistente || null;
+
+    const concepto = `Flete / Guía Internacional${numeroGuia ? ' - ' + numeroGuia : ''}`;
+    const trmImplicita = vUSD > 0 ? (vCOP / vUSD) : null;
+
+    if (gastoIdExistente) {
+        await db.postData('Gastos', {
+            id: gastoIdExistente,
+            tipo_gasto: 'Logística Externa / Envíos',
+            concepto,
+            moneda: 'USD',
+            valor_origen: vUSD,
+            trm: trmImplicita,
+            valor_cop: vCOP,
+            fecha_real_factura: fechaFlete || null,
+        }, 'UPDATE');
+        return gastoIdExistente;
+    }
+
+    const nuevoId = Date.now().toString() + Math.floor(Math.random()*1000);
+    await db.postData('Gastos', {
+        id: nuevoId,
+        tipo_gasto: 'Logística Externa / Envíos',
+        concepto,
+        numero_factura: null,
+        fecha_real_factura: fechaFlete || null,
+        moneda: 'USD',
+        valor_origen: vUSD,
+        trm: trmImplicita,
+        valor_cop: vCOP,
+        fecha: new Date().toLocaleDateString(),
+        comprobante_url: '',
+        empresa_id: auth.getEmpresaId()
+    }, 'INSERT');
+    return nuevoId;
+}
+
 window.modalDetalleGuia = async (guiaId) => {
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
@@ -1610,8 +1612,18 @@ window.modalDetalleGuia = async (guiaId) => {
                     <button class="btn-action" style="padding:6px 12px; font-size:0.75rem; background:rgba(255,255,255,0.1); height: 100%;" onclick="window.moverArticuloGuia('${l.id}', document.getElementById('move-txt-${l.id}').value || document.getElementById('move-sel-${l.id}').value, '${guiaId}')">Mover</button>
                 </div>
                 ` : '<span style="font-size:0.75rem; opacity:0.5;">No hay otras guías disponibles</span>'}
+                <button class="btn-action" style="padding:6px 12px; font-size:0.75rem; background:rgba(230,57,70,0.12); color:var(--primary-red); margin-left:8px;" title="Quita este producto de la guía y lo vuelve a dejar en Bodega USA, pendiente de reasociar" onclick="window.quitarArticuloGuia('${l.id}', '${guiaId}')">🗑️ Quitar</button>
             </div>
         `;
+    }).join('');
+
+    // #18 — productos disponibles para agregar a esta guía: en Bodega USA
+    // (fase 3) y todavía sin ninguna guía asignada.
+    const disponibles = logistica.filter(l => (l.fase || '').startsWith('3.') && !l.guia_internacional_id);
+    const disponiblesOptions = disponibles.map(l => {
+        const v = ventas.find(vt => vt.id.toString() === l.venta_id?.toString());
+        const p = v ? productos.find(pr => pr.id.toString() === v.producto_id?.toString()) : null;
+        return `<option value="${l.id}">${p?.nombre_producto || 'Producto Stock'} — Venta #${l.venta_id?.toString().slice(-4) || '-'}</option>`;
     }).join('');
 
     const diferencia = sumaIndividuales - (guia.valor_cop || 0);
@@ -1620,9 +1632,35 @@ window.modalDetalleGuia = async (guiaId) => {
         <div class="modal-content modal-wide">
             <div class="modal-header">
                 <h2 class="modal-title" style="color:var(--info-blue);">Detalle Guía: ${guia.numero_guia}</h2>
-                <button class="modal-close" onclick="window.closeModal()">&times;</button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="btn-action" style="font-size:0.78rem;" onclick="window.toggleEditarGuia()">✏️ Editar Guía</button>
+                    <button class="modal-close" onclick="window.closeModal()">&times;</button>
+                </div>
             </div>
             <div class="modal-body">
+                <div id="editar-guia-form" style="display:none; margin-bottom:1.5rem; padding:15px; background:var(--glass-hover); border-radius:12px; border:1px solid var(--glass-border);">
+                    <div class="form-grid-2" style="margin-bottom:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">Número de Guía</label>
+                            <input type="text" id="eg-numero-guia" value="${guia.numero_guia || ''}">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">Courier / Transportadora</label>
+                            <input type="text" id="eg-courier" value="${guia.courier || ''}">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">Valor Flete (USD)</label>
+                            <input type="number" id="eg-valor-usd" value="${guia.valor_usd || 0}" step="0.01">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">Valor Flete (COP)</label>
+                            <input type="number" id="eg-valor-cop" value="${guia.valor_cop || 0}">
+                        </div>
+                    </div>
+                    <p style="font-size:0.72rem; opacity:0.6; margin-bottom:10px;">Si cambias el número de guía o el courier, se actualiza también en todos los productos consolidados en ella. Si cambias el valor del flete, se actualiza el egreso ya registrado en Finanzas.</p>
+                    <button class="btn-primary" id="btn-guardar-guia" style="padding:8px 20px; font-size:0.85rem;" onclick="window.guardarEdicionGuia('${guiaId}')">💾 Guardar Cambios</button>
+                </div>
+
                 <div class="form-grid-2" style="margin-bottom:1.5rem;">
                     <div class="glass-card" style="padding:15px; text-align:center; border:1px solid var(--glass-border);">
                         <span style="font-size:0.75rem; opacity:0.6; text-transform:uppercase;">Valor Total Guía</span>
@@ -1644,9 +1682,24 @@ window.modalDetalleGuia = async (guiaId) => {
                 </div>
 
                 <h3 style="margin-bottom:12px; font-size:1.1rem;">Productos en esta Guía (${items.length})</h3>
-                <p style="font-size:0.8rem; opacity:0.7; margin-top:-5px; margin-bottom:10px;">Puedes mover un producto a otra guía si fue empaquetado de manera diferente.</p>
+                <p style="font-size:0.8rem; opacity:0.7; margin-top:-5px; margin-bottom:10px;">Puedes mover un producto a otra guía, o quitarlo por completo si no viajó en esta.</p>
                 <div style="max-height:300px; overflow-y:auto; background:var(--glass-hover); border-radius:12px; border:1px solid var(--glass-border); margin-bottom:1rem;">
                     ${itemsHtml || '<div style="padding:20px; text-align:center; opacity:0.5;">No hay productos vinculados.</div>'}
+                </div>
+
+                <div style="padding:12px; background:var(--glass-hover); border-radius:12px; border:1px dashed var(--glass-border);">
+                    <label class="form-label" style="margin-bottom:8px;">+ Agregar producto faltante a esta guía</label>
+                    ${disponibles.length === 0 ? `
+                        <p style="font-size:0.8rem; opacity:0.6; margin:0;">No hay productos en Bodega USA sin guía asignada por ahora.</p>
+                    ` : `
+                        <div style="display:flex; gap:10px;">
+                            <select id="sel-agregar-producto" style="flex:1;">
+                                <option value="">-- Seleccionar producto --</option>
+                                ${disponiblesOptions}
+                            </select>
+                            <button class="btn-primary" style="padding:8px 20px; font-size:0.85rem;" onclick="window.agregarProductoAGuia('${guiaId}')">Agregar</button>
+                        </div>
+                    `}
                 </div>
             </div>
             <div class="modal-footer">
@@ -1654,6 +1707,171 @@ window.modalDetalleGuia = async (guiaId) => {
             </div>
         </div>
     `;
+};
+
+window.toggleEditarGuia = () => {
+    const el = document.getElementById('editar-guia-form');
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.guardarEdicionGuia = async (guiaId) => {
+    const btn = document.getElementById('btn-guardar-guia');
+    const numeroGuia = document.getElementById('eg-numero-guia')?.value.trim();
+    const courier    = document.getElementById('eg-courier')?.value.trim();
+    const valorUsd   = parseFloat(document.getElementById('eg-valor-usd')?.value) || 0;
+    const valorCop   = parseInt(document.getElementById('eg-valor-cop')?.value) || 0;
+    if (!numeroGuia) { showToast('El número de guía es obligatorio.', 'error'); return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando...'; }
+    try {
+        const [guias, logistica] = await Promise.all([
+            db.fetchData('GuiasInternacionales'),
+            db.fetchData('Logistica'),
+        ]);
+        const guia = (Array.isArray(guias) ? guias : []).find(g => g.id.toString() === guiaId.toString());
+        if (!guia) throw new Error('Guía no encontrada.');
+
+        const cambioFlete = valorUsd !== parseFloat(guia.valor_usd || 0) || valorCop !== parseInt(guia.valor_cop || 0);
+        const gastoId = cambioFlete
+            ? await registrarEgresoFleteGuia(valorUsd, valorCop, numeroGuia, guia.gasto_id, guia.fecha_creacion)
+            : guia.gasto_id;
+
+        await db.postData('GuiasInternacionales', {
+            ...guia,
+            numero_guia: numeroGuia,
+            courier,
+            valor_usd: valorUsd,
+            valor_cop: valorCop,
+            gasto_id: gastoId,
+        }, 'UPDATE');
+
+        // Propagar número de guía / courier a todos los productos consolidados en ella.
+        const items = (Array.isArray(logistica) ? logistica : []).filter(l => l.guia_internacional_id?.toString() === guiaId.toString());
+        for (const item of items) {
+            if (item.int_guia === numeroGuia && item.paqueteria === courier) continue;
+            await db.postData('Logistica', {
+                ...item,
+                int_guia: numeroGuia,
+                id_seguimiento_internacional: numeroGuia,
+                paqueteria: courier || item.paqueteria,
+                fecha_actualizacion: new Date().toISOString(),
+            }, 'UPDATE');
+        }
+
+        showToast('✅ Guía actualizada', 'success');
+        window.modalDetalleGuia(guiaId);
+        if (window._navigateTo) window._navigateTo('logistics');
+    } catch (err) {
+        showToast('Error guardando la guía: ' + err.message, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar Cambios'; }
+    }
+};
+
+window.agregarProductoAGuia = async (guiaId) => {
+    const sel = document.getElementById('sel-agregar-producto');
+    const logisticaId = sel?.value;
+    if (!logisticaId) { showToast('Selecciona un producto primero.', 'error'); return; }
+    // Misma lógica que "Asociar a Guía Existente" (fase 3 → hereda fase/
+    // tracking de la guía), solo que la guía ya viene fijada por venir desde
+    // su propio detalle en vez de un selector aparte.
+    await confirmarAsociarAGuiaDirecta(logisticaId, guiaId);
+};
+
+async function confirmarAsociarAGuiaDirecta(logisticaId, guiaId) {
+    try {
+        const [logistica, guias] = await Promise.all([
+            db.fetchData('Logistica'),
+            db.fetchData('GuiasInternacionales'),
+        ]);
+        const logisticaList = Array.isArray(logistica) ? logistica : [];
+        const item = logisticaList.find(l => l.id.toString() === logisticaId.toString());
+        const guiasList = Array.isArray(guias) ? guias : [];
+        const guia = guiasList.find(g => g.id.toString() === guiaId.toString());
+        if (!item || !guia) throw new Error('Registro o guía no encontrados');
+
+        const gItems = logisticaList.filter(l => l.guia_internacional_id?.toString() === guiaId.toString());
+        const repItem = gItems.find(gi => (gi.fase || '').startsWith('4.')) || gItems[0];
+        const nuevaFase = repItem?.fase || '4. Tránsito Internacional / Aduana';
+
+        let histArr = [];
+        try { histArr = JSON.parse(item.historial || '[]'); } catch(e) {}
+        histArr.push({
+            fase: nuevaFase,
+            fecha: new Date().toLocaleString('es-CO'),
+            notas: `Agregado a la guía internacional ${guia.numero_guia} desde su detalle (producto faltante).`
+        });
+
+        const payload = {
+            ...item,
+            fase: nuevaFase,
+            guia_internacional_id: guia.id,
+            int_guia: guia.numero_guia,
+            paqueteria: guia.courier || item.paqueteria,
+            id_seguimiento_internacional: guia.numero_guia,
+            int_fecha_envio: repItem?.int_fecha_envio || item.int_fecha_envio || '',
+            int_url: repItem?.int_url || item.int_url || '',
+            historial: JSON.stringify(histArr),
+            fecha_actualizacion: new Date().toISOString()
+        };
+        if (MAPA_FASE_PORTAL[nuevaFase]) {
+            payload.fase_portal     = MAPA_FASE_PORTAL[nuevaFase].nombre;
+            payload.fase_portal_num = MAPA_FASE_PORTAL[nuevaFase].num;
+        }
+
+        const res = await db.postData('Logistica', payload, 'UPDATE');
+        if (res.error) throw new Error(res.error);
+
+        showToast(`Producto agregado a la guía ${guia.numero_guia}`, 'success');
+        window.modalDetalleGuia(guiaId);
+        if (window._navigateTo) window._navigateTo('logistics');
+    } catch (err) {
+        showToast('Error agregando el producto: ' + err.message, 'error');
+    }
+}
+
+window.quitarArticuloGuia = async (logisticaId, currentGuiaId) => {
+    const ok = await window.customConfirm('Quitar de la guía', '¿Quitar este producto de la guía? Vuelve a "En Bodega USA", pendiente de asociarse a otra guía.');
+    if (!ok) return;
+    try {
+        const logistica = await db.fetchData('Logistica');
+        const item = (Array.isArray(logistica) ? logistica : []).find(l => l.id.toString() === logisticaId.toString());
+        if (!item) throw new Error('Registro no encontrado');
+
+        const faseAnterior = '3. En Bodega USA (Estados Unidos)';
+        let histArr = [];
+        try { histArr = JSON.parse(item.historial || '[]'); } catch(e){}
+        histArr.push({
+            fase: faseAnterior,
+            fecha: new Date().toLocaleString('es-CO'),
+            notas: 'Quitado de la guía internacional — vuelve a Bodega USA pendiente de reasociar.'
+        });
+
+        const payload = {
+            ...item,
+            fase: faseAnterior,
+            guia_internacional_id: null,
+            int_guia: '',
+            id_seguimiento_internacional: '',
+            int_fecha_envio: '',
+            int_url: '',
+            paqueteria: '',
+            historial: JSON.stringify(histArr),
+            fecha_actualizacion: new Date().toISOString(),
+        };
+        if (MAPA_FASE_PORTAL[faseAnterior]) {
+            payload.fase_portal     = MAPA_FASE_PORTAL[faseAnterior].nombre;
+            payload.fase_portal_num = MAPA_FASE_PORTAL[faseAnterior].num;
+        }
+
+        const res = await db.postData('Logistica', payload, 'UPDATE');
+        if (res.error) throw new Error(res.error);
+
+        showToast('Producto quitado de la guía', 'success');
+        window.modalDetalleGuia(currentGuiaId);
+        if (window._navigateTo) window._navigateTo('logistics');
+    } catch (err) {
+        showToast('Error quitando el producto: ' + err.message, 'error');
+    }
 };
 
 window.moverArticuloGuia = async (logisticaId, newGuiaId, currentGuiaId) => {
