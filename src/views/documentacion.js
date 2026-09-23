@@ -1,9 +1,22 @@
+import { db } from '../db.js';
+
 export const renderDocumentacion = async (renderLayout, navigateTo) => {
   const { auth } = await import('../auth.js');
   const userAuth = auth.getProfile();
   console.log('[Documentacion] render iniciado, rol:', userAuth?.role);
 
   const puedeVerTecnico = userAuth?.role === 'admin' || userAuth?.role === 'gerente'
+
+  // #12: contrato de suscripción aceptado por esta empresa al registrarse
+  // (ver ContratosAceptados, migración 027) — solo admin/gerente, mismo
+  // criterio que el Manual Técnico.
+  let contrato = null;
+  if (puedeVerTecnico) {
+    const contratos = await db.fetchData('ContratosAceptados');
+    if (Array.isArray(contratos) && contratos.length) {
+      contrato = contratos.slice().sort((a, b) => new Date(b.fecha_aceptacion) - new Date(a.fecha_aceptacion))[0];
+    }
+  }
 
   renderLayout(`
     <div style="max-width:860px;margin:0 auto;padding:0 8px;">
@@ -96,9 +109,43 @@ export const renderDocumentacion = async (renderLayout, navigateTo) => {
         </div>
       </div>
 
+      ${puedeVerTecnico ? `
+      <div style="background:var(--surface-0);border:1px solid var(--border);border-radius:16px;padding:24px;margin-top:16px;">
+        <h2 style="font-size:15px;font-weight:600;margin-bottom:16px;">📄 Contrato de Suscripción</h2>
+        ${contrato ? `
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.7;">
+            <div>Aceptado por <strong>${contrato.nombre_completo || '—'}</strong> (${contrato.email})</div>
+            <div>Fecha de aceptación: ${new Date(contrato.fecha_aceptacion).toLocaleString('es-CO')}</div>
+            <div>Versión: ${contrato.version_contrato}</div>
+            <div>Copia enviada por correo: ${contrato.email_enviado ? '✅ Sí' : '⚠️ No — ' + (contrato.email_error || 'sin detalle')}</div>
+          </div>
+          <button onclick="window.verContratoCompleto()" style="margin-top:14px;background:var(--surface-1);color:var(--text-primary);border:1px solid var(--border);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;">
+            Ver texto completo
+          </button>
+        ` : `
+          <div style="font-size:13px;color:var(--text-faint);">No hay un contrato de suscripción registrado para esta empresa todavía.</div>
+        `}
+      </div>
+      ` : ''}
+
       <div style="margin-top:12px;text-align:center;font-size:11px;color:var(--text-faint);">
         EncargosPro · ${auth.getEmpresaNombre()} · Documentación actualizada junio 2026
       </div>
     </div>
   `);
+
+  if (contrato) {
+    window.verContratoCompleto = () => {
+      const container = document.getElementById('modal-container');
+      const content = document.getElementById('modal-content');
+      content.innerHTML = `
+        <div style="max-width:640px;">
+          <h3 style="font-size:16px;font-weight:600;margin-bottom:12px;">📄 Contrato de Suscripción — versión ${contrato.version_contrato}</h3>
+          <div style="max-height:60vh;overflow-y:auto;white-space:pre-wrap;font-size:12.5px;line-height:1.6;color:var(--text-secondary);background:var(--surface-1);border-radius:12px;padding:16px;">${contrato.texto_contrato.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>
+          <button onclick="window.closeModal()" style="margin-top:16px;width:100%;background:var(--primary);color:#fff;border:none;padding:10px;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;">Cerrar</button>
+        </div>
+      `;
+      container.style.display = 'flex';
+    };
+  }
 };
