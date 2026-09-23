@@ -29,7 +29,7 @@ import { AlertasService } from './services/alertas.js';
 import { initJaraBot } from './components/jarabot.js';
 
 // Init theme instantly to prevent flashing
-const savedTheme = localStorage.getItem('theme') || 'dark';
+const savedTheme = localStorage.getItem('theme') || 'light';
 document.documentElement.setAttribute('data-theme', savedTheme);
 
 window.auth = auth;
@@ -138,7 +138,7 @@ export const renderLayout = (contentHTML) => {
   }
 
   // Full render (primera vez o tras logout)
-  const currentTheme = localStorage.getItem('theme') || 'dark';
+  const currentTheme = localStorage.getItem('theme') || 'light';
   const profile = auth.getProfile();
   const roleColor = ROLE_COLORS[profile?.role] || '#64748B';
   const roleLabel = ROLE_LABELS[profile?.role] || 'Invitado';
