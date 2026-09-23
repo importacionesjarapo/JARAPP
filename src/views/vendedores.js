@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { formatCOP, showToast, downloadExcel } from '../utils.js';
+import { formatCOP, showToast, downloadExcel, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase, openComprobanteViewer } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache y estado ────────────────────────────────────────────────────────────
@@ -51,13 +51,14 @@ function _venComputeIds() {
 export const renderVendedores = async (renderLayout, navigateTo) => {
     renderLayout(`<div style="text-align:center;padding:5rem;"><div class="loader"></div> Cargando Vendedores...</div>`);
 
-    const [ventasList, comprasList, clientesList, productosList, configList, allUsers] = await Promise.all([
+    const [ventasList, comprasList, clientesList, productosList, configList, allUsers, pagosList] = await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Compras'),
         db.fetchData('Clientes'),
         db.fetchData('Productos'),
         db.fetchData('Configuracion'),
         auth.getAllUsers().catch(() => []),
+        db.fetchData('PagosVendedores'),
     ]);
     const ventas    = ventasList?.error ? [] : (ventasList || []);
     const compras   = comprasList?.error ? [] : (comprasList || []);
@@ -65,8 +66,9 @@ export const renderVendedores = async (renderLayout, navigateTo) => {
     const productos = productosList?.error ? [] : (productosList || []);
     const config    = configList?.error ? [] : (configList || []);
     const vendedores = (Array.isArray(allUsers) ? allUsers : []).filter(u => u.role === 'ventas' && u.is_active !== false);
+    const pagos     = pagosList?.error ? [] : (pagosList || []);
 
-    _venCache = { ventas, compras, clientes, productos, config, vendedores };
+    _venCache = { ventas, compras, clientes, productos, config, vendedores, pagos };
     _venEnsureActiveTab();
 
     window.setVenAnio = (y) => { _venYear = parseInt(y, 10); _venSelected.clear(); _reloadVenPanel(); };
@@ -195,6 +197,7 @@ function _renderVenPanelInner() {
             </div>
         </div>
         ${pct === 0 ? `<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:12px;padding:1rem;margin-bottom:1rem;font-size:0.85rem;"><strong>⚠️ Atención:</strong> El porcentaje de ganancia del analista está en 0%. Configúralo en <strong>Parámetros → % Ganancia Analista</strong>.</div>` : ''}
+        ${_renderEstadoPagoCard(totalCalc)}
         ${_venActiveTab === 'general' && canManage ? `
         <div id="ven-bulk-bar" style="display:${_venSelected.size>0?'flex':'none'};align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:1rem;padding:0.8rem 1rem;background:rgba(6,214,160,0.08);border:1px solid var(--success-green);border-radius:12px;">
             <strong id="ven-bulk-count" style="font-size:0.85rem;">${_venSelected.size} venta(s) seleccionada(s)</strong>
@@ -216,6 +219,142 @@ function _renderVenPanelInner() {
         .toggle-switch input:checked + .toggle-slider:before { transform:translateX(20px); }
     </style>`;
 }
+
+// ─── Estado de pago de comisión (#19) ───────────────────────────────────────────
+// Solo tiene sentido por vendedor individual + mes puntual (la comisión se
+// paga en bloque mensual) — en "General" o con mes "Todos" no se muestra.
+function _buscarPago(vendedorId, anio, mes) {
+    return (_venCache?.pagos || []).find(p =>
+        p.vendedor_id === vendedorId && p.anio === anio && p.mes === mes);
+}
+
+function _renderEstadoPagoCard(totalCalc) {
+    const esVendedorEspecifico = _venActiveTab !== 'general';
+    if (!esVendedorEspecifico || _venMonth === 'todos') return '';
+
+    const canManage = _venCanManage();
+    const pago = _buscarPago(_venActiveTab, _venYear, _venMonth);
+    const estado = pago?.estado || 'pendiente';
+
+    if (estado === 'pagado') {
+        return `
+        <div class="glass-card" style="padding:1.2rem;margin-bottom:1.5rem;border-left:4px solid var(--success-green);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+                <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💰 Estado de pago — ${MESES_VEN[_venMonth-1]} ${_venYear}</div>
+                <div style="font-size:1.1rem;font-weight:800;color:var(--success-green);">✅ Pagado el ${pago.fecha_pago || '—'} · ${formatCOP(pago.monto || 0)}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                ${pago.comprobante_url ? `<button class="btn-action" onclick="window.verComprobantePago('${pago.comprobante_url}')">📎 Ver comprobante</button>` : ''}
+                ${canManage ? `
+                    <button class="btn-action" onclick="window.modalPagoVendedor('${_venActiveTab}', ${_venYear}, ${_venMonth}, ${totalCalc})">✏️ Editar</button>
+                    <button class="btn-secondary" onclick="window.marcarPagoPendiente('${_venActiveTab}', ${_venYear}, ${_venMonth})">↩️ Marcar pendiente</button>
+                ` : ''}
+            </div>
+        </div>`;
+    }
+
+    return `
+    <div class="glass-card" style="padding:1.2rem;margin-bottom:1.5rem;border-left:4px solid var(--warning-orange);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;opacity:0.55;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">💰 Estado de pago — ${MESES_VEN[_venMonth-1]} ${_venYear}</div>
+            <div style="font-size:1.1rem;font-weight:800;color:var(--warning-orange);">⏳ Pendiente de pago · ${formatCOP(totalCalc)}</div>
+        </div>
+        ${canManage ? `<button class="btn-primary" onclick="window.modalPagoVendedor('${_venActiveTab}', ${_venYear}, ${_venMonth}, ${totalCalc})">Marcar como pagado</button>` : ''}
+    </div>`;
+}
+
+window.verComprobantePago = (url) => openComprobanteViewer(url);
+
+window.modalPagoVendedor = (vendedorId, anio, mes, montoSugerido) => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    const pago = _buscarPago(vendedorId, anio, mes);
+    const vendedor = (_venCache?.vendedores || []).find(u => u.id === vendedorId);
+
+    content.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">💰 Registrar Pago — ${vendedor?.full_name || 'Vendedor'}</h2>
+                <button class="modal-close" onclick="window.closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:0.82rem;opacity:0.7;margin-bottom:1rem;">${MESES_VEN[mes-1]} ${anio}</p>
+                <div class="form-group">
+                    <label class="form-label">Monto Pagado (COP)</label>
+                    <input type="number" id="pv-monto" value="${pago?.monto ?? montoSugerido}" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha de Pago</label>
+                    <input type="date" id="pv-fecha" value="${pago?.fecha_pago || new Date().toISOString().split('T')[0]}">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Comprobante <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span></label>
+                    ${buildComprobanteUploadHTML('pv-comp-file')}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
+                <button class="btn-primary" id="pv-btn-guardar" onclick="window.guardarPagoVendedor('${vendedorId}', ${anio}, ${mes})">💾 Guardar</button>
+            </div>
+        </div>`;
+    container.style.display = 'flex';
+    attachComprobanteInput('pv-comp-file');
+};
+
+window.guardarPagoVendedor = async (vendedorId, anio, mes) => {
+    const btn = document.getElementById('pv-btn-guardar');
+    const monto = parseFloat(document.getElementById('pv-monto')?.value) || 0;
+    const fechaPago = document.getElementById('pv-fecha')?.value;
+    if (!fechaPago) return showToast('La fecha de pago es obligatoria.', 'error');
+
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+        const pagoExistente = _buscarPago(vendedorId, anio, mes);
+        const compFile = document.getElementById('pv-comp-file')?.files[0];
+        let comprobanteUrl = pagoExistente?.comprobante_url || '';
+        if (compFile) {
+            btn.textContent = 'Subiendo comprobante...';
+            comprobanteUrl = await uploadImageToSupabase(compFile, 'comprobantes');
+        }
+
+        const payload = {
+            id: pagoExistente?.id || `pv-${vendedorId}-${anio}-${mes}`,
+            vendedor_id: vendedorId,
+            anio, mes,
+            monto,
+            estado: 'pagado',
+            fecha_pago: fechaPago,
+            comprobante_url: comprobanteUrl,
+            empresa_id: auth.getEmpresaId(),
+        };
+        await db.postData('PagosVendedores', payload, pagoExistente ? 'UPDATE' : 'INSERT');
+        showToast('✅ Pago registrado', 'success');
+        window.closeModal();
+
+        const pagos = await db.fetchData('PagosVendedores');
+        if (_venCache) _venCache.pagos = pagos?.error ? [] : (pagos || []);
+        _reloadVenPanel();
+    } catch (err) {
+        showToast('Error guardando el pago: ' + err.message, 'error');
+        btn.disabled = false; btn.textContent = '💾 Guardar';
+    }
+};
+
+window.marcarPagoPendiente = async (vendedorId, anio, mes) => {
+    const ok = await window.customConfirm('Marcar como pendiente', '¿Quitar el estado de "pagado" de este mes? Se conserva el registro por si quieres volver a marcarlo pagado.');
+    if (!ok) return;
+    try {
+        const pago = _buscarPago(vendedorId, anio, mes);
+        if (!pago) return;
+        await db.postData('PagosVendedores', { ...pago, estado: 'pendiente' }, 'UPDATE');
+        showToast('Marcado como pendiente', 'success');
+        const pagos = await db.fetchData('PagosVendedores');
+        if (_venCache) _venCache.pagos = pagos?.error ? [] : (pagos || []);
+        _reloadVenPanel();
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+};
 
 function _montarTablaVendedores() {
     const ids        = _venComputeIds();

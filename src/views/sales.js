@@ -992,6 +992,10 @@ export const createSaleModal = async (navigateTo) => {
                         <span>📋</span>
                         <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto por Encargo</h3>
                     </div>
+                    <div class="form-group full-width" style="display:flex; align-items:center; gap:12px; padding:0.7rem 1rem; background:rgba(217,119,6,0.08); border-radius:12px; border:1px solid rgba(217,119,6,0.3); margin-bottom:1.2rem;">
+                        <input type="checkbox" id="enc_viaje_encargos" style="width:20px; height:20px; cursor:pointer;" onchange="window.updateEncargoRequirements()">
+                        <label for="enc_viaje_encargos" style="font-weight:700; color:#D97706; cursor:pointer; margin:0; text-transform:none; font-size:0.85rem;">Comprado en viaje de encargos (EEUU) — URL, foto, valor USD y peso quedan opcionales</label>
+                    </div>
                     <div class="form-grid-3">
                         <div class="form-group">
                             <label class="form-label">Categoría <span style="color:var(--primary-red);">*</span></label>
@@ -1012,11 +1016,11 @@ export const createSaleModal = async (navigateTo) => {
                             <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue">
                         </div>
                         <div class="form-group" style="grid-column: span 3;">
-                            <label class="form-label">Enlace del Producto (URL) <span style="color:var(--primary-red);">*</span></label>
+                            <label class="form-label" id="lbl-enc-link">Enlace del Producto (URL) <span style="color:var(--primary-red);">*</span></label>
                             <input type="url" id="enc_link" placeholder="https://...">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Valor Cotizado (USD) <span style="color:var(--primary-red);">*</span></label>
+                            <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) <span style="color:var(--primary-red);">*</span></label>
                             <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00">
                         </div>
                         <div class="form-group">
@@ -1042,7 +1046,7 @@ export const createSaleModal = async (navigateTo) => {
                             <input type="number" id="enc_cantidad" value="1" min="1">
                         </div>
                         <div class="form-group full-width">
-                            <label class="form-label">Foto de Referencia <span style="color:var(--primary-red);">*</span></label>
+                            <label class="form-label">Foto de Referencia <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
                             <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
                                 <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
                                     <span style="font-size:0.6rem; opacity:0.4;">FOTO</span>
@@ -1064,7 +1068,7 @@ export const createSaleModal = async (navigateTo) => {
                 
                 <div class="form-grid-3">
                     <div class="form-group">
-                        <label class="form-label">Peso Estimado (Libras) <span style="color:var(--primary-red);">*</span></label>
+                        <label class="form-label" id="lbl-sale-peso">Peso Estimado (Libras) <span style="color:var(--primary-red);">*</span></label>
                         <input type="text" name="peso_producto" id="sale-peso" placeholder="0.0" required inputmode="decimal">
                     </div>
                     <div class="form-group">
@@ -1074,10 +1078,12 @@ export const createSaleModal = async (navigateTo) => {
                     <div class="form-group">
                         <label class="form-label">Valor Venta (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="valor_total_cop" id="sale-total" required min="1" placeholder="0">
+                        <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
+                        <p id="sale-ganancia-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Gastos Administrativos (COP)</label>
@@ -1119,7 +1125,7 @@ export const createSaleModal = async (navigateTo) => {
         const talla = document.getElementById('enc_talla');
         const lblGen = document.getElementById('lbl-enc-genero');
         const lblTalla = document.getElementById('lbl-enc-talla');
-        
+
         if (isCond) {
             genero?.setAttribute('required', 'true');
             talla?.setAttribute('required', 'true');
@@ -1131,6 +1137,27 @@ export const createSaleModal = async (navigateTo) => {
             if (lblGen) lblGen.innerHTML = `Género`;
             if (lblTalla) lblTalla.innerHTML = `Talla`;
         }
+
+        // #26 — comprado en viaje: no hay link/valor USD de tienda online ni
+        // peso de flete que calcular (el viajero lo trae en la maleta).
+        const esViaje = document.getElementById('enc_viaje_encargos')?.checked;
+        const campos = [
+            { input: 'enc_link',       label: 'lbl-enc-link',       texto: 'Enlace del Producto (URL)' },
+            { input: 'enc_precio_usd', label: 'lbl-enc-precio-usd', texto: 'Valor Cotizado (USD)' },
+            { input: 'sale-peso',      label: 'lbl-sale-peso',      texto: 'Peso Estimado (Libras)' },
+        ];
+        campos.forEach(({ input, label, texto }) => {
+            const el = document.getElementById(input);
+            const lbl = document.getElementById(label);
+            if (!el) return;
+            if (esViaje) {
+                el.removeAttribute('required');
+                if (lbl) lbl.innerHTML = `${texto} <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>`;
+            } else {
+                el.setAttribute('required', 'true');
+                if (lbl) lbl.innerHTML = `${texto} <span style="color:var(--primary-red);">*</span>`;
+            }
+        });
     };
 
     window.toggleSaleType = (val) => {
@@ -1189,9 +1216,32 @@ export const createSaleModal = async (navigateTo) => {
         });
         const pSel=document.getElementById('sel-producto-text'),pHide=document.getElementById('sel-producto-id');
         const vTot=document.getElementById('sale-total'),vAb=document.getElementById('sale-abono'),lblS=document.getElementById('lbl-saldo');
-        const updS=()=>{ const t=parseInt(vTot.value||0),a=parseInt(vAb.value||0); lblS.innerText=formatCOP(Math.max(0,t-a)); };
+        const vGan=document.getElementById('sale-ganancia-calc'),hintGan=document.getElementById('sale-ganancia-hint');
+        const encCant=document.getElementById('enc_cantidad'),hintTot=document.getElementById('sale-total-hint');
+        // #26 — en Encargo, "Valor Venta" y "Ganancia Calculada" son
+        // unitarios; el saldo/total/ganancia mostrados ya reflejan
+        // unitario × cantidad, no solo lo que se tecleó.
+        const updS=()=>{
+            const tipoActual = document.querySelector('input[name="tipo_venta"]:checked')?.value;
+            const cant = tipoActual === 'Encargo' ? (parseInt(encCant?.value) || 1) : 1;
+            const unit = parseInt(vTot.value||0);
+            const t = unit * cant;
+            const a = parseInt(vAb.value||0);
+            lblS.innerText=formatCOP(Math.max(0,t-a));
+            if (hintTot) {
+                if (cant > 1) { hintTot.style.display='block'; hintTot.textContent = `Total a cobrar (${cant} × ${formatCOP(unit)}) = ${formatCOP(t)}`; }
+                else hintTot.style.display='none';
+            }
+            if (hintGan) {
+                const unitGan = parseInt(vGan?.value||0);
+                if (cant > 1) { hintGan.style.display='block'; hintGan.textContent = `Ganancia total (${cant} × ${formatCOP(unitGan)}) = ${formatCOP(unitGan * cant)}`; }
+                else hintGan.style.display='none';
+            }
+        };
         if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); if(pr){vTot.value=pr;vAb.value=pr;updS();}} }); });
         if(vTot&&vAb){vTot.addEventListener('input',updS);vAb.addEventListener('input',updS);}
+        if(vGan) vGan.addEventListener('input',updS);
+        if(encCant) encCant.addEventListener('input',updS);
         const encTipo = document.getElementById('enc_tipo');
         if (encTipo) encTipo.onchange = () => window.updateEncargoRequirements();
         
@@ -1369,17 +1419,14 @@ export const createSaleModal = async (navigateTo) => {
         const cliHidden=document.getElementById('sel-cliente-id').value;
         if(!cliHidden) return window.showToast('Debes seleccionar un Cliente válido.','error');
         
-        if (tipoVenta === 'Encargo') {
-            const fotoFile = document.getElementById('enc-file-img')?.files[0];
-            if (!fotoFile) {
-                return window.showToast('La foto de referencia es obligatoria para pedidos por encargo.', 'error');
-            }
-        }
-
         fd.set('cliente_id',cliHidden);
         if(tipoVenta==='Stock'){ const prodH=document.getElementById('sel-producto-id').value; if(!prodH) return window.showToast('Debes seleccionar un Producto válido.','error'); fd.set('producto_id',prodH); }
-        const valorTotal=parseInt(fd.get('valor_total_cop')||0);
-        const gananciaCalc=parseInt(fd.get('ganancia_calculada')||0);
+        // #26 — en Encargo, "Valor Venta" y "Ganancia Calculada" son
+        // valores UNITARIOS; el sistema multiplica por la cantidad en vez
+        // de que el vendedor haga la cuenta a mano.
+        const cantidadEnc = tipoVenta === 'Encargo' ? (parseInt(document.getElementById('enc_cantidad')?.value) || 1) : 1;
+        const valorTotal=parseInt(fd.get('valor_total_cop')||0) * cantidadEnc;
+        const gananciaCalc=parseInt(fd.get('ganancia_calculada')||0) * cantidadEnc;
         
         if (valorTotal <= 0) return window.showToast('El Valor Total debe ser mayor a 0.', 'error');
         if (gananciaCalc <= 0) return window.showToast('La Ganancia Calculada debe ser mayor a 0.', 'error');

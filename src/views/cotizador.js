@@ -24,10 +24,14 @@ async function cargarConfig() {
 
 // ── Fórmula idéntica a calculadora.js ─────────────────────────────────────────
 function calcular(inputs, cfg) {
-  const { precioUSD, descuentoUSD, pesoLbs, trm, categoria, conDomicilio } = inputs;
-  const { taxUsa, comisionTC, valorLibraUsd, valorLibra, costoDomicilio, categorias } = cfg;
+  const { precioUSD, descuentoUSD, pesoLbs, trm, categoria, conDomicilio, gananciaManual } = inputs;
+  const { taxUsa, comisionTC, valorLibraUsd, valorLibra, costoDomicilio, categorias, pctEncargo } = cfg;
 
-  const gananciaFija   = parseFloat(categorias?.[categoria]?.ganancia) || 50000;
+  // #24 — en "General" la ganancia no viene de una categoría fija, la
+  // escribe quien cotiza (cada encargo "general" es distinto).
+  const gananciaFija   = categoria === 'general'
+    ? (parseFloat(gananciaManual) || 0)
+    : (parseFloat(categorias?.[categoria]?.ganancia) || 50000);
   const precioFinalUSD = (precioUSD || 0) - (descuentoUSD || 0);
 
   const valorConTax    = precioFinalUSD * (1 + (taxUsa || 7) / 100);
@@ -45,7 +49,8 @@ function calcular(inputs, cfg) {
   const domicilioCOP   = conDomicilio ? (costoDomicilio || 20000) : 0;
   const totalFinal     = valorProducto + domicilioCOP;
   const taxCOP         = Math.round((valorConTax - precioFinalUSD) * (trm || 4200));
-  const anticipo35     = Math.ceil(totalFinal * 0.35 / 1000) * 1000;
+  const pctAnticipo    = pctEncargo ?? 35;
+  const anticipo35     = Math.ceil(totalFinal * (pctAnticipo / 100) / 1000) * 1000;
 
   return {
     precioFinalUSD, valorConTax, taxCOP,
@@ -58,6 +63,7 @@ function calcular(inputs, cfg) {
     valorProducto,
     domicilioCOP,
     totalFinal,
+    pctAnticipo,
     anticipo35,
     necesitaDomicilio: valorProducto < 200000,
   };
@@ -71,11 +77,11 @@ function generarMensajeWA(f, r) {
   if (f.tienda)      msg += `🏪 ${f.tienda}\n`;
   if (f.link)        msg += `🔗 ${f.link}\n`;
   msg += `\n💰 *Valor total: ${fmt(r.totalFinal)} COP*\n`;
-  msg += `🚚 Envío incluido ✓\n`;
+  if (r.domicilioCOP > 0) msg += `🚚 Envío incluido ✓\n`;
   msg += `\n⚠️ *Válida únicamente hoy ${hoy()}*\n`;
   msg += `⏳ Sujeto a disponibilidad y vigencia de la promoción\n`;
   msg += `\nPara apartar necesitamos:\n`;
-  msg += `💳 *Anticipo 35%: ${fmt(r.anticipo35)} COP*\n\n`;
+  msg += `💳 *Anticipo ${r.pctAnticipo}%: ${fmt(r.anticipo35)} COP*\n\n`;
   msg += `¡Escríbenos para confirmar! 🙌\n_${auth.getEmpresaNombre()}_ ✈️🇨🇴`;
   return msg;
 }
@@ -193,7 +199,7 @@ async function generarPDFCliente(f, r, params) {
       { text:'CONDICIONES', bold:true, fontSize:9, color:gris, margin:[0,0,0,5] },
       {
         ul:[
-          { text:`Anticipo 35% para apartar: ${fmt(r.anticipo35)} COP`, bold:true },
+          { text:`Anticipo ${r.pctAnticipo}% para apartar: ${fmt(r.anticipo35)} COP`, bold:true },
           'Cotización válida únicamente hoy ' + hoy() + '.',
           'Precio sujeto a disponibilidad y vigencia de la promoción.',
           'Tiempo de entrega estimado: 10-15 días hábiles.',
@@ -307,7 +313,7 @@ async function generarPDFInterno(f, r, cfg, params) {
 
       // ANTICIPO
       { table:{ widths:['*', 120], body:[
-          [{ text:'Anticipo 35% para apartar', bold:true, fontSize:10 },
+          [{ text:`Anticipo ${r.pctAnticipo}% para apartar`, bold:true, fontSize:10 },
            { text:fmt(r.anticipo35), bold:true, fontSize:10, alignment:'right', color:rojo }],
         ]},
         layout:{ hLineColor:()=>'#E2E8F0', vLineWidth:()=>0,
@@ -423,6 +429,11 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
               padding:6px 10px;background:var(--surface-2);border-radius:7px;"></div>
           </div>
 
+          <div class="cot-g" id="c-ganancia-gen-wrap" style="grid-column:span 2;display:none;">
+            <label class="cot-l">Ganancia para este encargo (COP) *</label>
+            <input id="c-ganancia-gen" type="number" class="cot-i" min="0" step="1000" placeholder="0">
+          </div>
+
           <div class="cot-g">
             <label class="cot-l">Precio USD en tienda *</label>
             <input id="c-precio" type="number" class="cot-i" min="0" step="0.01" placeholder="0.00">
@@ -507,10 +518,14 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
   function actualizarCategoria() {
     const key = selCat?.value || catDefault;
     const cat = cats[key] || {};
+    const esGeneral = key === 'general';
     if (inPeso) inPeso.value = cat.peso || '';
     const info = document.getElementById('c-cat-info');
-    if (info) info.textContent =
-      `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia fija: ${fmt(cat.ganancia || 0)}`;
+    if (info) info.textContent = esGeneral
+      ? `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia: la defines abajo para este encargo`
+      : `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia fija: ${fmt(cat.ganancia || 0)}`;
+    const ganWrap = document.getElementById('c-ganancia-gen-wrap');
+    if (ganWrap) ganWrap.style.display = esGeneral ? 'flex' : 'none';
     recalcular();
   }
 
@@ -530,6 +545,7 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
       descuentoUSD:parseFloat(document.getElementById('c-descuento')?.value) || 0,
       pesoLbs:     parseFloat(document.getElementById('c-peso')?.value) || 0,
       trm:         parseFloat(document.getElementById('c-trm')?.value) || trmActual,
+      gananciaManual: parseFloat(document.getElementById('c-ganancia-gen')?.value) || 0,
       conDomicilio:document.getElementById('c-domicilio')?.checked || false,
       notas:       document.getElementById('c-notas')?.value.trim() || '',
     };
@@ -628,7 +644,7 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
         <span style="font-size:1.2rem;font-weight:800;color:var(--primary);">${fmt(r.totalFinal)}</span>
       </div>
       <div style="margin-top:8px;padding:7px 10px;background:var(--surface-2);border-radius:8px;font-size:0.8rem;color:var(--text-muted);">
-        Anticipo 35%: <strong style="color:var(--text-main);">${fmt(r.anticipo35)}</strong>
+        Anticipo ${r.pctAnticipo}%: <strong style="color:var(--text-main);">${fmt(r.anticipo35)}</strong>
       </div>
       <div style="margin-top:8px;font-size:0.7rem;color:var(--text-faint);text-align:center;">
         TRM: $${Math.round(f.trm).toLocaleString('es-CO')} · Tax ${taxUsa}% · Válida hoy ${hoy()}
@@ -646,8 +662,8 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
   // ── Botón WhatsApp ───────────────────────────────────────────────────────
   document.getElementById('btn-wa')?.addEventListener('click', () => {
     const f = leer();
-    if (!f.producto || !f.precioUSD) {
-      window.customAlert?.('Faltan datos','Completa el nombre del producto y el precio USD.','warning'); return;
+    if (!f.producto || !f.precioUSD || (f.categoria === 'general' && !f.gananciaManual)) {
+      window.customAlert?.('Faltan datos','Completa el nombre del producto, el precio USD' + (f.categoria === 'general' ? ' y la ganancia de este encargo' : '') + '.','warning'); return;
     }
     const conDom = document.getElementById('c-domicilio')?.checked || false;
     const r = calcular({ ...f, conDomicilio: conDom }, cfg);
@@ -668,8 +684,8 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
   // ── Botón PDF Cliente ────────────────────────────────────────────────────
   document.getElementById('btn-pdf-cliente')?.addEventListener('click', async () => {
     const f = leer();
-    if (!f.producto || !f.precioUSD) {
-      window.customAlert?.('Faltan datos','Completa el nombre del producto y el precio USD.','warning'); return;
+    if (!f.producto || !f.precioUSD || (f.categoria === 'general' && !f.gananciaManual)) {
+      window.customAlert?.('Faltan datos','Completa el nombre del producto, el precio USD' + (f.categoria === 'general' ? ' y la ganancia de este encargo' : '') + '.','warning'); return;
     }
     const btn = document.getElementById('btn-pdf-cliente');
     btn.disabled = true; btn.textContent = 'Generando...';
@@ -686,8 +702,8 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
   // ── Botón PDF Interno (solo admin/gerente) ───────────────────────────────
   document.getElementById('btn-pdf-interno')?.addEventListener('click', async () => {
     const f = leer();
-    if (!f.producto || !f.precioUSD) {
-      window.customAlert?.('Faltan datos','Completa el nombre del producto y el precio USD.','warning'); return;
+    if (!f.producto || !f.precioUSD || (f.categoria === 'general' && !f.gananciaManual)) {
+      window.customAlert?.('Faltan datos','Completa el nombre del producto, el precio USD' + (f.categoria === 'general' ? ' y la ganancia de este encargo' : '') + '.','warning'); return;
     }
     const btn = document.getElementById('btn-pdf-interno');
     btn.disabled = true; btn.textContent = 'Generando...';
