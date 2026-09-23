@@ -656,20 +656,29 @@ async function bootApp() {
   const wasPasswordRecovery = auth.isPasswordRecoveryUrl();
   const recoveryError = auth.getPasswordRecoveryError();
 
-  // Inicializar auth (verifica sesión existente)
-  const { session, profile } = await auth.init();
-
   // Enlace de "restablecer contraseña" del correo: Supabase ya estableció
   // la sesión de recuperación, pero antes de dejarlo entrar a la app hay
   // que pedirle la contraseña nueva — si no, quedaría logueado con la
-  // contraseña VIEJA sin que nadie se la cambiara.
+  // contraseña VIEJA sin que nadie se la cambiara. Todo el flujo (incluido
+  // auth.init()) va en un try/catch que muestra el error EN PANTALLA — en
+  // celulares/tablets no siempre hay forma fácil de abrir las herramientas
+  // de desarrollador para ver qué falló en la consola.
   if (wasPasswordRecovery) {
-    const { renderResetPassword } = await import('./views/resetPassword.js');
-    renderResetPassword(() => {
-      renderLogin(() => startApp());
-    });
+    try {
+      await auth.init();
+      const { renderResetPassword } = await import('./views/resetPassword.js');
+      renderResetPassword(() => {
+        renderLogin(() => startApp());
+      });
+    } catch (e) {
+      console.error('[bootApp] Error en pantalla de restablecer contraseña:', e);
+      renderLogin(() => startApp(), { message: 'Error técnico al abrir la pantalla de nueva contraseña: ' + e.message, type: 'error' });
+    }
     return;
   }
+
+  // Inicializar auth (verifica sesión existente)
+  const { session, profile } = await auth.init();
 
   // Enlace de recuperación vencido o ya usado: Supabase redirige con un
   // error en el hash en vez del token — avisar en vez de dejar el login
