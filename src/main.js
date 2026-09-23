@@ -650,6 +650,18 @@ async function bootApp() {
   // Inicializar auth (verifica sesión existente)
   const { session, profile } = await auth.init();
 
+  // Enlace de "restablecer contraseña" del correo: Supabase ya estableció
+  // la sesión de recuperación (session llega con valor), pero antes de
+  // dejarlo entrar a la app hay que pedirle la contraseña nueva — si no,
+  // quedaría logueado con la contraseña VIEJA sin que nadie se la cambiara.
+  if (auth.isPasswordRecoveryUrl()) {
+    const { renderResetPassword } = await import('./views/resetPassword.js');
+    renderResetPassword(() => {
+      renderLogin(() => startApp());
+    });
+    return;
+  }
+
   if (!session || !profile) {
     // No autenticado → pantalla de login
     renderLogin((userProfile) => {
