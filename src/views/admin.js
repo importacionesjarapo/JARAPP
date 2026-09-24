@@ -5,9 +5,10 @@
 
 import { auth, ROLE_TEMPLATES, ROLE_LABELS, ROLE_COLORS, MODULE_LABELS } from '../auth.js';
 import { loadCalcConfig, saveCalcConfig, CALC_DEFAULT_CONFIG, sumarGastosAdministrativos } from './calculadora.js';
+import { loadCorreoGerencialConfig, saveCorreoGerencialConfig } from '../services/correoGerencial.js';
 import { showToast } from '../utils.js';
 
-let _adminActiveTab = 'usuarios'; // 'usuarios' | 'calculadora'
+let _adminActiveTab = 'usuarios'; // 'usuarios' | 'calculadora' | 'correo'
 let _conceptosDraft = null; // borrador en memoria de "conceptosAdmin" mientras se edita la pestaña Calculadora (#15)
 
 export const renderAdmin = async (renderLayout, navigateTo) => {
@@ -16,6 +17,7 @@ export const renderAdmin = async (renderLayout, navigateTo) => {
   let users = [];
   let loadError = null;
   let calcConfig = null;
+  let correoConfig = null;
 
   try {
     users = await auth.getAllUsers();
@@ -30,14 +32,21 @@ export const renderAdmin = async (renderLayout, navigateTo) => {
     calcConfig = JSON.parse(JSON.stringify(CALC_DEFAULT_CONFIG));
   }
 
-  const html = buildAdminHTML(users, loadError, calcConfig);
+  try {
+    correoConfig = await loadCorreoGerencialConfig();
+  } catch (err) {
+    console.warn('[Admin] Error cargando config correo gerencial:', err.message);
+    correoConfig = { activo: false, destinatarios: [] };
+  }
+
+  const html = buildAdminHTML(users, loadError, calcConfig, correoConfig);
   renderLayout(html);
-  bindAdminEvents(users, navigateTo, renderLayout, calcConfig);
+  bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConfig);
 };
 
 // ── HTML Builder ────────────────────────────────────────────
 
-function buildAdminHTML(users, error, calcConfig) {
+function buildAdminHTML(users, error, calcConfig, correoConfig) {
   return `
     <div class="module-header">
       <div>
@@ -54,6 +63,9 @@ function buildAdminHTML(users, error, calcConfig) {
       </button>
       <button class="pv-tab ${_adminActiveTab === 'calculadora' ? 'active' : ''}" id="admin-tab-calculadora">
         🧭 Administración Calculadora
+      </button>
+      <button class="pv-tab ${_adminActiveTab === 'correo' ? 'active' : ''}" id="admin-tab-correo">
+        📧 Correo Gerencial
       </button>
     </div>
 
@@ -108,6 +120,36 @@ function buildAdminHTML(users, error, calcConfig) {
       ${buildCalcAdminPanel(calcConfig)}
     </div>
 
+    <!-- Panel Correo Gerencial -->
+    <div id="admin-panel-correo" style="display:${_adminActiveTab === 'correo' ? 'block' : 'none'}">
+      ${buildCorreoGerencialPanel(correoConfig)}
+    </div>
+
+    </div>
+  `;
+}
+
+function buildCorreoGerencialPanel(correoConfig) {
+  const destinatariosTexto = (correoConfig.destinatarios || []).join('\n');
+  return `
+    <div class="glass-card" style="padding:1.5rem; max-width:640px;">
+      <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);margin-bottom:6px;">Informe diario de gestión</h3>
+      <p style="font-size:0.78rem;color:var(--text-faint);line-height:1.5;margin-bottom:1.2rem;">
+        Un resumen del día anterior (ventas, facturación, ganancia, gastos y cartera pendiente) se envía por correo cada mañana a los destinatarios que definas aquí.
+      </p>
+
+      <label style="display:flex;align-items:center;gap:10px;margin-bottom:1.2rem;cursor:pointer;">
+        <input type="checkbox" id="correo-gerencial-activo" ${correoConfig.activo ? 'checked' : ''} style="width:18px;height:18px;">
+        <span style="font-size:0.88rem;font-weight:600;">Activar el envío diario</span>
+      </label>
+
+      <label style="font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px;">Destinatarios (un correo por línea)</label>
+      <textarea id="correo-gerencial-destinatarios" rows="5" placeholder="gerencia@tuempresa.com&#10;dueño@tuempresa.com"
+        style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-size:0.9rem;outline:none;resize:vertical;font-family:inherit;">${destinatariosTexto}</textarea>
+
+      <div style="display:flex;justify-content:flex-end;margin-top:1.2rem;">
+        <button id="correo-gerencial-save-btn" class="btn-primary" style="padding:12px 32px;font-size:0.95rem;">💾 Guardar</button>
+      </div>
     </div>
   `;
 }
@@ -404,7 +446,7 @@ function buildCalcAdminPanel(config) {
 
 // ── Event Binding ───────────────────────────────────────────
 
-function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
+function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConfig) {
   // ── Tabs --
   document.getElementById('admin-tab-usuarios')?.addEventListener('click', () => {
     _adminActiveTab = 'usuarios';
@@ -413,6 +455,26 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig) {
   document.getElementById('admin-tab-calculadora')?.addEventListener('click', () => {
     _adminActiveTab = 'calculadora';
     renderAdmin(renderLayout, navigateTo);
+  });
+  document.getElementById('admin-tab-correo')?.addEventListener('click', () => {
+    _adminActiveTab = 'correo';
+    renderAdmin(renderLayout, navigateTo);
+  });
+
+  document.getElementById('correo-gerencial-save-btn')?.addEventListener('click', async () => {
+    const activo = document.getElementById('correo-gerencial-activo').checked;
+    const destinatarios = document.getElementById('correo-gerencial-destinatarios').value
+      .split('\n').map(e => e.trim()).filter(Boolean);
+    if (activo && !destinatarios.length) {
+      showToast('Agrega al menos un correo destinatario para activar el envío.', 'error');
+      return;
+    }
+    try {
+      await saveCorreoGerencialConfig({ activo, destinatarios });
+      showToast('Configuración del correo gerencial guardada.', 'success');
+    } catch (err) {
+      showToast('Error al guardar: ' + err.message, 'error');
+    }
   });
   // Botón nuevo usuario
   document.getElementById('admin-new-user-btn')?.addEventListener('click', async () => {
