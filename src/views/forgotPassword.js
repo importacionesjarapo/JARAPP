@@ -53,7 +53,7 @@ export const renderForgotPassword = (onDone, onBack) => {
     return `
       <form id="fp-email-form" class="login-form" autocomplete="off" novalidate>
         <h2 class="login-form-heading">¿Olvidaste tu contraseña?</h2>
-        <p class="login-form-desc">Escribe tu correo y te enviamos un código de 6 dígitos.</p>
+        <p class="login-form-desc">Escribe tu correo y te enviamos un código de verificación.</p>
 
         <div id="fp-alert" class="login-alert" style="display:none;"></div>
 
@@ -84,7 +84,7 @@ export const renderForgotPassword = (onDone, onBack) => {
     return `
       <form id="fp-code-form" class="login-form" autocomplete="off" novalidate>
         <h2 class="login-form-heading">Ingresa el código</h2>
-        <p class="login-form-desc">Revisa <strong>${emailValue}</strong> y escribe el código de 6 dígitos junto con tu nueva contraseña.</p>
+        <p class="login-form-desc">Revisa <strong>${emailValue}</strong> y escribe el código que te enviamos junto con tu nueva contraseña.</p>
 
         <div id="fp-alert" class="login-alert" style="display:none;"></div>
 
@@ -95,7 +95,7 @@ export const renderForgotPassword = (onDone, onBack) => {
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" id="fp-code" class="login-input" placeholder="123456" autocomplete="one-time-code" style="letter-spacing:.3em;font-weight:700;" required />
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" id="fp-code" class="login-input" placeholder="Código recibido por correo" autocomplete="one-time-code" style="letter-spacing:.2em;font-weight:700;" required />
           </div>
         </div>
 
@@ -188,7 +188,7 @@ export const renderForgotPassword = (onDone, onBack) => {
         const nueva = document.getElementById('fp-new-pass').value;
         const confirmar = document.getElementById('fp-confirm-pass').value;
 
-        if (!/^\d{6}$/.test(code)) { showAlert('El código debe tener 6 dígitos.', 'error'); return; }
+        if (!/^\d{4,10}$/.test(code)) { showAlert('El código debe ser numérico.', 'error'); return; }
         if (!nueva || nueva.length < 6) { showAlert('La contraseña debe tener al menos 6 caracteres.', 'error'); return; }
         if (nueva !== confirmar) { showAlert('Las contraseñas no coinciden.', 'error'); return; }
 
