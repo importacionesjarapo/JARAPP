@@ -249,7 +249,12 @@ export const renderLayout = (contentHTML) => {
     <div id="sidebar-overlay"></div>
 
     <main class="main-content">
-      ${auth.isReadOnlyMode() ? bannerSoloLectura(auth.getEmpresaSync()) : ''}
+      ${auth.isReadOnlyMode() ? bannerSoloLectura(auth.getEmpresaSync()) : (() => {
+          const empresa = auth.getEmpresaSync();
+          const dias = diasHastaVencimiento(empresa);
+          const avisar = auth.isAdmin() && empresa?.estado_suscripcion === 'trial' && dias !== null && dias >= 0 && dias <= 5;
+          return avisar ? bannerProximoAVencer(empresa, dias) : '';
+        })()}
       <header class="header">
         <div style="display:flex; align-items:center; justify-content:space-between; width:100%;">
           <div class="welcome-msg">
@@ -866,6 +871,31 @@ function renderSuscripcionVencida(empresa, motivo) {
         💬 Reactivar por WhatsApp
       </a>
       <button class="btn-secondary" onclick="window.location.reload()">Ya renové — Recargar</button>
+    </div>
+  `;
+}
+
+/** Días calendario hasta fecha_vencimiento (negativo si ya pasó). null si la empresa no tiene esa fecha. */
+function diasHastaVencimiento(empresa) {
+  if (!empresa?.fecha_vencimiento) return null;
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const vencimiento = new Date(empresa.fecha_vencimiento + 'T00:00:00');
+  return Math.round((vencimiento - hoy) / 86400000);
+}
+
+/** Banner de aviso (#13) cuando faltan 5 días o menos para que venza el
+ * trial — antes de que evaluarAccesoSuscripcion() la bloquee o la pase a
+ * solo-lectura. Solo para admin: es quien puede contratar un plan. */
+function bannerProximoAVencer(empresa, dias) {
+  const numeroWhatsapp = import.meta.env?.VITE_WHATSAPP_COMERCIAL || '573207761097';
+  const mensaje = encodeURIComponent(`Hola, mi prueba gratis de EncargosPro (${empresa?.nombre || ''}) vence ${dias <= 0 ? 'hoy' : `en ${dias} día(s)`}. Quiero contratar un plan.`);
+  const texto = dias <= 0 ? 'Tu prueba gratis vence hoy' : `Tu prueba gratis vence en ${dias} día${dias === 1 ? '' : 's'}`;
+  return `
+    <div id="banner-proximo-vencer" style="background:#7A4B08; color:#fff; padding:10px 20px; display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; font-size:0.82rem; text-align:center;">
+      <span>⏳ ${texto} — contrata un plan para no perder acceso.</span>
+      <a href="https://wa.me/${numeroWhatsapp}?text=${mensaje}" target="_blank" rel="noopener" style="background:#20BD5C; color:#fff; padding:5px 14px; border-radius:8px; font-weight:700; text-decoration:none; white-space:nowrap;">
+        💬 Contratar ahora
+      </a>
     </div>
   `;
 }
