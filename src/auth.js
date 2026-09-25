@@ -292,6 +292,10 @@ class Auth {
    */
   getEmpresaNombre() { return this._empresa?.nombre || 'EncargosPro'; }
 
+  /** Slug de la empresa actual (requiere getEmpresa()/getEmpresaSync() ya cargado) —
+   * se usa para armar el link del portal de seguimiento del cliente. */
+  getEmpresaSlug() { return this._empresa?.slug || ''; }
+
   /**
    * Fila de "Planes" (catálogo de suscripciones) correspondiente al plan
    * contratado por la empresa actual. null para superadmin, para una
