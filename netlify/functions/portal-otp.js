@@ -10,14 +10,14 @@ function generarOTP() {
   return String(crypto.randomInt(100000, 999999))
 }
 
-async function enviarOTPWhatsApp({ telefono, otp }) {
+async function enviarOTPWhatsApp({ telefono, otp, nombreEmpresa }) {
   const subdomain = process.env.KOMMO_SUBDOMAIN
   const accessToken = process.env.KOMMO_ACCESS_TOKEN
   if (!subdomain || !accessToken) {
     console.log(`[DEV] OTP para ${telefono}: ${otp}`)
     return { ok: true, dev: true }
   }
-  const mensaje = `Tu código de verificación para el portal de *Importaciones Jarapo* es:\n\n*${otp}*\n\nVálido por 10 minutos. No lo compartas.`
+  const mensaje = `Tu código de verificación para el portal de *${nombreEmpresa || 'EncargosPro'}* es:\n\n*${otp}*\n\nVálido por 10 minutos. No lo compartas.`
   const telefonoCompleto = `57${telefono}`
   try {
     // Paso 1: Buscar el contacto en Kommo por teléfono
@@ -69,6 +69,29 @@ async function enviarOTPWhatsApp({ telefono, otp }) {
   }
 }
 
+/** Resuelve la empresa dueña del portal a partir del slug que va en la URL
+ * (/portal/<slug>?t=...). Sin esto, las búsquedas de cliente por teléfono
+ * corrían sin acotar por empresa — dos tenants distintos con un cliente que
+ * comparte el mismo número de WhatsApp podían mezclarse en el login. */
+async function resolverEmpresaPorSlug(slug) {
+  if (!slug) return null
+  const { data } = await supabase
+    .from('Empresas').select('id, nombre').eq('slug', slug).maybeSingle()
+  return data || null
+}
+
+/** El logo que sube cada empresa en Parámetros vive en Configuracion (clave
+ * GLOBAL_LOGO), no en Empresas.logo_url — ese campo no se usa en el resto de
+ * la app (ver ConfigService.getLogo() en src/services/config.js), así que
+ * leerlo ahí dejaría el portal siempre con el logo genérico. */
+async function obtenerLogoEmpresa(empresaId) {
+  if (!empresaId) return null
+  const { data } = await supabase
+    .from('Configuracion').select('valor')
+    .eq('clave', 'GLOBAL_LOGO').eq('empresa_id', empresaId).maybeSingle()
+  return data?.valor || null
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -81,11 +104,21 @@ export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' }
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers: CORS, body: 'Method not allowed' }
 
-  const { accion, telefono, otp, token_portal } = JSON.parse(event.body || '{}')
+  const { accion, telefono, otp, token_portal, empresa_slug } = JSON.parse(event.body || '{}')
+
+  // ── DATOS PÚBLICOS DE LA EMPRESA (marca del portal antes de loguearse) ──
+  if (accion === 'empresa_por_slug') {
+    const empresa = await resolverEmpresaPorSlug(empresa_slug)
+    if (!empresa) return res(404, { error: 'Empresa no encontrada' })
+    const logo_url = await obtenerLogoEmpresa(empresa.id)
+    return res(200, { ok: true, nombre: empresa.nombre, logo_url })
+  }
 
   // ── SOLICITAR OTP ──
   if (accion === 'solicitar') {
     if (!telefono) return res(400, { error: 'telefono requerido' })
+
+    const empresa = await resolverEmpresaPorSlug(empresa_slug)
 
     const { count } = await supabase
       .from('portal_otps').select('*', { count: 'exact', head: true })
@@ -94,20 +127,25 @@ export const handler = async (event) => {
 
     if (count >= 3) return res(429, { error: 'Demasiados intentos. Espera 10 minutos.' })
 
-    const { data: byWA, error: errWA } = await supabase
-      .from('Clientes').select('id').ilike('whatsapp', `%${telefono}%`).limit(1)
+    // Acota por empresa cuando se conoce (siempre que el link venga del portal
+    // con /portal/<slug>) para no mezclar clientes de tenants distintos que
+    // comparten el mismo número de WhatsApp.
+    let queryWA = supabase.from('Clientes').select('id').ilike('whatsapp', `%${telefono}%`)
+    if (empresa) queryWA = queryWA.eq('empresa_id', empresa.id)
+    const { data: byWA, error: errWA } = await queryWA.limit(1)
     if (errWA) return res(500, { error: 'DB whatsapp: ' + errWA.message })
 
     let cliente = byWA?.[0] || null
 
     if (!cliente) {
-      const { data: byTel, error: errTel } = await supabase
-        .from('Clientes').select('id').eq('telefono', telefono).maybeSingle()
+      let queryTel = supabase.from('Clientes').select('id').eq('telefono', telefono)
+      if (empresa) queryTel = queryTel.eq('empresa_id', empresa.id)
+      const { data: byTel, error: errTel } = await queryTel.maybeSingle()
       if (errTel) return res(500, { error: 'DB telefono: ' + errTel.message })
       cliente = byTel || null
     }
 
-    if (!cliente) return res(404, { error: 'Número no registrado. Contacta a Importaciones Jarapo.' })
+    if (!cliente) return res(404, { error: `Número no registrado${empresa ? ' en ' + empresa.nombre : ''}. Contacta a tu asesor.` })
 
     const codigo = generarOTP()
     const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString()
@@ -119,7 +157,7 @@ export const handler = async (event) => {
       return res(500, { error: 'Error generando código: ' + insertErr.message })
     }
     console.log('[OTP] Insert exitoso para', telefono)
-    await enviarOTPWhatsApp({ telefono, otp: codigo })
+    await enviarOTPWhatsApp({ telefono, otp: codigo, nombreEmpresa: empresa?.nombre })
 
     return res(200, { ok: true, mensaje: 'Código enviado por WhatsApp' })
   }
@@ -149,10 +187,11 @@ export const handler = async (event) => {
 
     await supabase.from('portal_otps').update({ used: true }).eq('id', registro.id)
 
-    const { data: clientes2 } = await supabase
-      .from('Clientes').select('id, nombre, portal_token')
+    const empresa = await resolverEmpresaPorSlug(empresa_slug)
+    let queryCliente = supabase.from('Clientes').select('id, nombre, portal_token')
       .or(`whatsapp.ilike.%${telefono}%,telefono.ilike.%${telefono}%`)
-      .limit(1)
+    if (empresa) queryCliente = queryCliente.eq('empresa_id', empresa.id)
+    const { data: clientes2 } = await queryCliente.limit(1)
     const cliente = clientes2?.[0] || null
     if (!cliente) return res(400, { error: 'Cliente no encontrado' })
 
@@ -165,7 +204,7 @@ export const handler = async (event) => {
 
     await supabase.from('portal_tokens').update({ last_used_at: new Date().toISOString() }).eq('token', portalToken)
 
-    return res(200, { ok: true, token: portalToken, nombre: cliente.nombre, redirect: `/portal?t=${portalToken}` })
+    return res(200, { ok: true, token: portalToken, nombre: cliente.nombre, redirect: `/portal/${empresa_slug || ''}?t=${portalToken}` })
   }
 
   // ── VALIDAR TOKEN ──
@@ -201,9 +240,17 @@ export const handler = async (event) => {
     }
 
     const { data: cliente } = await supabase
-      .from('Clientes').select('id, nombre, whatsapp').eq('id', clienteId).single()
+      .from('Clientes').select('id, nombre, whatsapp, empresa_id').eq('id', clienteId).single()
+    if (!cliente) return res(401, { error: 'Cliente no encontrado' })
 
-    return res(200, { ok: true, cliente })
+    const { data: empresa } = await supabase
+      .from('Empresas').select('nombre').eq('id', cliente.empresa_id).maybeSingle()
+    const empresa_logo_url = await obtenerLogoEmpresa(cliente.empresa_id)
+
+    return res(200, {
+      ok: true,
+      cliente: { ...cliente, empresa_nombre: empresa?.nombre, empresa_logo_url },
+    })
   }
 
   return res(400, { error: 'Acción no reconocida' })

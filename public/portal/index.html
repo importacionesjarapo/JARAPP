@@ -436,7 +436,7 @@
   <span class="hero-avion" style="bottom:5px;left:10px;transform:rotate(-10deg);font-size:55px">✈</span>
   <span class="hero-avion" style="bottom:-5px;right:20px;transform:rotate(20deg);font-size:90px">✈</span>
   <div class="hero-logo-wrap">
-    <img src="/logo.png" alt="EncargosPro" class="hero-logo-img">
+    <img src="/logo.png" alt="EncargosPro" class="hero-logo-img" id="hero-logo-img">
   </div>
   <div class="hero-sub" id="hero-sub">Seguimiento de tu pedido</div>
   <div class="hero-tel" id="hero-tel"></div>
@@ -512,7 +512,28 @@ const SUPABASE_URL  = 'https://vygfsqdveudpzytnnhiq.supabase.co'
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTk2NjMsImV4cCI6MjA5MDYzNTY2M30.ZfkBk625C6X1Hgs51MRIB5TbRLYoztD1YS-QESL2x9M'
 const IS_DEV = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
 const API = IS_DEV ? 'http://localhost:9999/.netlify/functions' : '/.netlify/functions'
+// URL: /portal/<slug-empresa>?t=<codigo-cliente> — el slug identifica de qué
+// negocio es este portal (marca + acota el login por teléfono a esa empresa
+// en portal-otp.js). Un visitante que llegue a /portal a secas (sin slug)
+// sigue funcionando igual que antes, sin marca personalizada.
+const EMPRESA_SLUG = location.pathname.split('/').filter(Boolean)[1] || ''
 const est = { token: null, tel: null, cliente: null }
+
+function aplicarMarcaEmpresa({ nombre, logo_url }) {
+  if (logo_url) $('hero-logo-img').src = logo_url
+  if (nombre) {
+    $('hero-sub').textContent = `Seguimiento de tu pedido — ${nombre}`
+    document.title = `Mi Pedido — ${nombre}`
+  }
+}
+
+async function cargarMarcaEmpresa() {
+  if (!EMPRESA_SLUG) return
+  try {
+    const r = await api('portal-otp', { accion: 'empresa_por_slug', empresa_slug: EMPRESA_SLUG })
+    if (r.ok) aplicarMarcaEmpresa(r)
+  } catch (e) { console.warn('[PORTAL] No se pudo cargar la marca de la empresa:', e.message) }
+}
 
 const $ = id => document.getElementById(id)
 const show = id => $(id).classList.remove('hidden')
@@ -580,7 +601,7 @@ $('btn-enviar').addEventListener('click', async () => {
   $('btn-enviar').textContent = 'Enviando...'
   $('err-tel').style.display = 'none'
   try {
-    await api('portal-otp',{accion:'solicitar',telefono:tel})
+    await api('portal-otp',{accion:'solicitar',telefono:tel,empresa_slug:EMPRESA_SLUG})
     est.tel = tel
     $('otp-numero').textContent = `+57 ${tel}`
     pantalla('pantalla-otp')
@@ -606,7 +627,7 @@ document.querySelectorAll('.otp-digit').forEach((inp,i,all)=>{
 $('btn-verificar').addEventListener('click', verificar)
 $('btn-reenviar').addEventListener('click', async ()=>{
   $('btn-reenviar').disabled = true
-  try { await api('portal-otp',{accion:'solicitar',telefono:est.tel}); countdown() }
+  try { await api('portal-otp',{accion:'solicitar',telefono:est.tel,empresa_slug:EMPRESA_SLUG}); countdown() }
   catch(e){ mostrarErr('err-otp',e.message) }
   finally { setTimeout(()=>{ $('btn-reenviar').disabled=false },5000) }
 })
@@ -617,7 +638,7 @@ async function verificar() {
   $('btn-verificar').disabled = true
   $('btn-verificar').textContent = 'Verificando...'
   try {
-    const r = await api('portal-otp',{accion:'verificar',telefono:est.tel,otp})
+    const r = await api('portal-otp',{accion:'verificar',telefono:est.tel,otp,empresa_slug:EMPRESA_SLUG})
     est.token = r.token
     est.cliente = {nombre: r.nombre}
     localStorage.setItem('jp_token', r.token)
@@ -644,9 +665,13 @@ function countdown() {
 // PORTAL
 async function abrirPortal() {
   pantalla('pantalla-portal')
+  // Si llegamos por un link viejo sin slug en la URL, la marca de la empresa
+  // solo se conoce hasta ahora (viene en la respuesta de validar_token/verificar).
+  if (est.cliente?.empresa_nombre || est.cliente?.empresa_logo_url) {
+    aplicarMarcaEmpresa({ nombre: est.cliente.empresa_nombre, logo_url: est.cliente.empresa_logo_url })
+  }
   const nombre = est.cliente?.nombre || ''
   $('saludo-nombre').textContent = `Hola, ${nombre.split(' ')[0]} 👋`
-  $('hero-sub').textContent = `Bienvenido, ${nombre.split(' ')[0]}`
   if(est.tel){ $('hero-tel').textContent = `+57 ${est.tel}`; $('hero-tel').style.display='block' }
   show('portal-loading'); hide('portal-contenido')
   try {
@@ -864,6 +889,7 @@ function mostrarErr(id, msg) { const el=$(id); el.textContent=msg; el.style.disp
 
 // INIT
 async function init() {
+  cargarMarcaEmpresa() // no bloqueante: pinta la marca mientras se resuelve la sesión
   const params = new URLSearchParams(window.location.search)
   const tokenURL = params.get('t')
   const tokenGuardado = localStorage.getItem('jp_token')

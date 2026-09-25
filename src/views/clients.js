@@ -682,9 +682,18 @@ export const renderClients = async (renderLayout, navigateTo) => {
 
 // ── Portal Cliente ─────────────────────────────────────────────────────────────
 // Dominio del portal público — configurable vía VITE_APP_URL (Netlify → Site
-// settings → Environment variables) para cuando se apunte a un dominio propio;
-// el de acá queda solo como fallback del deploy actual.
-const APP_URL = import.meta.env?.VITE_APP_URL || 'https://importacionesjarapo-jarapp.netlify.app'
+// settings → Environment variables); el de acá queda solo como fallback.
+const APP_URL = import.meta.env?.VITE_APP_URL || 'https://app.encargospro.com'
+
+// El link incluye el slug de la empresa (además del código propio del cliente)
+// para que: 1) la URL identifique de un vistazo a qué negocio pertenece, y
+// 2) el backend (portal-otp.js) pueda acotar la búsqueda del cliente por
+// teléfono a ESTA empresa — sin esto, dos empresas distintas con un cliente
+// que comparte el mismo número de WhatsApp podían mezclarse en el login.
+function buildPortalUrl(token) {
+  const slug = auth.getEmpresaSlug()
+  return `${APP_URL}/portal/${slug}?t=${token}`
+}
 
 function generarCodigoPortal() {
   const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
@@ -705,7 +714,7 @@ window.generarPortalCliente = async function(clienteId) {
 }
 
 window.copiarLinkPortal = function(clienteId, token, nombre) {
-  const url = `${APP_URL}/portal?t=${token}`
+  const url = buildPortalUrl(token)
   navigator.clipboard.writeText(url).then(() => {
     const btns = document.querySelectorAll(`button[onclick*="copiarLinkPortal('${clienteId}'"]`)
     btns.forEach(btn => {
@@ -717,7 +726,7 @@ window.copiarLinkPortal = function(clienteId, token, nombre) {
 }
 
 window.enviarPortalWhatsApp = function(clienteId, token, nombre, whatsapp) {
-  const url = `${APP_URL}/portal?t=${token}`
+  const url = buildPortalUrl(token)
   const primerNombre = nombre.split(' ')[0]
   const nombreEmpresa = auth.getEmpresaNombre();
   const mensaje = `Hola ${primerNombre} 👋\n\nTe compartimos tu link de seguimiento en *${nombreEmpresa}*:\n\n🔗 ${url}\n\nDesde aquí puedes consultar:\n📦 Todos tus pedidos activos y su estado actual\n✅ Historial de pedidos entregados\n❌ Pedidos cancelados (si aplica)\n\n¡Guarda este link, es tuyo y siempre podrás consultarlo! 🛍️\n\n_${nombreEmpresa} — 100% original, directo de USA_ ✈️`
