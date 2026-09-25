@@ -125,6 +125,9 @@ export const renderParams = async (renderLayout, navigateTo) => {
     const globalLogoParam = list.find(p => p.clave === 'GLOBAL_LOGO');
     const logoImgSrc = globalLogoParam ? globalLogoParam.valor : '';
 
+    const whatsappSoporteParam = list.find(p => p.clave === 'PORTAL_WHATSAPP_SOPORTE');
+    const whatsappSoporteValor = whatsappSoporteParam ? whatsappSoporteParam.valor : '';
+
     const html = `
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem;">
         <div><h2>Parametrización del Sistema</h2><p style="opacity:0.5;">Administra variables desplegables, metas del Dashboard y configuración global.</p></div>
@@ -141,6 +144,21 @@ export const renderParams = async (renderLayout, navigateTo) => {
           </div>
           <div>
              ${canEdit ? `<button id="btn-save-logo" class="btn-primary">Guardar Logo</button>` : ''}
+          </div>
+      </div>
+
+      <!-- WhatsApp de Soporte (Portal de Clientes) -->
+      <div class="glass-card" style="margin-bottom:2rem; display:flex; gap:20px; align-items:center;">
+          <div style="width:80px; height:80px; border-radius:16px; background:var(--glass-hover); display:flex; justify-content:center; align-items:center; flex-shrink:0; font-size:2rem;">
+             💬
+          </div>
+          <div style="flex:1;">
+             <h3 style="margin-top:0;">WhatsApp de Soporte (Portal de Clientes)</h3>
+             <p style="opacity:0.6; font-size:0.8rem; margin-bottom:10px;">Número que verán tus clientes para escribirte desde su página de seguimiento de pedidos. Solo números, sin +57. Déjalo vacío para ocultar el botón.</p>
+             <input type="tel" id="whatsapp-soporte-input" placeholder="Ej: 3001234567" value="${whatsappSoporteValor}" style="padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.9rem; font-family:inherit; width:220px;">
+          </div>
+          <div>
+             ${canEdit ? `<button id="btn-save-whatsapp-soporte" class="btn-primary">Guardar</button>` : ''}
           </div>
       </div>
 
@@ -277,6 +295,29 @@ export const renderParams = async (renderLayout, navigateTo) => {
                     showToast(e.message, 'error');
                     btnUpload.innerText = "Reintentar";
                     btnUpload.disabled = false;
+                }
+            };
+        }
+
+        // WhatsApp de Soporte (Portal de Clientes)
+        const btnWhatsappSoporte = document.getElementById('btn-save-whatsapp-soporte');
+        if (btnWhatsappSoporte) {
+            btnWhatsappSoporte.onclick = async () => {
+                const input = document.getElementById('whatsapp-soporte-input');
+                const valor = (input?.value || '').trim().replace(/\D/g, '');
+                btnWhatsappSoporte.disabled = true;
+                btnWhatsappSoporte.textContent = 'Guardando...';
+                try {
+                    const payload = { id: whatsappSoporteParam ? whatsappSoporteParam.id : Date.now().toString(), clave: 'PORTAL_WHATSAPP_SOPORTE', valor };
+                    const action = whatsappSoporteParam ? 'UPDATE' : 'INSERT';
+                    if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
+                    await db.postData('Configuracion', payload, action);
+                    showToast('✅ WhatsApp de soporte actualizado', 'success');
+                    setTimeout(() => navigateTo('params'), 800);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    btnWhatsappSoporte.disabled = false;
+                    btnWhatsappSoporte.textContent = 'Guardar';
                 }
             };
         }

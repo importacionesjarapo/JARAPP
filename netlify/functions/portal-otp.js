@@ -92,6 +92,17 @@ async function obtenerLogoEmpresa(empresaId) {
   return data?.valor || null
 }
 
+/** Número de WhatsApp de soporte que cada empresa configura en Parámetros
+ * (clave PORTAL_WHATSAPP_SOPORTE) para el botón de contacto del portal de
+ * clientes. Sin configurar, el botón simplemente no se muestra. */
+async function obtenerWhatsappSoporte(empresaId) {
+  if (!empresaId) return null
+  const { data } = await supabase
+    .from('Configuracion').select('valor')
+    .eq('clave', 'PORTAL_WHATSAPP_SOPORTE').eq('empresa_id', empresaId).maybeSingle()
+  return data?.valor || null
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -110,8 +121,11 @@ export const handler = async (event) => {
   if (accion === 'empresa_por_slug') {
     const empresa = await resolverEmpresaPorSlug(empresa_slug)
     if (!empresa) return res(404, { error: 'Empresa no encontrada' })
-    const logo_url = await obtenerLogoEmpresa(empresa.id)
-    return res(200, { ok: true, nombre: empresa.nombre, logo_url })
+    const [logo_url, whatsapp_soporte] = await Promise.all([
+      obtenerLogoEmpresa(empresa.id),
+      obtenerWhatsappSoporte(empresa.id),
+    ])
+    return res(200, { ok: true, nombre: empresa.nombre, logo_url, whatsapp_soporte })
   }
 
   // ── SOLICITAR OTP ──
@@ -245,11 +259,14 @@ export const handler = async (event) => {
 
     const { data: empresa } = await supabase
       .from('Empresas').select('nombre').eq('id', cliente.empresa_id).maybeSingle()
-    const empresa_logo_url = await obtenerLogoEmpresa(cliente.empresa_id)
+    const [empresa_logo_url, empresa_whatsapp_soporte] = await Promise.all([
+      obtenerLogoEmpresa(cliente.empresa_id),
+      obtenerWhatsappSoporte(cliente.empresa_id),
+    ])
 
     return res(200, {
       ok: true,
-      cliente: { ...cliente, empresa_nombre: empresa?.nombre, empresa_logo_url },
+      cliente: { ...cliente, empresa_nombre: empresa?.nombre, empresa_logo_url, empresa_whatsapp_soporte },
     })
   }
 

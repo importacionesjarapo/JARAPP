@@ -425,6 +425,24 @@
     .detalle-img { width: 80px; height: 80px; border-radius: 14px; object-fit: cover; border: 1px solid var(--borde); flex-shrink: 0; }
     .detalle-nombre { font-size: 17px; font-weight: 800; color: var(--txt); }
     .detalle-meta { font-size: 13px; color: var(--txt2); margin-top: 4px; }
+
+    /* ── NUEVO HOY ── */
+    .badge-nuevo {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--rojo-claro); color: var(--rojo-s);
+      font-size: 10px; font-weight: 800; padding: 3px 9px;
+      border-radius: 20px; margin-left: 6px; letter-spacing: 0.2px;
+    }
+
+    /* ── BOTÓN WHATSAPP SOPORTE ── */
+    .btn-whatsapp-flotante {
+      position: fixed; right: 18px; bottom: 18px; z-index: 50;
+      width: 56px; height: 56px; border-radius: 50%;
+      background: #25D366; color: white; display: flex;
+      align-items: center; justify-content: center; font-size: 28px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25); text-decoration: none;
+    }
+    .btn-whatsapp-flotante:active { transform: scale(0.94); }
   </style>
 </head>
 <body>
@@ -507,6 +525,8 @@
 
 </div>
 
+<a href="#" id="btn-whatsapp-soporte" class="btn-whatsapp-flotante hidden" target="_blank" rel="noopener" title="Escríbenos por WhatsApp">💬</a>
+
 <script>
 const SUPABASE_URL  = 'https://vygfsqdveudpzytnnhiq.supabase.co'
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTk2NjMsImV4cCI6MjA5MDYzNTY2M30.ZfkBk625C6X1Hgs51MRIB5TbRLYoztD1YS-QESL2x9M'
@@ -517,14 +537,41 @@ const API = IS_DEV ? 'http://localhost:9999/.netlify/functions' : '/.netlify/fun
 // en portal-otp.js). Un visitante que llegue a /portal a secas (sin slug)
 // sigue funcionando igual que antes, sin marca personalizada.
 const EMPRESA_SLUG = location.pathname.split('/').filter(Boolean)[1] || ''
+const DIAS_PROMESA_ENTREGA = 20
 const est = { token: null, tel: null, cliente: null }
 
-function aplicarMarcaEmpresa({ nombre, logo_url }) {
+function aplicarMarcaEmpresa({ nombre, logo_url, whatsapp_soporte }) {
   if (logo_url) $('hero-logo-img').src = logo_url
   if (nombre) {
     $('hero-sub').textContent = `Seguimiento de tu pedido — ${nombre}`
     document.title = `Mi Pedido — ${nombre}`
   }
+  if (whatsapp_soporte) {
+    const numero = String(whatsapp_soporte).replace(/\D/g, '')
+    const btn = $('btn-whatsapp-soporte')
+    btn.href = `https://wa.me/57${numero}?text=${encodeURIComponent('Hola, quisiera consultar sobre mi pedido')}`
+    btn.classList.remove('hidden')
+  }
+}
+
+// Calcula una fecha sumando días hábiles (excluye sáb/dom) — usada para
+// mostrar la fecha estimada de entrega según la promesa de 20 días hábiles.
+function sumarDiasHabiles(fechaInicio, dias) {
+  const f = new Date(fechaInicio)
+  let restantes = dias
+  while (restantes > 0) {
+    f.setDate(f.getDate() + 1)
+    const dow = f.getDay()
+    if (dow !== 0 && dow !== 6) restantes--
+  }
+  return f
+}
+
+function esHoy(fechaStr) {
+  if (!fechaStr) return false
+  const d = new Date(fechaStr)
+  const hoy = new Date()
+  return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate()
 }
 
 async function cargarMarcaEmpresa() {
@@ -667,8 +714,8 @@ async function abrirPortal() {
   pantalla('pantalla-portal')
   // Si llegamos por un link viejo sin slug en la URL, la marca de la empresa
   // solo se conoce hasta ahora (viene en la respuesta de validar_token/verificar).
-  if (est.cliente?.empresa_nombre || est.cliente?.empresa_logo_url) {
-    aplicarMarcaEmpresa({ nombre: est.cliente.empresa_nombre, logo_url: est.cliente.empresa_logo_url })
+  if (est.cliente?.empresa_nombre || est.cliente?.empresa_logo_url || est.cliente?.empresa_whatsapp_soporte) {
+    aplicarMarcaEmpresa({ nombre: est.cliente.empresa_nombre, logo_url: est.cliente.empresa_logo_url, whatsapp_soporte: est.cliente.empresa_whatsapp_soporte })
   }
   const nombre = est.cliente?.nombre || ''
   $('saludo-nombre').textContent = `Hola, ${nombre.split(' ')[0]} 👋`
@@ -814,6 +861,7 @@ function renderLista() {
         <div class="pedido-mini-estado" style="color:${estado.color}">
           <span style="width:7px;height:7px;border-radius:50%;background:${estado.color};display:inline-block"></span>
           ${estado.txt}
+          ${esHoy(v.fecha_actualizacion) ? `<span class="badge-nuevo">🆕 Hoy</span>` : ''}
         </div>
       </div>
       <div class="pedido-mini-arrow">›</div>
@@ -846,7 +894,12 @@ function verDetalle(idx) {
       <div class="pedido-estado-wrap">
         <div class="pedido-estado-dot" style="background:${estado.color}"></div>
         <div class="pedido-estado-txt" style="color:${estado.color}">${estado.txt}</div>
+        ${esHoy(v.fecha_actualizacion) ? `<span class="badge-nuevo">🆕 Actualizado hoy</span>` : ''}
       </div>
+      ${tabDeEstado(v) === 'encurso' && v.fecha_venta ? `
+      <div class="fecha-chip">
+        📅 Entrega estimada: ${fecha(sumarDiasHabiles(v.fecha_venta, DIAS_PROMESA_ENTREGA))}
+      </div>` : ''}
       <div class="pedido-timeline-wrap" style="margin-top:14px">
         <div class="tl-mini">${renderTimeline(v.track, estado.num)}</div>
       </div>
