@@ -103,6 +103,20 @@ async function obtenerWhatsappSoporte(empresaId) {
   return data?.valor || null
 }
 
+const DIAS_PROMESA_ENTREGA_DEFAULT = 20
+
+/** Días hábiles de promesa de entrega que cada empresa configura en
+ * Parámetros (clave DIAS_PROMESA_ENTREGA) — cada negocio que usa el
+ * software puede tener un plazo distinto. Sin configurar, se usa 20. */
+async function obtenerDiasPromesaEntrega(empresaId) {
+  if (!empresaId) return DIAS_PROMESA_ENTREGA_DEFAULT
+  const { data } = await supabase
+    .from('Configuracion').select('valor')
+    .eq('clave', 'DIAS_PROMESA_ENTREGA').eq('empresa_id', empresaId).maybeSingle()
+  const dias = parseInt(data?.valor, 10)
+  return Number.isFinite(dias) && dias > 0 ? dias : DIAS_PROMESA_ENTREGA_DEFAULT
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -121,11 +135,12 @@ export const handler = async (event) => {
   if (accion === 'empresa_por_slug') {
     const empresa = await resolverEmpresaPorSlug(empresa_slug)
     if (!empresa) return res(404, { error: 'Empresa no encontrada' })
-    const [logo_url, whatsapp_soporte] = await Promise.all([
+    const [logo_url, whatsapp_soporte, dias_promesa_entrega] = await Promise.all([
       obtenerLogoEmpresa(empresa.id),
       obtenerWhatsappSoporte(empresa.id),
+      obtenerDiasPromesaEntrega(empresa.id),
     ])
-    return res(200, { ok: true, nombre: empresa.nombre, logo_url, whatsapp_soporte })
+    return res(200, { ok: true, nombre: empresa.nombre, logo_url, whatsapp_soporte, dias_promesa_entrega })
   }
 
   // ── SOLICITAR OTP ──
@@ -259,14 +274,15 @@ export const handler = async (event) => {
 
     const { data: empresa } = await supabase
       .from('Empresas').select('nombre').eq('id', cliente.empresa_id).maybeSingle()
-    const [empresa_logo_url, empresa_whatsapp_soporte] = await Promise.all([
+    const [empresa_logo_url, empresa_whatsapp_soporte, empresa_dias_promesa_entrega] = await Promise.all([
       obtenerLogoEmpresa(cliente.empresa_id),
       obtenerWhatsappSoporte(cliente.empresa_id),
+      obtenerDiasPromesaEntrega(cliente.empresa_id),
     ])
 
     return res(200, {
       ok: true,
-      cliente: { ...cliente, empresa_nombre: empresa?.nombre, empresa_logo_url, empresa_whatsapp_soporte },
+      cliente: { ...cliente, empresa_nombre: empresa?.nombre, empresa_logo_url, empresa_whatsapp_soporte, empresa_dias_promesa_entrega },
     })
   }
 

@@ -128,6 +128,9 @@ export const renderParams = async (renderLayout, navigateTo) => {
     const whatsappSoporteParam = list.find(p => p.clave === 'PORTAL_WHATSAPP_SOPORTE');
     const whatsappSoporteValor = whatsappSoporteParam ? whatsappSoporteParam.valor : '';
 
+    const diasPromesaParam = list.find(p => p.clave === 'DIAS_PROMESA_ENTREGA');
+    const diasPromesaValor = diasPromesaParam ? diasPromesaParam.valor : '20';
+
     const html = `
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem;">
         <div><h2>Parametrización del Sistema</h2><p style="opacity:0.5;">Administra variables desplegables, metas del Dashboard y configuración global.</p></div>
@@ -159,6 +162,21 @@ export const renderParams = async (renderLayout, navigateTo) => {
           </div>
           <div>
              ${canEdit ? `<button id="btn-save-whatsapp-soporte" class="btn-primary">Guardar</button>` : ''}
+          </div>
+      </div>
+
+      <!-- Días de Promesa de Entrega (Portal de Clientes) -->
+      <div class="glass-card" style="margin-bottom:2rem; display:flex; gap:20px; align-items:center;">
+          <div style="width:80px; height:80px; border-radius:16px; background:var(--glass-hover); display:flex; justify-content:center; align-items:center; flex-shrink:0; font-size:2rem;">
+             📅
+          </div>
+          <div style="flex:1;">
+             <h3 style="margin-top:0;">Días de Promesa de Entrega (Portal de Clientes)</h3>
+             <p style="opacity:0.6; font-size:0.8rem; margin-bottom:10px;">Días hábiles (sin contar sábados ni domingos) que se muestran como fecha estimada de entrega en el portal de seguimiento de tus clientes, contados desde la fecha de venta.</p>
+             <input type="number" id="dias-promesa-input" min="1" step="1" placeholder="Ej: 20" value="${diasPromesaValor}" style="padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.9rem; font-family:inherit; width:120px;">
+          </div>
+          <div>
+             ${canEdit ? `<button id="btn-save-dias-promesa" class="btn-primary">Guardar</button>` : ''}
           </div>
       </div>
 
@@ -318,6 +336,33 @@ export const renderParams = async (renderLayout, navigateTo) => {
                     showToast(e.message, 'error');
                     btnWhatsappSoporte.disabled = false;
                     btnWhatsappSoporte.textContent = 'Guardar';
+                }
+            };
+        }
+
+        // Días de Promesa de Entrega (Portal de Clientes)
+        const btnDiasPromesa = document.getElementById('btn-save-dias-promesa');
+        if (btnDiasPromesa) {
+            btnDiasPromesa.onclick = async () => {
+                const input = document.getElementById('dias-promesa-input');
+                const valor = parseInt(input?.value, 10);
+                if (!valor || valor < 1) {
+                    showToast('Ingresa un número de días mayor a 0.', 'error');
+                    return;
+                }
+                btnDiasPromesa.disabled = true;
+                btnDiasPromesa.textContent = 'Guardando...';
+                try {
+                    const payload = { id: diasPromesaParam ? diasPromesaParam.id : Date.now().toString(), clave: 'DIAS_PROMESA_ENTREGA', valor: String(valor) };
+                    const action = diasPromesaParam ? 'UPDATE' : 'INSERT';
+                    if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
+                    await db.postData('Configuracion', payload, action);
+                    showToast('✅ Días de promesa de entrega actualizados', 'success');
+                    setTimeout(() => navigateTo('params'), 800);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    btnDiasPromesa.disabled = false;
+                    btnDiasPromesa.textContent = 'Guardar';
                 }
             };
         }

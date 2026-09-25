@@ -537,10 +537,13 @@ const API = IS_DEV ? 'http://localhost:9999/.netlify/functions' : '/.netlify/fun
 // en portal-otp.js). Un visitante que llegue a /portal a secas (sin slug)
 // sigue funcionando igual que antes, sin marca personalizada.
 const EMPRESA_SLUG = location.pathname.split('/').filter(Boolean)[1] || ''
-const DIAS_PROMESA_ENTREGA = 20
+// Días hábiles de promesa de entrega — cada empresa lo configura en
+// Parámetros (Configuracion/DIAS_PROMESA_ENTREGA); 20 es solo el
+// valor por defecto hasta que llegue el de la empresa desde el backend.
+let diasPromesaEntrega = 20
 const est = { token: null, tel: null, cliente: null }
 
-function aplicarMarcaEmpresa({ nombre, logo_url, whatsapp_soporte }) {
+function aplicarMarcaEmpresa({ nombre, logo_url, whatsapp_soporte, dias_promesa_entrega }) {
   if (logo_url) $('hero-logo-img').src = logo_url
   if (nombre) {
     $('hero-sub').textContent = `Seguimiento de tu pedido — ${nombre}`
@@ -552,6 +555,7 @@ function aplicarMarcaEmpresa({ nombre, logo_url, whatsapp_soporte }) {
     btn.href = `https://wa.me/57${numero}?text=${encodeURIComponent('Hola, quisiera consultar sobre mi pedido')}`
     btn.classList.remove('hidden')
   }
+  if (dias_promesa_entrega) diasPromesaEntrega = parseInt(dias_promesa_entrega, 10) || diasPromesaEntrega
 }
 
 // Calcula una fecha sumando días hábiles (excluye sáb/dom) — usada para
@@ -714,8 +718,13 @@ async function abrirPortal() {
   pantalla('pantalla-portal')
   // Si llegamos por un link viejo sin slug en la URL, la marca de la empresa
   // solo se conoce hasta ahora (viene en la respuesta de validar_token/verificar).
-  if (est.cliente?.empresa_nombre || est.cliente?.empresa_logo_url || est.cliente?.empresa_whatsapp_soporte) {
-    aplicarMarcaEmpresa({ nombre: est.cliente.empresa_nombre, logo_url: est.cliente.empresa_logo_url, whatsapp_soporte: est.cliente.empresa_whatsapp_soporte })
+  if (est.cliente?.empresa_nombre || est.cliente?.empresa_logo_url || est.cliente?.empresa_whatsapp_soporte || est.cliente?.empresa_dias_promesa_entrega) {
+    aplicarMarcaEmpresa({
+      nombre: est.cliente.empresa_nombre,
+      logo_url: est.cliente.empresa_logo_url,
+      whatsapp_soporte: est.cliente.empresa_whatsapp_soporte,
+      dias_promesa_entrega: est.cliente.empresa_dias_promesa_entrega,
+    })
   }
   const nombre = est.cliente?.nombre || ''
   $('saludo-nombre').textContent = `Hola, ${nombre.split(' ')[0]} 👋`
@@ -898,7 +907,7 @@ function verDetalle(idx) {
       </div>
       ${tabDeEstado(v) === 'encurso' && v.fecha_venta ? `
       <div class="fecha-chip">
-        📅 Entrega estimada: ${fecha(sumarDiasHabiles(v.fecha_venta, DIAS_PROMESA_ENTREGA))}
+        📅 Entrega estimada: ${fecha(sumarDiasHabiles(v.fecha_venta, diasPromesaEntrega))}
       </div>` : ''}
       <div class="pedido-timeline-wrap" style="margin-top:14px">
         <div class="tl-mini">${renderTimeline(v.track, estado.num)}</div>
