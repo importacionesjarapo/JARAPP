@@ -1,5 +1,5 @@
-const CACHE_STATIC  = 'jarapp-static-v4';
-const CACHE_DYNAMIC = 'jarapp-dynamic-v4';
+const CACHE_STATIC  = 'jarapp-static-v5';
+const CACHE_DYNAMIC = 'jarapp-dynamic-v5';
 
 // Assets estáticos — siempre desde caché
 const STATIC_ASSETS = [
@@ -8,7 +8,8 @@ const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
-  '/favicon.svg',
+  '/favicon.png',
+  '/apple-touch-icon.png',
 ];
 
 // Instalar — pre-cachear assets estáticos
