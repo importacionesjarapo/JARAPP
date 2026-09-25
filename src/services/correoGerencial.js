@@ -5,6 +5,7 @@
 // Correo Gerencial), mismo patrón que loadCalcConfig/saveCalcConfig en
 // calculadora.js.
 import { db } from '../db.js';
+import { auth } from '../auth.js';
 
 export const CORREO_GERENCIAL_DEFAULT = { activo: false, destinatarios: [] };
 
@@ -31,6 +32,7 @@ export async function saveCorreoGerencialConfig(config) {
     id: existing ? existing.id : 'CORREO_GERENCIAL_' + Date.now(),
     clave: 'CORREO_GERENCIAL',
     valor: JSON.stringify(config),
+    empresa_id: auth.getEmpresaId(),
   };
   await db.postData('Configuracion', payload, existing ? 'UPDATE' : 'INSERT');
 }
