@@ -425,6 +425,34 @@
     .detalle-img { width: 80px; height: 80px; border-radius: 14px; object-fit: cover; border: 1px solid var(--borde); flex-shrink: 0; }
     .detalle-nombre { font-size: 17px; font-weight: 800; color: var(--txt); }
     .detalle-meta { font-size: 13px; color: var(--txt2); margin-top: 4px; }
+
+    /* ── PROGRESO DE ENTREGA ── */
+    .progreso-entrega-wrap { margin-top: 16px; }
+    .fecha-chip-atraso {
+      display: flex; align-items: flex-start; gap: 6px;
+      background: #FEE2E2; border: 1px solid #FCA5A5;
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; color: #991B1B; font-weight: 600;
+      margin-top: 10px; line-height: 1.4;
+    }
+
+    /* ── NUEVO HOY ── */
+    .badge-nuevo {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--rojo-claro); color: var(--rojo-s);
+      font-size: 10px; font-weight: 800; padding: 3px 9px;
+      border-radius: 20px; margin-left: 6px; letter-spacing: 0.2px;
+    }
+
+    /* ── BOTÓN WHATSAPP SOPORTE ── */
+    .btn-whatsapp-flotante {
+      position: fixed; right: 18px; bottom: 18px; z-index: 50;
+      width: 56px; height: 56px; border-radius: 50%;
+      background: #25D366; color: white; display: flex;
+      align-items: center; justify-content: center; font-size: 28px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25); text-decoration: none;
+    }
+    .btn-whatsapp-flotante:active { transform: scale(0.94); }
   </style>
 </head>
 <body>
@@ -507,6 +535,8 @@
 
 </div>
 
+<a href="#" id="btn-whatsapp-soporte" class="btn-whatsapp-flotante hidden" target="_blank" rel="noopener" title="Escríbenos por WhatsApp">💬</a>
+
 <script>
 const SUPABASE_URL  = 'https://vygfsqdveudpzytnnhiq.supabase.co'
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5Z2ZzcWR2ZXVkcHp5dG5uaGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTk2NjMsImV4cCI6MjA5MDYzNTY2M30.ZfkBk625C6X1Hgs51MRIB5TbRLYoztD1YS-QESL2x9M'
@@ -517,14 +547,151 @@ const API = IS_DEV ? 'http://localhost:9999/.netlify/functions' : '/.netlify/fun
 // en portal-otp.js). Un visitante que llegue a /portal a secas (sin slug)
 // sigue funcionando igual que antes, sin marca personalizada.
 const EMPRESA_SLUG = location.pathname.split('/').filter(Boolean)[1] || ''
+// Días hábiles de promesa de entrega por track — cada empresa lo configura
+// en Parámetros (Configuracion/DIAS_PROMESA_*); estos son solo los valores
+// por defecto hasta que lleguen los de la empresa desde el backend.
+let diasPromesaPorTrack = { colombia: 20, encargo_usa: 20, encargo_web: 20 }
+// Barra de progreso hacia la entrega — apagada hasta que la empresa la
+// active explícitamente en Parámetros (puede incluir el aviso "Atrasado").
+let mostrarBarraProgreso = false
 const est = { token: null, tel: null, cliente: null }
 
-function aplicarMarcaEmpresa({ nombre, logo_url }) {
+function aplicarMarcaEmpresa({ nombre, logo_url, whatsapp_soporte, dias_promesa, mostrar_barra_progreso }) {
   if (logo_url) $('hero-logo-img').src = logo_url
   if (nombre) {
     $('hero-sub').textContent = `Seguimiento de tu pedido — ${nombre}`
     document.title = `Mi Pedido — ${nombre}`
   }
+  if (whatsapp_soporte) {
+    const numero = String(whatsapp_soporte).replace(/\D/g, '')
+    const btn = $('btn-whatsapp-soporte')
+    btn.href = `https://wa.me/57${numero}?text=${encodeURIComponent('Hola, quisiera consultar sobre mi pedido')}`
+    btn.classList.remove('hidden')
+  }
+  if (dias_promesa) {
+    ['colombia', 'encargo_usa', 'encargo_web'].forEach(t => {
+      const dias = parseInt(dias_promesa[t], 10)
+      if (Number.isFinite(dias) && dias > 0) diasPromesaPorTrack[t] = dias
+    })
+  }
+  if (mostrar_barra_progreso !== undefined) mostrarBarraProgreso = !!mostrar_barra_progreso
+}
+
+// ── FESTIVOS DE COLOMBIA (Ley 51/1983, "Ley Emiliani") ──
+// Se excluyen del conteo de días hábiles junto con sábados y domingos.
+function claveFecha(f) {
+  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`
+}
+function sumarDias(fecha, dias) {
+  const f = new Date(fecha)
+  f.setDate(f.getDate() + dias)
+  return f
+}
+// Traslada un festivo movible al lunes siguiente (Ley Emiliani). Si ya cae
+// en lunes, la fórmula (8-dow)%7 da 0 y no lo mueve.
+function trasladarALunes(f) {
+  return sumarDias(f, (8 - f.getDay()) % 7)
+}
+// Domingo de Pascua (algoritmo de Gauss/Meeus) — de ahí se derivan Jueves
+// Santo, Viernes Santo, Ascensión, Corpus Christi y Sagrado Corazón.
+function domingoPascua(year) {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const mes = Math.floor((h + l - 7 * m + 114) / 31)
+  const dia = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(year, mes - 1, dia)
+}
+function festivosColombia(year) {
+  const pascua = domingoPascua(year)
+  const fijos = [
+    new Date(year, 0, 1),    // Año Nuevo
+    new Date(year, 4, 1),    // Día del Trabajo
+    new Date(year, 6, 20),   // Independencia
+    new Date(year, 7, 7),    // Batalla de Boyacá
+    new Date(year, 11, 8),   // Inmaculada Concepción
+    new Date(year, 11, 25),  // Navidad
+    sumarDias(pascua, -3),   // Jueves Santo
+    sumarDias(pascua, -2),   // Viernes Santo
+  ]
+  const trasladables = [
+    new Date(year, 0, 6),    // Reyes Magos
+    new Date(year, 2, 19),   // San José
+    new Date(year, 5, 29),   // San Pedro y San Pablo
+    new Date(year, 7, 15),   // Asunción de la Virgen
+    new Date(year, 9, 12),   // Día de la Raza
+    new Date(year, 10, 1),   // Todos los Santos
+    new Date(year, 10, 11),  // Independencia de Cartagena
+  ].map(trasladarALunes)
+  const especiales = [
+    sumarDias(pascua, 43),  // Ascensión del Señor
+    sumarDias(pascua, 64),  // Corpus Christi
+    sumarDias(pascua, 71),  // Sagrado Corazón
+  ]
+  return new Set([...fijos, ...trasladables, ...especiales].map(claveFecha))
+}
+const festivosCache = {}
+function esFestivoColombia(f) {
+  const year = f.getFullYear()
+  if (!festivosCache[year]) festivosCache[year] = festivosColombia(year)
+  return festivosCache[year].has(claveFecha(f))
+}
+
+// Calcula una fecha sumando días hábiles (excluye sáb/dom y festivos de
+// Colombia) — usada para mostrar la fecha estimada de entrega.
+function sumarDiasHabiles(fechaInicio, dias) {
+  const f = new Date(fechaInicio)
+  let restantes = dias
+  while (restantes > 0) {
+    f.setDate(f.getDate() + 1)
+    const dow = f.getDay()
+    if (dow !== 0 && dow !== 6 && !esFestivoColombia(f)) restantes--
+  }
+  return f
+}
+
+function esHoy(fechaStr) {
+  if (!fechaStr) return false
+  const d = new Date(fechaStr)
+  const hoy = new Date()
+  return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate()
+}
+
+// Días hábiles ya transcurridos entre la fecha de venta y hoy — usado para
+// calcular el % de la barra de progreso hacia la promesa de entrega.
+function contarDiasHabilesTranscurridos(fechaInicio) {
+  const inicio = new Date(fechaInicio); inicio.setHours(0, 0, 0, 0)
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  let cuenta = 0
+  const f = new Date(inicio)
+  while (f < hoy) {
+    f.setDate(f.getDate() + 1)
+    const dow = f.getDay()
+    if (dow !== 0 && dow !== 6 && !esFestivoColombia(f)) cuenta++
+  }
+  return cuenta
+}
+
+// El equipo registra novedades/motivos de atraso como notas del historial
+// de Logística (mismo campo "Añadir Nota / Comentario al Historial" que se
+// usa en Seguimientos) — se toma la más reciente como motivo a mostrar.
+function motivoAtrasoDesdeHistorial(v) {
+  if (!v.historial) return null
+  try {
+    const arr = typeof v.historial === 'string' ? JSON.parse(v.historial) : v.historial
+    if (!Array.isArray(arr) || !arr.length) return null
+    const ultima = arr[arr.length - 1]
+    return ultima?.notas || null
+  } catch (e) { return null }
 }
 
 async function cargarMarcaEmpresa() {
@@ -667,8 +834,14 @@ async function abrirPortal() {
   pantalla('pantalla-portal')
   // Si llegamos por un link viejo sin slug en la URL, la marca de la empresa
   // solo se conoce hasta ahora (viene en la respuesta de validar_token/verificar).
-  if (est.cliente?.empresa_nombre || est.cliente?.empresa_logo_url) {
-    aplicarMarcaEmpresa({ nombre: est.cliente.empresa_nombre, logo_url: est.cliente.empresa_logo_url })
+  if (est.cliente?.empresa_nombre || est.cliente?.empresa_logo_url || est.cliente?.empresa_whatsapp_soporte || est.cliente?.empresa_dias_promesa) {
+    aplicarMarcaEmpresa({
+      nombre: est.cliente.empresa_nombre,
+      logo_url: est.cliente.empresa_logo_url,
+      whatsapp_soporte: est.cliente.empresa_whatsapp_soporte,
+      dias_promesa: est.cliente.empresa_dias_promesa,
+      mostrar_barra_progreso: est.cliente.empresa_mostrar_barra_progreso,
+    })
   }
   const nombre = est.cliente?.nombre || ''
   $('saludo-nombre').textContent = `Hola, ${nombre.split(' ')[0]} 👋`
@@ -814,11 +987,41 @@ function renderLista() {
         <div class="pedido-mini-estado" style="color:${estado.color}">
           <span style="width:7px;height:7px;border-radius:50%;background:${estado.color};display:inline-block"></span>
           ${estado.txt}
+          ${esHoy(v.fecha_actualizacion) ? `<span class="badge-nuevo">🆕 Hoy</span>` : ''}
         </div>
       </div>
       <div class="pedido-mini-arrow">›</div>
     </div>`
   }).join('')
+}
+
+function renderProgresoEntrega(v) {
+  if (tabDeEstado(v) !== 'encurso' || !v.fecha_venta) return ''
+  const diasPromesa = diasPromesaPorTrack[v.track] || diasPromesaPorTrack.colombia
+  const fechaChip = `<div class="fecha-chip">📅 Entrega estimada: ${fecha(sumarDiasHabiles(v.fecha_venta, diasPromesa))}</div>`
+  if (!mostrarBarraProgreso) return fechaChip
+
+  const diasTranscurridos = contarDiasHabilesTranscurridos(v.fecha_venta)
+  const pct = diasPromesa > 0 ? Math.min(100, Math.round((diasTranscurridos / diasPromesa) * 100)) : 0
+  const atrasado = diasTranscurridos > diasPromesa
+  const diasDeAtraso = atrasado ? diasTranscurridos - diasPromesa : 0
+  const motivo = atrasado ? motivoAtrasoDesdeHistorial(v) : null
+
+  return `
+    ${fechaChip}
+    <div class="progreso-entrega-wrap">
+      <div class="pedido-progress-wrap">
+        <div class="pedido-progress-bar">
+          <div class="pedido-progress-fill" style="width:${pct}%;background:${atrasado ? '#DC2626' : 'var(--rojo)'}"></div>
+        </div>
+        <span class="pedido-progress-pct">${pct}%</span>
+      </div>
+      ${atrasado ? `
+      <div class="fecha-chip-atraso">
+        <span>⚠️</span>
+        <span>Atrasado ${diasDeAtraso} día${diasDeAtraso === 1 ? '' : 's'} hábil${diasDeAtraso === 1 ? '' : 'es'}${motivo ? ` — ${motivo}` : ''}</span>
+      </div>` : ''}
+    </div>`
 }
 
 function verDetalle(idx) {
@@ -846,7 +1049,9 @@ function verDetalle(idx) {
       <div class="pedido-estado-wrap">
         <div class="pedido-estado-dot" style="background:${estado.color}"></div>
         <div class="pedido-estado-txt" style="color:${estado.color}">${estado.txt}</div>
+        ${esHoy(v.fecha_actualizacion) ? `<span class="badge-nuevo">🆕 Actualizado hoy</span>` : ''}
       </div>
+      ${renderProgresoEntrega(v)}
       <div class="pedido-timeline-wrap" style="margin-top:14px">
         <div class="tl-mini">${renderTimeline(v.track, estado.num)}</div>
       </div>

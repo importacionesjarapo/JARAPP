@@ -4,6 +4,40 @@ import { renderError, showToast, uploadImageToSupabase, formatCOP } from '../uti
 import { TRMService } from '../services/trm.js';
 import { ConfigService } from '../services/config.js';
 
+let _paramsActiveTab = 'marca'; // 'marca' | 'metas' | 'catalogos' | 'logistica' | 'finanzas'
+
+const TABS = [
+    { id: 'marca',      label: '🎨 Marca y Portal' },
+    { id: 'metas',      label: '🎯 Metas y Umbrales' },
+    { id: 'catalogos',  label: '🏷️ Catálogos' },
+    { id: 'logistica',  label: '🚚 Logística y Envíos' },
+    { id: 'finanzas',   label: '💰 Finanzas' },
+];
+
+const TRACKS_PROMESA = [
+    { clave: 'DIAS_PROMESA_COLOMBIA',    track: 'colombia',    label: '🇨🇴 Colombia (stock, entrega inmediata)' },
+    { clave: 'DIAS_PROMESA_ENCARGO_WEB', track: 'encargo_web', label: '🛒 Encargo Web (pedido a USA desde Colombia)' },
+    { clave: 'DIAS_PROMESA_ENCARGO_USA', track: 'encargo_usa', label: '✈️ Encargo Viaje (comprado durante viaje a EEUU)' },
+];
+
+const METAS_SCHEMA = [
+    { clave: 'meta_facturacion_mensual',    label: 'Meta Facturación Mensual',         tipo: 'cop',     desc: 'Objetivo de ventas facturadas en el mes (COP)',                    icon: '📊' },
+    { clave: 'meta_cobrado_mensual',         label: 'Meta Cobrado Mensual',              tipo: 'cop',     desc: 'Objetivo de ingresos realmente cobrados en el mes (COP)',          icon: '✅' },
+    { clave: 'meta_margen_neto_pct',         label: 'Meta Margen Neto (%)',              tipo: 'pct',     desc: 'Porcentaje de margen neto objetivo (ej: 25 = 25%)',               icon: '📈' },
+    { clave: 'meta_cartera_maxima',          label: 'Cartera Vencida Máxima',           tipo: 'cop',     desc: 'Límite máximo aceptable de cartera vencida (COP)',                icon: '⚠️' },
+    { clave: 'meta_dso_dias',                label: 'DSO Objetivo (días de cobro)',      tipo: 'num',     desc: 'Días promedio de cobro objetivo (Day Sales Outstanding)',         icon: '📅' },
+    { clave: 'meta_rotacion_inventario',     label: 'Rotación de Inventario Objetivo',  tipo: 'num',     desc: 'Veces que debe rotar el inventario por año',                      icon: '🔄' },
+    { clave: 'meta_envios_tiempo_pct',       label: 'On-Time Delivery (%)',             tipo: 'pct',     desc: 'Porcentaje de envíos entregados a tiempo objetivo',               icon: '🚚' },
+    { clave: 'meta_nuevos_clientes_mes',     label: 'Nuevos Clientes por Mes',          tipo: 'num',     desc: 'Meta de adquisición de clientes nuevos por mes',                 icon: '👥' },
+    { clave: 'meta_conversion_pct',          label: 'Conversión Cotización→Venta (%)',  tipo: 'pct',     desc: 'Tasa de conversión de cotizaciones en ventas cerradas',           icon: '🎯' },
+    { clave: 'umbral_caja_minima',           label: 'Saldo Mínimo de Caja Operativa',   tipo: 'cop',     desc: 'Umbral mínimo de caja para alerta 🔴 (COP)',                      icon: '💰' },
+    { clave: 'umbral_margen_minimo_pct',     label: 'Margen Mínimo por Producto (%)',   tipo: 'pct',     desc: 'Si el margen cae por debajo de esto, se genera alerta 🟡',       icon: '📉' },
+    { clave: 'dias_inactividad_cliente',     label: 'Días para Cliente Inactivo',       tipo: 'num',     desc: 'Días sin compra para clasificar cliente en riesgo de churn',     icon: '😴' },
+    { clave: 'dias_vencimiento_cotizacion',  label: 'Días para Alerta de Cotización',   tipo: 'num',     desc: 'Días sin respuesta antes de generar alerta sobre cotización',    icon: '📝' },
+    { clave: 'dias_retraso_envio_critico',   label: 'Días Retraso Crítico de Envío',    tipo: 'num',     desc: 'Días de retraso en un envío para activar alerta 🔴',              icon: '🚨' },
+    { clave: 'plazo_vencimiento_factura',    label: 'Plazo de Crédito por Defecto',     tipo: 'num',     desc: 'Días de crédito para calcular fecha de vencimiento de facturas', icon: '🗓️' },
+];
+
 export const renderParams = async (renderLayout, navigateTo) => {
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Parámetros Globales...</div>`);
 
@@ -30,45 +64,54 @@ export const renderParams = async (renderLayout, navigateTo) => {
         PctGananciaAnalista: list.filter(p => p.clave === 'PctGananciaAnalista'),
     };
 
-    // ── Metas del Dashboard (MetasDashboard) ──
-    const METAS_SCHEMA = [
-        { clave: 'meta_facturacion_mensual',    label: 'Meta Facturación Mensual',         tipo: 'cop',     desc: 'Objetivo de ventas facturadas en el mes (COP)',                    icon: '📊' },
-        { clave: 'meta_cobrado_mensual',         label: 'Meta Cobrado Mensual',              tipo: 'cop',     desc: 'Objetivo de ingresos realmente cobrados en el mes (COP)',          icon: '✅' },
-        { clave: 'meta_margen_neto_pct',         label: 'Meta Margen Neto (%)',              tipo: 'pct',     desc: 'Porcentaje de margen neto objetivo (ej: 25 = 25%)',               icon: '📈' },
-        { clave: 'meta_cartera_maxima',          label: 'Cartera Vencida Máxima',           tipo: 'cop',     desc: 'Límite máximo aceptable de cartera vencida (COP)',                icon: '⚠️' },
-        { clave: 'meta_dso_dias',                label: 'DSO Objetivo (días de cobro)',      tipo: 'num',     desc: 'Días promedio de cobro objetivo (Day Sales Outstanding)',         icon: '📅' },
-        { clave: 'meta_rotacion_inventario',     label: 'Rotación de Inventario Objetivo',  tipo: 'num',     desc: 'Veces que debe rotar el inventario por año',                      icon: '🔄' },
-        { clave: 'meta_envios_tiempo_pct',       label: 'On-Time Delivery (%)',             tipo: 'pct',     desc: 'Porcentaje de envíos entregados a tiempo objetivo',               icon: '🚚' },
-        { clave: 'meta_nuevos_clientes_mes',     label: 'Nuevos Clientes por Mes',          tipo: 'num',     desc: 'Meta de adquisición de clientes nuevos por mes',                 icon: '👥' },
-        { clave: 'meta_conversion_pct',          label: 'Conversión Cotización→Venta (%)',  tipo: 'pct',     desc: 'Tasa de conversión de cotizaciones en ventas cerradas',           icon: '🎯' },
-        { clave: 'umbral_caja_minima',           label: 'Saldo Mínimo de Caja Operativa',   tipo: 'cop',     desc: 'Umbral mínimo de caja para alerta 🔴 (COP)',                      icon: '💰' },
-        { clave: 'umbral_margen_minimo_pct',     label: 'Margen Mínimo por Producto (%)',   tipo: 'pct',     desc: 'Si el margen cae por debajo de esto, se genera alerta 🟡',       icon: '📉' },
-        { clave: 'dias_inactividad_cliente',     label: 'Días para Cliente Inactivo',       tipo: 'num',     desc: 'Días sin compra para clasificar cliente en riesgo de churn',     icon: '😴' },
-        { clave: 'dias_vencimiento_cotizacion',  label: 'Días para Alerta de Cotización',   tipo: 'num',     desc: 'Días sin respuesta antes de generar alerta sobre cotización',    icon: '📝' },
-        { clave: 'dias_retraso_envio_critico',   label: 'Días Retraso Crítico de Envío',    tipo: 'num',     desc: 'Días de retraso en un envío para activar alerta 🔴',              icon: '🚨' },
-        { clave: 'plazo_vencimiento_factura',    label: 'Plazo de Crédito por Defecto',     tipo: 'num',     desc: 'Días de crédito para calcular fecha de vencimiento de facturas', icon: '🗓️' },
-    ];
-
     const metasMap = {};
     (Array.isArray(metas) ? metas : []).forEach(m => { metasMap[m.clave] = m; });
 
     const canEdit = auth.canEdit('params');
 
-    const renderGroup = (title, key, arr) => `
-        <div class="glass-card" style="margin-bottom:2rem; position:relative;">
-           ${canEdit ? `<button class="btn-action" onclick="window.modalParametro('${key}')">+ ${key}</button>` : ''}
-           <h3 style="margin-top:0;">${title} <span style="opacity:0.4; font-size:0.8rem; font-weight:normal;">(${arr.length} registrados)</span></h3>
-           <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:1.5rem;">
-               ${arr.length === 0 ? '<span style="opacity:0.4; font-size:0.8rem;">Ninguno registrado.</span>' : ''}
+    const GROUP_ICONS = {
+        Marca: '🏷️', Tienda: '🏬', Categoria: '📂', Genero: '🚻',
+        BodegaUSA: '🏭', TranspUSA: '🚚', TranspCOL: '🚛',
+        ValorLibra: '⚖️', PctGananciaAnalista: '💵',
+    };
+
+    const formatChipValor = (key, valor) => {
+        if (key === 'ValorLibra') return `$${valor} USD`;
+        if (key === 'PctGananciaAnalista') return `${valor}%`;
+        return valor;
+    };
+
+    const renderGroup = (title, key, arrIn) => {
+        const esNumerico = key === 'ValorLibra' || key === 'PctGananciaAnalista';
+        const arr = [...arrIn].sort((a, b) => esNumerico
+            ? parseFloat(a.valor) - parseFloat(b.valor)
+            : String(a.valor).localeCompare(String(b.valor), 'es', { sensitivity: 'base' }));
+        const necesitaBuscador = arr.length > 8;
+        return `
+        <div class="glass-card" style="margin-bottom:1.2rem; padding:1.1rem 1.3rem;">
+           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:${necesitaBuscador ? '8px' : '12px'};">
+               <h3 style="margin:0; font-size:0.9rem; font-weight:700; display:flex; align-items:center; gap:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                   <span>${GROUP_ICONS[key] || '🔖'}</span> ${title}
+                   <span style="opacity:0.4; font-size:0.72rem; font-weight:600; flex-shrink:0;">(${arr.length})</span>
+               </h3>
+               ${canEdit ? `<button class="btn-action" onclick="window.modalParametro('${key}')" style="flex-shrink:0;">+ Agregar</button>` : ''}
+           </div>
+           ${necesitaBuscador ? `
+           <input type="text" placeholder="🔎 Buscar…" class="catalogo-buscador" data-target="catalogo-chips-${key}"
+               style="width:100%; padding:6px 12px; border-radius:8px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.78rem; font-family:inherit; margin-bottom:8px; box-sizing:border-box;">
+           ` : ''}
+           <div id="catalogo-chips-${key}" style="display:flex; gap:6px; flex-wrap:wrap; align-content:flex-start; max-height:186px; overflow-y:auto; padding-right:2px;">
+               ${arr.length === 0 ? '<span style="opacity:0.4; font-size:0.78rem;">Ninguno registrado.</span>' : ''}
                ${arr.map(c => `
-                  <div style="background:var(--glass-hover); border:1px solid var(--glass-border); padding:8px 12px; border-radius:12px; display:flex; gap:10px; align-items:center;">
-                     <span style="font-weight:700;">${key === 'ValorLibra' ? `$${c.valor} USD` : c.valor}</span>
-                     ${canEdit ? `<button onclick="window.deleteParametro('${c.id}')" style="background:none; border:none; color:var(--primary-red); cursor:pointer; opacity:0.5; font-size:1.1rem; padding:0;">&times;</button>` : ''}
+                  <div class="catalogo-chip" data-texto="${String(c.valor).toLowerCase()}" style="background:var(--glass-hover); border:1px solid var(--glass-border); padding:4px 6px 4px 10px; border-radius:20px; display:flex; gap:5px; align-items:center; font-size:0.78rem; line-height:1.3;">
+                     <span style="font-weight:600;">${formatChipValor(key, c.valor)}</span>
+                     ${canEdit ? `<button onclick="window.deleteParametro('${c.id}')" style="background:none; border:none; color:var(--primary-red); cursor:pointer; opacity:0.5; font-size:0.95rem; padding:2px 4px; line-height:1;">&times;</button>` : ''}
                   </div>
                `).join('')}
            </div>
         </div>
     `;
+    };
 
     const formatMetaDisplay = (meta) => {
         if (!meta) return '—';
@@ -125,11 +168,17 @@ export const renderParams = async (renderLayout, navigateTo) => {
     const globalLogoParam = list.find(p => p.clave === 'GLOBAL_LOGO');
     const logoImgSrc = globalLogoParam ? globalLogoParam.valor : '';
 
-    const html = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem;">
-        <div><h2>Parametrización del Sistema</h2><p style="opacity:0.5;">Administra variables desplegables, metas del Dashboard y configuración global.</p></div>
-      </div>
+    const whatsappSoporteParam = list.find(p => p.clave === 'PORTAL_WHATSAPP_SOPORTE');
+    const whatsappSoporteValor = whatsappSoporteParam ? whatsappSoporteParam.valor : '';
 
+    const diasPromesaParams = {};
+    TRACKS_PROMESA.forEach(t => { diasPromesaParams[t.track] = list.find(p => p.clave === t.clave) || null; });
+
+    const mostrarBarraParam = list.find(p => p.clave === 'PORTAL_MOSTRAR_BARRA_PROGRESO');
+    const mostrarBarraActivo = mostrarBarraParam ? mostrarBarraParam.valor === 'true' : false;
+
+    // ── Panel: Marca y Portal ──
+    const panelMarca = () => `
       <div class="glass-card" style="margin-bottom:2rem; display:flex; gap:20px; align-items:center;">
           <div style="width:80px; height:80px; border-radius:16px; background:var(--glass-hover); overflow:hidden; display:flex; justify-content:center; align-items:center; flex-shrink:0; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
              ${logoImgSrc ? `<img src="${logoImgSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<i data-lucide="image" style="opacity:0.3; width:30px; height:30px;"></i>`}
@@ -144,8 +193,72 @@ export const renderParams = async (renderLayout, navigateTo) => {
           </div>
       </div>
 
-      ${renderMetasSection()}
+      <!-- WhatsApp de Soporte (Portal de Clientes) -->
+      <div class="glass-card" style="margin-bottom:2rem; display:flex; gap:20px; align-items:center;">
+          <div style="width:80px; height:80px; border-radius:16px; background:var(--glass-hover); display:flex; justify-content:center; align-items:center; flex-shrink:0; font-size:2rem;">
+             💬
+          </div>
+          <div style="flex:1;">
+             <h3 style="margin-top:0;">WhatsApp de Soporte (Portal de Clientes)</h3>
+             <p style="opacity:0.6; font-size:0.8rem; margin-bottom:10px;">Número que verán tus clientes para escribirte desde su página de seguimiento de pedidos. Solo números, sin +57. Déjalo vacío para ocultar el botón.</p>
+             <input type="tel" id="whatsapp-soporte-input" placeholder="Ej: 3001234567" value="${whatsappSoporteValor}" style="padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.9rem; font-family:inherit; width:220px;">
+          </div>
+          <div>
+             ${canEdit ? `<button id="btn-save-whatsapp-soporte" class="btn-primary">Guardar</button>` : ''}
+          </div>
+      </div>
 
+      <!-- Días de Promesa de Entrega (Portal de Clientes) -->
+      <div class="glass-card" style="margin-bottom:2rem;">
+          <div style="display:flex; gap:16px; align-items:flex-start; margin-bottom:1.2rem;">
+              <div style="width:56px; height:56px; border-radius:14px; background:var(--glass-hover); display:flex; justify-content:center; align-items:center; flex-shrink:0; font-size:1.6rem;">📅</div>
+              <div>
+                  <h3 style="margin:0 0 4px 0;">Días de Promesa de Entrega (Portal de Clientes)</h3>
+                  <p style="margin:0; opacity:0.6; font-size:0.8rem;">Días hábiles (sin contar sábados, domingos ni festivos de Colombia) para la fecha estimada de entrega en el portal de tus clientes — cada tipo de venta puede tener un plazo distinto.</p>
+              </div>
+          </div>
+          <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:1.4rem;">
+              ${TRACKS_PROMESA.map(t => `
+                  <div style="flex:1; min-width:160px;">
+                      <label class="form-label" style="margin-bottom:6px; display:block; font-size:0.8rem;">${t.label}</label>
+                      <input type="number" id="dias-promesa-input-${t.track}" min="1" step="1" placeholder="Ej: 20"
+                          value="${diasPromesaParams[t.track] ? diasPromesaParams[t.track].valor : '20'}"
+                          style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.9rem; font-family:inherit; box-sizing:border-box;">
+                  </div>
+              `).join('')}
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding-top:1rem; border-top:1px solid var(--border-base);">
+              <label style="display:flex; align-items:center; gap:10px; font-size:0.85rem; cursor:${canEdit ? 'pointer' : 'default'};">
+                  <input type="checkbox" id="mostrar-barra-progreso-input" ${mostrarBarraActivo ? 'checked' : ''} ${canEdit ? '' : 'disabled'} style="width:18px; height:18px;">
+                  Mostrar a los clientes la barra de progreso hacia la entrega (incluye aviso de "Atrasado" con el motivo)
+              </label>
+              ${canEdit ? `<button id="btn-save-dias-promesa" class="btn-primary">Guardar</button>` : ''}
+          </div>
+      </div>
+    `;
+
+    // ── Panel: Catálogos ──
+    const panelCatalogos = () => `
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px; align-items:start;">
+          ${renderGroup('Marcas', 'Marca', grouped.Marca)}
+          ${renderGroup('Tiendas', 'Tienda', grouped.Tienda)}
+          ${renderGroup('Categorías', 'Categoria', grouped.Categoria)}
+          ${renderGroup('Géneros', 'Genero', grouped.Genero)}
+      </div>
+    `;
+
+    // ── Panel: Logística y Envíos ──
+    const panelLogistica = () => `
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px; align-items:start;">
+          ${renderGroup('Bodegas USA', 'BodegaUSA', grouped.BodegaUSA)}
+          ${renderGroup('Transp. Local USA', 'TranspUSA', grouped.TranspUSA)}
+          ${renderGroup('Transp. (Local Colombia)', 'TranspCOL', grouped.TranspCOL)}
+          ${renderGroup('Valor Libra Envío EEUU-COL', 'ValorLibra', grouped.ValorLibra)}
+      </div>
+    `;
+
+    // ── Panel: Finanzas ──
+    const panelFinanzas = () => `
       <!-- Métodos de Pago -->
       <div class="glass-card" style="margin-bottom:2rem;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem;">
@@ -167,17 +280,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
           </div>
       </div>
 
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-          ${renderGroup('Marcas', 'Marca', grouped.Marca)}
-          ${renderGroup('Tiendas', 'Tienda', grouped.Tienda)}
-          ${renderGroup('Categorías', 'Categoria', grouped.Categoria)}
-          ${renderGroup('Géneros', 'Genero', grouped.Genero)}
-          ${renderGroup('Bodegas USA', 'BodegaUSA', grouped.BodegaUSA)}
-          ${renderGroup('Transp. Local USA', 'TranspUSA', grouped.TranspUSA)}
-          ${renderGroup('Transp. (Local Colombia)', 'TranspCOL', grouped.TranspCOL)}
-          ${renderGroup('Valor Libra Envio EEUU - COLOMBIA', 'ValorLibra', grouped.ValorLibra)}
-          ${renderGroup('% Ganancia Analista', 'PctGananciaAnalista', grouped.PctGananciaAnalista)}
-      </div>
+      ${renderGroup('% Ganancia Analista', 'PctGananciaAnalista', grouped.PctGananciaAnalista)}
 
       <!-- TRM Manual -->
       <div class="glass-card" style="margin-top:2rem;" id="trm-section">
@@ -214,9 +317,56 @@ export const renderParams = async (renderLayout, navigateTo) => {
           </div>` : ''}
       </div>
     `;
+
+    const PANELES = {
+        marca:     panelMarca,
+        metas:     renderMetasSection,
+        catalogos: panelCatalogos,
+        logistica: panelLogistica,
+        finanzas:  panelFinanzas,
+    };
+
+    const html = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem;">
+        <div><h2>Parametrización del Sistema</h2><p style="opacity:0.5;">Administra variables desplegables, metas del Dashboard y configuración global.</p></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="purchase-view-switcher" style="margin-bottom:1.5rem; flex-wrap:wrap;">
+          ${TABS.map(t => `
+              <button class="pv-tab ${_paramsActiveTab === t.id ? 'active' : ''}" id="params-tab-${t.id}">${t.label}</button>
+          `).join('')}
+      </div>
+
+      ${TABS.map(t => `
+          <div id="params-panel-${t.id}" style="display:${_paramsActiveTab === t.id ? 'block' : 'none'}">
+              ${PANELES[t.id]()}
+          </div>
+      `).join('')}
+    `;
     renderLayout(html);
 
+    // Tabs
+    TABS.forEach(t => {
+        document.getElementById(`params-tab-${t.id}`)?.addEventListener('click', () => {
+            _paramsActiveTab = t.id;
+            renderParams(renderLayout, navigateTo);
+        });
+    });
+
     setTimeout(() => {
+        // Buscador en vivo de cada card de catálogo (Marcas, Tiendas, etc.)
+        document.querySelectorAll('.catalogo-buscador').forEach(input => {
+            input.addEventListener('input', () => {
+                const q = input.value.trim().toLowerCase();
+                const contenedor = document.getElementById(input.dataset.target);
+                if (!contenedor) return;
+                contenedor.querySelectorAll('.catalogo-chip').forEach(chip => {
+                    chip.style.display = (!q || chip.dataset.texto.includes(q)) ? 'flex' : 'none';
+                });
+            });
+        });
+
         // Guardar TRM Manual
         const btnTRM = document.getElementById('btn-guardar-trm');
         if (btnTRM) {
@@ -277,6 +427,68 @@ export const renderParams = async (renderLayout, navigateTo) => {
                     showToast(e.message, 'error');
                     btnUpload.innerText = "Reintentar";
                     btnUpload.disabled = false;
+                }
+            };
+        }
+
+        // WhatsApp de Soporte (Portal de Clientes)
+        const btnWhatsappSoporte = document.getElementById('btn-save-whatsapp-soporte');
+        if (btnWhatsappSoporte) {
+            btnWhatsappSoporte.onclick = async () => {
+                const input = document.getElementById('whatsapp-soporte-input');
+                const valor = (input?.value || '').trim().replace(/\D/g, '');
+                btnWhatsappSoporte.disabled = true;
+                btnWhatsappSoporte.textContent = 'Guardando...';
+                try {
+                    const payload = { id: whatsappSoporteParam ? whatsappSoporteParam.id : Date.now().toString(), clave: 'PORTAL_WHATSAPP_SOPORTE', valor };
+                    const action = whatsappSoporteParam ? 'UPDATE' : 'INSERT';
+                    if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
+                    await db.postData('Configuracion', payload, action);
+                    showToast('✅ WhatsApp de soporte actualizado', 'success');
+                    setTimeout(() => navigateTo('params'), 800);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    btnWhatsappSoporte.disabled = false;
+                    btnWhatsappSoporte.textContent = 'Guardar';
+                }
+            };
+        }
+
+        // Días de Promesa de Entrega por track + barra de progreso (Portal de Clientes)
+        const btnDiasPromesa = document.getElementById('btn-save-dias-promesa');
+        if (btnDiasPromesa) {
+            btnDiasPromesa.onclick = async () => {
+                const valores = {};
+                for (const t of TRACKS_PROMESA) {
+                    const input = document.getElementById(`dias-promesa-input-${t.track}`);
+                    const valor = parseInt(input?.value, 10);
+                    if (!valor || valor < 1) {
+                        showToast(`Ingresa un número de días válido para ${t.label}.`, 'error');
+                        return;
+                    }
+                    valores[t.track] = valor;
+                }
+                const mostrarBarra = document.getElementById('mostrar-barra-progreso-input')?.checked || false;
+                btnDiasPromesa.disabled = true;
+                btnDiasPromesa.textContent = 'Guardando...';
+                try {
+                    for (const t of TRACKS_PROMESA) {
+                        const existente = diasPromesaParams[t.track];
+                        const payload = { id: existente ? existente.id : Date.now().toString() + '_' + t.track, clave: t.clave, valor: String(valores[t.track]) };
+                        const action = existente ? 'UPDATE' : 'INSERT';
+                        if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
+                        await db.postData('Configuracion', payload, action);
+                    }
+                    const payloadBarra = { id: mostrarBarraParam ? mostrarBarraParam.id : Date.now().toString() + '_barra', clave: 'PORTAL_MOSTRAR_BARRA_PROGRESO', valor: String(mostrarBarra) };
+                    const actionBarra = mostrarBarraParam ? 'UPDATE' : 'INSERT';
+                    if (actionBarra === 'INSERT') payloadBarra.empresa_id = auth.getEmpresaId();
+                    await db.postData('Configuracion', payloadBarra, actionBarra);
+                    showToast('✅ Configuración de entrega actualizada', 'success');
+                    setTimeout(() => navigateTo('params'), 800);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    btnDiasPromesa.disabled = false;
+                    btnDiasPromesa.textContent = 'Guardar';
                 }
             };
         }
