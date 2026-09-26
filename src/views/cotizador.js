@@ -9,6 +9,15 @@ const fmtUSD = (n) => `$${(parseFloat(n)||0).toFixed(2)} USD`;
 const hoy    = () => new Date().toLocaleDateString('es-CO', { day:'2-digit', month:'2-digit', year:'numeric' });
 const hoyISO = () => new Date().toISOString().split('T')[0];
 
+// Línea de contacto del pie del PDF — omite cada dato que la empresa no
+// haya configurado en vez de mostrar un valor de otro negocio por defecto.
+function lineaContacto(params) {
+  return [
+    params.instagram ? `Instagram: ${params.instagram}` : '',
+    params.whatsapp   ? `WhatsApp: ${params.whatsapp}`   : '',
+  ].filter(Boolean).join('  ·  ');
+}
+
 // ── Cargar CALC_CONFIG (misma fuente que calculadora.js) + params extra ────────
 async function cargarConfig() {
   const calcCfg = await loadCalcConfig();
@@ -18,7 +27,7 @@ async function cargarConfig() {
   return {
     calc:      calcCfg,
     whatsapp:  map['WHATSAPP']  || map['TELEFONO'] || '',
-    instagram: map['INSTAGRAM'] || '@importacionesjarapo',
+    instagram: map['INSTAGRAM'] || '',
   };
 }
 
@@ -211,7 +220,7 @@ async function generarPDFCliente(f, r, params) {
     footer: () => ({
       stack:[
         { canvas:[{ type:'line', x1:40, y1:0, x2:555, y2:0, lineWidth:1.5, lineColor:rojo }], margin:[0,0,0,5] },
-        { text:`Instagram: ${params.instagram}${params.whatsapp ? '  ·  WhatsApp: '+params.whatsapp : ''}`,
+        { text: lineaContacto(params),
           fontSize:8, color:gris, alignment:'center' },
       ], margin:[0,8,0,0],
     }),
@@ -336,7 +345,7 @@ async function generarPDFInterno(f, r, cfg, params) {
       stack:[
         { canvas:[{ type:'line', x1:40, y1:0, x2:555, y2:0, lineWidth:1.5, lineColor:rojo }], margin:[0,0,0,5] },
         { columns:[
-            { text:`Instagram: ${params.instagram}${params.whatsapp ? '  ·  WhatsApp: '+params.whatsapp : ''}`,
+            { text: lineaContacto(params),
               fontSize:7, color:gris, margin:[40,0,0,0] },
             { text:`Pág. ${cur}/${total}`, fontSize:7, color:gris, alignment:'right', margin:[0,0,40,0] },
           ]},

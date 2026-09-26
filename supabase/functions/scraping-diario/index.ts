@@ -32,16 +32,17 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 // Perfil de marca para el prompt de IA — configurable por tenant desde
 // Competitor Tracker → "⚙️ Configurar marca IA" (guardado en Configuracion,
-// misma tabla/patrón que GLOBAL_LOGO). Los valores de Jarapo quedan como
-// default para no romper su comportamiento si nunca los configura ahí.
+// misma tabla/patrón que GLOBAL_LOGO). Genéricos a propósito: se usan en el
+// prompt real de la IA si una empresa no configuró su marca, y no deben
+// hacerle creer a la IA que es un negocio distinto al que realmente es.
 const PERFIL_MARCA_DEFAULTS: Record<string, string> = {
-  TRACKER_NOMBRE_EMPRESA: 'Importaciones Jarapo',
-  TRACKER_DESCRIPCION: 'una empresa colombiana de personal shopping que importa productos originales desde USA (calzado, ropa, accesorios, vitaminas, perfumes, tecnología)',
-  TRACKER_IG_HANDLE: '@importaciones_jarapo',
-  TRACKER_IG_SEGUIDORES: '36.3K seguidores verificados',
-  TRACKER_DESTINO_VIAJE: 'Orlando',
-  TRACKER_TONO: '"copy violento" — impactante, aspiracional, emocional y directo',
-  TRACKER_WHATSAPP: '573207761097',
+  TRACKER_NOMBRE_EMPRESA: 'EncargosPro',
+  TRACKER_DESCRIPCION: 'una empresa que trae productos originales desde el exterior para sus clientes',
+  TRACKER_IG_HANDLE: '',
+  TRACKER_IG_SEGUIDORES: '',
+  TRACKER_DESTINO_VIAJE: 'Estados Unidos',
+  TRACKER_TONO: 'cercano, directo y persuasivo',
+  TRACKER_WHATSAPP: '',
 }
 
 async function obtenerPerfilMarca(empresaId: string): Promise<Record<string, string>> {
