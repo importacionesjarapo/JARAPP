@@ -1484,6 +1484,7 @@ export const createSaleModal = async (navigateTo) => {
                 trm_cotizada: trm,
                 valor_envio_internacional: valorEnvioInt,
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
+                comprado_en_viaje: tipoVenta === 'Encargo' ? !!document.getElementById('enc_viaje_encargos')?.checked : false,
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
                 analista_id: auth.getProfile()?.id || null,
                 empresa_id: auth.getEmpresaId()
