@@ -1024,6 +1024,34 @@ function renderProgresoEntrega(v) {
     </div>`
 }
 
+// El equipo registra la transportadora/guía nacional en Seguimientos (form
+// "Transportadora COL" / "Guía Nacional" / "URL Tracking Local", columnas
+// cli_empresa/cli_guia/cli_url/cli_estado_entrega de Logística) — se muestra
+// solo si al menos uno de esos datos ya se cargó para este pedido.
+function renderEnvioNacional(v) {
+  if (!v.cli_guia && !v.cli_url && !v.cli_empresa) return ''
+  const entregado = v.cli_estado_entrega === 'Recibido'
+  return `
+    <div class="detalle-card">
+      <div class="card-label">🚚 Envío Nacional (Colombia)</div>
+      ${v.cli_empresa ? `
+      <div class="pedido-fin-row">
+        <span class="pedido-fin-label">Transportadora</span>
+        <span class="pedido-fin-val">${v.cli_empresa}</span>
+      </div>` : ''}
+      ${v.cli_guia ? `
+      <div class="pedido-fin-row">
+        <span class="pedido-fin-label">Número de guía</span>
+        <span class="pedido-fin-val">${v.cli_guia}</span>
+      </div>` : ''}
+      <div class="pedido-fin-row">
+        <span class="pedido-fin-label">Estado</span>
+        <span class="pedido-fin-val" style="color:${entregado ? 'var(--ok)' : 'var(--rojo)'}">${entregado ? '✅ Entregado' : '🚚 En tránsito'}</span>
+      </div>
+      ${v.cli_url ? `<a href="${v.cli_url}" target="_blank" rel="noopener" class="btn-outline" style="margin-top:10px; display:block; text-align:center; text-decoration:none;">📦 Ver guía de envío</a>` : ''}
+    </div>`
+}
+
 function verDetalle(idx) {
   const v = todosLosPedidos[idx]
   if (!v) return
@@ -1056,6 +1084,7 @@ function verDetalle(idx) {
         <div class="tl-mini">${renderTimeline(v.track, estado.num)}</div>
       </div>
     </div>
+    ${renderEnvioNacional(v)}
     <div class="detalle-card">
       <div class="pedido-fin">
         <div class="pedido-fin-row">
