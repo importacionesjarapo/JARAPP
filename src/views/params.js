@@ -4,6 +4,40 @@ import { renderError, showToast, uploadImageToSupabase, formatCOP } from '../uti
 import { TRMService } from '../services/trm.js';
 import { ConfigService } from '../services/config.js';
 
+let _paramsActiveTab = 'marca'; // 'marca' | 'metas' | 'catalogos' | 'logistica' | 'finanzas'
+
+const TABS = [
+    { id: 'marca',      label: '🎨 Marca y Portal' },
+    { id: 'metas',      label: '🎯 Metas y Umbrales' },
+    { id: 'catalogos',  label: '🏷️ Catálogos' },
+    { id: 'logistica',  label: '🚚 Logística y Envíos' },
+    { id: 'finanzas',   label: '💰 Finanzas' },
+];
+
+const TRACKS_PROMESA = [
+    { clave: 'DIAS_PROMESA_COLOMBIA',    track: 'colombia',    label: '🇨🇴 Colombia (stock, entrega inmediata)' },
+    { clave: 'DIAS_PROMESA_ENCARGO_WEB', track: 'encargo_web', label: '🛒 Encargo Web (pedido a USA desde Colombia)' },
+    { clave: 'DIAS_PROMESA_ENCARGO_USA', track: 'encargo_usa', label: '✈️ Encargo Viaje (comprado durante viaje a EEUU)' },
+];
+
+const METAS_SCHEMA = [
+    { clave: 'meta_facturacion_mensual',    label: 'Meta Facturación Mensual',         tipo: 'cop',     desc: 'Objetivo de ventas facturadas en el mes (COP)',                    icon: '📊' },
+    { clave: 'meta_cobrado_mensual',         label: 'Meta Cobrado Mensual',              tipo: 'cop',     desc: 'Objetivo de ingresos realmente cobrados en el mes (COP)',          icon: '✅' },
+    { clave: 'meta_margen_neto_pct',         label: 'Meta Margen Neto (%)',              tipo: 'pct',     desc: 'Porcentaje de margen neto objetivo (ej: 25 = 25%)',               icon: '📈' },
+    { clave: 'meta_cartera_maxima',          label: 'Cartera Vencida Máxima',           tipo: 'cop',     desc: 'Límite máximo aceptable de cartera vencida (COP)',                icon: '⚠️' },
+    { clave: 'meta_dso_dias',                label: 'DSO Objetivo (días de cobro)',      tipo: 'num',     desc: 'Días promedio de cobro objetivo (Day Sales Outstanding)',         icon: '📅' },
+    { clave: 'meta_rotacion_inventario',     label: 'Rotación de Inventario Objetivo',  tipo: 'num',     desc: 'Veces que debe rotar el inventario por año',                      icon: '🔄' },
+    { clave: 'meta_envios_tiempo_pct',       label: 'On-Time Delivery (%)',             tipo: 'pct',     desc: 'Porcentaje de envíos entregados a tiempo objetivo',               icon: '🚚' },
+    { clave: 'meta_nuevos_clientes_mes',     label: 'Nuevos Clientes por Mes',          tipo: 'num',     desc: 'Meta de adquisición de clientes nuevos por mes',                 icon: '👥' },
+    { clave: 'meta_conversion_pct',          label: 'Conversión Cotización→Venta (%)',  tipo: 'pct',     desc: 'Tasa de conversión de cotizaciones en ventas cerradas',           icon: '🎯' },
+    { clave: 'umbral_caja_minima',           label: 'Saldo Mínimo de Caja Operativa',   tipo: 'cop',     desc: 'Umbral mínimo de caja para alerta 🔴 (COP)',                      icon: '💰' },
+    { clave: 'umbral_margen_minimo_pct',     label: 'Margen Mínimo por Producto (%)',   tipo: 'pct',     desc: 'Si el margen cae por debajo de esto, se genera alerta 🟡',       icon: '📉' },
+    { clave: 'dias_inactividad_cliente',     label: 'Días para Cliente Inactivo',       tipo: 'num',     desc: 'Días sin compra para clasificar cliente en riesgo de churn',     icon: '😴' },
+    { clave: 'dias_vencimiento_cotizacion',  label: 'Días para Alerta de Cotización',   tipo: 'num',     desc: 'Días sin respuesta antes de generar alerta sobre cotización',    icon: '📝' },
+    { clave: 'dias_retraso_envio_critico',   label: 'Días Retraso Crítico de Envío',    tipo: 'num',     desc: 'Días de retraso en un envío para activar alerta 🔴',              icon: '🚨' },
+    { clave: 'plazo_vencimiento_factura',    label: 'Plazo de Crédito por Defecto',     tipo: 'num',     desc: 'Días de crédito para calcular fecha de vencimiento de facturas', icon: '🗓️' },
+];
+
 export const renderParams = async (renderLayout, navigateTo) => {
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Parámetros Globales...</div>`);
 
@@ -29,25 +63,6 @@ export const renderParams = async (renderLayout, navigateTo) => {
         ValorLibra:          list.filter(p => p.clave === 'ValorLibra'),
         PctGananciaAnalista: list.filter(p => p.clave === 'PctGananciaAnalista'),
     };
-
-    // ── Metas del Dashboard (MetasDashboard) ──
-    const METAS_SCHEMA = [
-        { clave: 'meta_facturacion_mensual',    label: 'Meta Facturación Mensual',         tipo: 'cop',     desc: 'Objetivo de ventas facturadas en el mes (COP)',                    icon: '📊' },
-        { clave: 'meta_cobrado_mensual',         label: 'Meta Cobrado Mensual',              tipo: 'cop',     desc: 'Objetivo de ingresos realmente cobrados en el mes (COP)',          icon: '✅' },
-        { clave: 'meta_margen_neto_pct',         label: 'Meta Margen Neto (%)',              tipo: 'pct',     desc: 'Porcentaje de margen neto objetivo (ej: 25 = 25%)',               icon: '📈' },
-        { clave: 'meta_cartera_maxima',          label: 'Cartera Vencida Máxima',           tipo: 'cop',     desc: 'Límite máximo aceptable de cartera vencida (COP)',                icon: '⚠️' },
-        { clave: 'meta_dso_dias',                label: 'DSO Objetivo (días de cobro)',      tipo: 'num',     desc: 'Días promedio de cobro objetivo (Day Sales Outstanding)',         icon: '📅' },
-        { clave: 'meta_rotacion_inventario',     label: 'Rotación de Inventario Objetivo',  tipo: 'num',     desc: 'Veces que debe rotar el inventario por año',                      icon: '🔄' },
-        { clave: 'meta_envios_tiempo_pct',       label: 'On-Time Delivery (%)',             tipo: 'pct',     desc: 'Porcentaje de envíos entregados a tiempo objetivo',               icon: '🚚' },
-        { clave: 'meta_nuevos_clientes_mes',     label: 'Nuevos Clientes por Mes',          tipo: 'num',     desc: 'Meta de adquisición de clientes nuevos por mes',                 icon: '👥' },
-        { clave: 'meta_conversion_pct',          label: 'Conversión Cotización→Venta (%)',  tipo: 'pct',     desc: 'Tasa de conversión de cotizaciones en ventas cerradas',           icon: '🎯' },
-        { clave: 'umbral_caja_minima',           label: 'Saldo Mínimo de Caja Operativa',   tipo: 'cop',     desc: 'Umbral mínimo de caja para alerta 🔴 (COP)',                      icon: '💰' },
-        { clave: 'umbral_margen_minimo_pct',     label: 'Margen Mínimo por Producto (%)',   tipo: 'pct',     desc: 'Si el margen cae por debajo de esto, se genera alerta 🟡',       icon: '📉' },
-        { clave: 'dias_inactividad_cliente',     label: 'Días para Cliente Inactivo',       tipo: 'num',     desc: 'Días sin compra para clasificar cliente en riesgo de churn',     icon: '😴' },
-        { clave: 'dias_vencimiento_cotizacion',  label: 'Días para Alerta de Cotización',   tipo: 'num',     desc: 'Días sin respuesta antes de generar alerta sobre cotización',    icon: '📝' },
-        { clave: 'dias_retraso_envio_critico',   label: 'Días Retraso Crítico de Envío',    tipo: 'num',     desc: 'Días de retraso en un envío para activar alerta 🔴',              icon: '🚨' },
-        { clave: 'plazo_vencimiento_factura',    label: 'Plazo de Crédito por Defecto',     tipo: 'num',     desc: 'Días de crédito para calcular fecha de vencimiento de facturas', icon: '🗓️' },
-    ];
 
     const metasMap = {};
     (Array.isArray(metas) ? metas : []).forEach(m => { metasMap[m.clave] = m; });
@@ -128,22 +143,14 @@ export const renderParams = async (renderLayout, navigateTo) => {
     const whatsappSoporteParam = list.find(p => p.clave === 'PORTAL_WHATSAPP_SOPORTE');
     const whatsappSoporteValor = whatsappSoporteParam ? whatsappSoporteParam.valor : '';
 
-    const TRACKS_PROMESA = [
-        { clave: 'DIAS_PROMESA_COLOMBIA',    track: 'colombia',    label: '🇨🇴 Colombia (stock, entrega inmediata)' },
-        { clave: 'DIAS_PROMESA_ENCARGO_WEB', track: 'encargo_web', label: '🛒 Encargo Web (pedido a USA desde Colombia)' },
-        { clave: 'DIAS_PROMESA_ENCARGO_USA', track: 'encargo_usa', label: '✈️ Encargo Viaje (comprado durante viaje a EEUU)' },
-    ];
     const diasPromesaParams = {};
     TRACKS_PROMESA.forEach(t => { diasPromesaParams[t.track] = list.find(p => p.clave === t.clave) || null; });
 
     const mostrarBarraParam = list.find(p => p.clave === 'PORTAL_MOSTRAR_BARRA_PROGRESO');
     const mostrarBarraActivo = mostrarBarraParam ? mostrarBarraParam.valor === 'true' : false;
 
-    const html = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem;">
-        <div><h2>Parametrización del Sistema</h2><p style="opacity:0.5;">Administra variables desplegables, metas del Dashboard y configuración global.</p></div>
-      </div>
-
+    // ── Panel: Marca y Portal ──
+    const panelMarca = () => `
       <div class="glass-card" style="margin-bottom:2rem; display:flex; gap:20px; align-items:center;">
           <div style="width:80px; height:80px; border-radius:16px; background:var(--glass-hover); overflow:hidden; display:flex; justify-content:center; align-items:center; flex-shrink:0; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
              ${logoImgSrc ? `<img src="${logoImgSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<i data-lucide="image" style="opacity:0.3; width:30px; height:30px;"></i>`}
@@ -200,9 +207,30 @@ export const renderParams = async (renderLayout, navigateTo) => {
               ${canEdit ? `<button id="btn-save-dias-promesa" class="btn-primary">Guardar</button>` : ''}
           </div>
       </div>
+    `;
 
-      ${renderMetasSection()}
+    // ── Panel: Catálogos ──
+    const panelCatalogos = () => `
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+          ${renderGroup('Marcas', 'Marca', grouped.Marca)}
+          ${renderGroup('Tiendas', 'Tienda', grouped.Tienda)}
+          ${renderGroup('Categorías', 'Categoria', grouped.Categoria)}
+          ${renderGroup('Géneros', 'Genero', grouped.Genero)}
+      </div>
+    `;
 
+    // ── Panel: Logística y Envíos ──
+    const panelLogistica = () => `
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+          ${renderGroup('Bodegas USA', 'BodegaUSA', grouped.BodegaUSA)}
+          ${renderGroup('Transp. Local USA', 'TranspUSA', grouped.TranspUSA)}
+          ${renderGroup('Transp. (Local Colombia)', 'TranspCOL', grouped.TranspCOL)}
+          ${renderGroup('Valor Libra Envio EEUU - COLOMBIA', 'ValorLibra', grouped.ValorLibra)}
+      </div>
+    `;
+
+    // ── Panel: Finanzas ──
+    const panelFinanzas = () => `
       <!-- Métodos de Pago -->
       <div class="glass-card" style="margin-bottom:2rem;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem;">
@@ -224,17 +252,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
           </div>
       </div>
 
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-          ${renderGroup('Marcas', 'Marca', grouped.Marca)}
-          ${renderGroup('Tiendas', 'Tienda', grouped.Tienda)}
-          ${renderGroup('Categorías', 'Categoria', grouped.Categoria)}
-          ${renderGroup('Géneros', 'Genero', grouped.Genero)}
-          ${renderGroup('Bodegas USA', 'BodegaUSA', grouped.BodegaUSA)}
-          ${renderGroup('Transp. Local USA', 'TranspUSA', grouped.TranspUSA)}
-          ${renderGroup('Transp. (Local Colombia)', 'TranspCOL', grouped.TranspCOL)}
-          ${renderGroup('Valor Libra Envio EEUU - COLOMBIA', 'ValorLibra', grouped.ValorLibra)}
-          ${renderGroup('% Ganancia Analista', 'PctGananciaAnalista', grouped.PctGananciaAnalista)}
-      </div>
+      ${renderGroup('% Ganancia Analista', 'PctGananciaAnalista', grouped.PctGananciaAnalista)}
 
       <!-- TRM Manual -->
       <div class="glass-card" style="margin-top:2rem;" id="trm-section">
@@ -271,7 +289,42 @@ export const renderParams = async (renderLayout, navigateTo) => {
           </div>` : ''}
       </div>
     `;
+
+    const PANELES = {
+        marca:     panelMarca,
+        metas:     renderMetasSection,
+        catalogos: panelCatalogos,
+        logistica: panelLogistica,
+        finanzas:  panelFinanzas,
+    };
+
+    const html = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem;">
+        <div><h2>Parametrización del Sistema</h2><p style="opacity:0.5;">Administra variables desplegables, metas del Dashboard y configuración global.</p></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="purchase-view-switcher" style="margin-bottom:1.5rem; flex-wrap:wrap;">
+          ${TABS.map(t => `
+              <button class="pv-tab ${_paramsActiveTab === t.id ? 'active' : ''}" id="params-tab-${t.id}">${t.label}</button>
+          `).join('')}
+      </div>
+
+      ${TABS.map(t => `
+          <div id="params-panel-${t.id}" style="display:${_paramsActiveTab === t.id ? 'block' : 'none'}">
+              ${PANELES[t.id]()}
+          </div>
+      `).join('')}
+    `;
     renderLayout(html);
+
+    // Tabs
+    TABS.forEach(t => {
+        document.getElementById(`params-tab-${t.id}`)?.addEventListener('click', () => {
+            _paramsActiveTab = t.id;
+            renderParams(renderLayout, navigateTo);
+        });
+    });
 
     setTimeout(() => {
         // Guardar TRM Manual
