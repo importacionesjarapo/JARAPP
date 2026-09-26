@@ -397,6 +397,19 @@ export const handler = async (event) => {
     return res(200, { ok: true, empresa: data })
   }
 
+  // Integraciones (Kommo, etc.) es un panel que no todas las empresas deben
+  // ver todavía — el superadmin lo habilita empresa por empresa.
+  if (accion === 'actualizar_integraciones') {
+    const { empresa_id, integraciones_habilitadas } = body
+    if (!empresa_id || typeof integraciones_habilitadas !== 'boolean') {
+      return res(400, { error: 'empresa_id e integraciones_habilitadas (boolean) son obligatorios.' })
+    }
+    const { data, error } = await supabase
+      .from('Empresas').update({ integraciones_habilitadas }).eq('id', empresa_id).select().single()
+    if (error) return res(400, { error: error.message })
+    return res(200, { ok: true, empresa: data })
+  }
+
   // ── PAGOS DE SUSCRIPCIÓN (cada empresa hacia EncargosPro) ──
 
   if (accion === 'listar_pagos') {

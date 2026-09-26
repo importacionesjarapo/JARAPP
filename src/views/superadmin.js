@@ -148,13 +148,15 @@ function buildHTML(empresas, planes, semillas, error) {
                 <th>Vence</th>
                 <th>Usuarios</th>
                 <th>Referido</th>
+                <th>Integraciones</th>
                 <th class="text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              ${empresas.length === 0 ? `<tr><td colspan="9" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
+              ${empresas.length === 0 ? `<tr><td colspan="10" style="text-align:center;padding:2rem;opacity:0.6;">Sin empresas todavía.</td></tr>` : ''}
               ${empresas.map(e => {
                 const referente = e.referido_por ? empresas.find(x => x.id === e.referido_por) : null;
+                const integracionesOn = !!e.integraciones_habilitadas;
                 return `
                 <tr>
                   <td><strong>${e.nombre}</strong></td>
@@ -167,6 +169,12 @@ function buildHTML(empresas, planes, semillas, error) {
                   <td style="font-size:0.75rem;">
                     <div><code title="Código propio">${e.codigo_referido || '—'}</code></div>
                     ${referente ? `<div style="color:var(--text-faint);margin-top:2px;">de ${referente.nombre}</div>` : ''}
+                  </td>
+                  <td>
+                    <button class="btn-action sa-btn-integraciones" data-id="${e.id}" data-nombre="${e.nombre}" data-habilitado="${integracionesOn}"
+                      style="${integracionesOn ? 'background:rgba(34,197,94,0.15);color:#16a34a;' : ''}">
+                      ${integracionesOn ? '🔗 Habilitado' : '🔗 Deshabilitado'}
+                    </button>
                   </td>
                   <td class="text-right">
                     <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">
@@ -278,6 +286,24 @@ function bindEvents(renderLayout, planes, semillas) {
   });
   document.querySelectorAll('.sa-btn-pagos').forEach(btn => {
     btn.addEventListener('click', () => modalPagosEmpresa(btn.dataset.id, btn.dataset.nombre, renderLayout));
+  });
+  document.querySelectorAll('.sa-btn-integraciones').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const habilitadoActual = btn.dataset.habilitado === 'true';
+      const accionTexto = habilitadoActual ? 'deshabilitar' : 'habilitar';
+      const ok = await window.customConfirm(
+        `${habilitadoActual ? 'Deshabilitar' : 'Habilitar'} Integraciones`,
+        `¿${accionTexto.charAt(0).toUpperCase() + accionTexto.slice(1)} el panel de Integraciones (Kommo) para "${btn.dataset.nombre}"?`
+      );
+      if (!ok) return;
+      try {
+        await callAdminEmpresas({ accion: 'actualizar_integraciones', empresa_id: btn.dataset.id, integraciones_habilitadas: !habilitadoActual });
+        showToast(`✅ Integraciones ${habilitadoActual ? 'deshabilitadas' : 'habilitadas'} para ${btn.dataset.nombre}`, 'success');
+        renderSuperadmin(renderLayout);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
   });
   document.querySelectorAll('.sa-btn-exportar').forEach(btn => {
     btn.addEventListener('click', () => exportarDatosEmpresa(btn.dataset.id, btn.dataset.nombre, btn));

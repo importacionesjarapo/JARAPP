@@ -6,12 +6,15 @@ import { ConfigService } from '../services/config.js';
 
 let _paramsActiveTab = 'marca'; // 'marca' | 'metas' | 'catalogos' | 'logistica' | 'finanzas'
 
-const TABS = [
+const TODAS_LAS_TABS = [
     { id: 'marca',         label: '🎨 Marca y Portal' },
     { id: 'metas',         label: '🎯 Metas y Umbrales' },
     { id: 'catalogos',     label: '🏷️ Catálogos' },
     { id: 'logistica',     label: '🚚 Logística y Envíos' },
     { id: 'finanzas',      label: '💰 Finanzas' },
+    // Kommo es muy propio de cómo trabaja hoy Importaciones Jarapo — el
+    // superadmin la habilita empresa por empresa (Empresas.integraciones_habilitadas)
+    // en vez de mostrarla a cualquier tenant nuevo por defecto.
     { id: 'integraciones', label: '🔗 Integraciones' },
 ];
 
@@ -190,6 +193,9 @@ export const renderParams = async (renderLayout, navigateTo) => {
     KOMMO_CAMPOS.forEach(c => { kommoParams[c.clave] = list.find(p => p.clave === c.clave) || null; });
     const kommoConfigurado = !!(kommoParams.KOMMO_SUBDOMAIN?.valor && kommoParams.KOMMO_ACCESS_TOKEN?.valor);
     const empresaSlug = auth.getEmpresaSlug() || '';
+    const integracionesHabilitadas = !!auth.getEmpresaSync()?.integraciones_habilitadas;
+    const tabs = TODAS_LAS_TABS.filter(t => t.id !== 'integraciones' || integracionesHabilitadas);
+    if (!tabs.find(t => t.id === _paramsActiveTab)) _paramsActiveTab = 'marca';
     const kommoWebhookUrl = `${APP_URL_PROD}/.netlify/functions/kommo-webhook?empresa=${empresaSlug}`;
 
     // ── Panel: Marca y Portal ──
@@ -391,12 +397,12 @@ export const renderParams = async (renderLayout, navigateTo) => {
 
       <!-- Tabs -->
       <div class="purchase-view-switcher" style="margin-bottom:1.5rem; flex-wrap:wrap;">
-          ${TABS.map(t => `
+          ${tabs.map(t => `
               <button class="pv-tab ${_paramsActiveTab === t.id ? 'active' : ''}" id="params-tab-${t.id}">${t.label}</button>
           `).join('')}
       </div>
 
-      ${TABS.map(t => `
+      ${tabs.map(t => `
           <div id="params-panel-${t.id}" style="display:${_paramsActiveTab === t.id ? 'block' : 'none'}">
               ${PANELES[t.id]()}
           </div>
@@ -405,7 +411,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
     renderLayout(html);
 
     // Tabs
-    TABS.forEach(t => {
+    tabs.forEach(t => {
         document.getElementById(`params-tab-${t.id}`)?.addEventListener('click', () => {
             _paramsActiveTab = t.id;
             renderParams(renderLayout, navigateTo);
