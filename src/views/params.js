@@ -69,21 +69,49 @@ export const renderParams = async (renderLayout, navigateTo) => {
 
     const canEdit = auth.canEdit('params');
 
-    const renderGroup = (title, key, arr) => `
-        <div class="glass-card" style="margin-bottom:2rem; position:relative;">
-           ${canEdit ? `<button class="btn-action" onclick="window.modalParametro('${key}')">+ ${key}</button>` : ''}
-           <h3 style="margin-top:0;">${title} <span style="opacity:0.4; font-size:0.8rem; font-weight:normal;">(${arr.length} registrados)</span></h3>
-           <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:1.5rem;">
-               ${arr.length === 0 ? '<span style="opacity:0.4; font-size:0.8rem;">Ninguno registrado.</span>' : ''}
+    const GROUP_ICONS = {
+        Marca: '🏷️', Tienda: '🏬', Categoria: '📂', Genero: '🚻',
+        BodegaUSA: '🏭', TranspUSA: '🚚', TranspCOL: '🚛',
+        ValorLibra: '⚖️', PctGananciaAnalista: '💵',
+    };
+
+    const formatChipValor = (key, valor) => {
+        if (key === 'ValorLibra') return `$${valor} USD`;
+        if (key === 'PctGananciaAnalista') return `${valor}%`;
+        return valor;
+    };
+
+    const renderGroup = (title, key, arrIn) => {
+        const esNumerico = key === 'ValorLibra' || key === 'PctGananciaAnalista';
+        const arr = [...arrIn].sort((a, b) => esNumerico
+            ? parseFloat(a.valor) - parseFloat(b.valor)
+            : String(a.valor).localeCompare(String(b.valor), 'es', { sensitivity: 'base' }));
+        const necesitaBuscador = arr.length > 8;
+        return `
+        <div class="glass-card" style="margin-bottom:1.2rem; padding:1.1rem 1.3rem;">
+           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:${necesitaBuscador ? '8px' : '12px'};">
+               <h3 style="margin:0; font-size:0.9rem; font-weight:700; display:flex; align-items:center; gap:7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                   <span>${GROUP_ICONS[key] || '🔖'}</span> ${title}
+                   <span style="opacity:0.4; font-size:0.72rem; font-weight:600; flex-shrink:0;">(${arr.length})</span>
+               </h3>
+               ${canEdit ? `<button class="btn-action" onclick="window.modalParametro('${key}')" style="flex-shrink:0;">+ Agregar</button>` : ''}
+           </div>
+           ${necesitaBuscador ? `
+           <input type="text" placeholder="🔎 Buscar…" class="catalogo-buscador" data-target="catalogo-chips-${key}"
+               style="width:100%; padding:6px 12px; border-radius:8px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.78rem; font-family:inherit; margin-bottom:8px; box-sizing:border-box;">
+           ` : ''}
+           <div id="catalogo-chips-${key}" style="display:flex; gap:6px; flex-wrap:wrap; align-content:flex-start; max-height:186px; overflow-y:auto; padding-right:2px;">
+               ${arr.length === 0 ? '<span style="opacity:0.4; font-size:0.78rem;">Ninguno registrado.</span>' : ''}
                ${arr.map(c => `
-                  <div style="background:var(--glass-hover); border:1px solid var(--glass-border); padding:8px 12px; border-radius:12px; display:flex; gap:10px; align-items:center;">
-                     <span style="font-weight:700;">${key === 'ValorLibra' ? `$${c.valor} USD` : c.valor}</span>
-                     ${canEdit ? `<button onclick="window.deleteParametro('${c.id}')" style="background:none; border:none; color:var(--primary-red); cursor:pointer; opacity:0.5; font-size:1.1rem; padding:0;">&times;</button>` : ''}
+                  <div class="catalogo-chip" data-texto="${String(c.valor).toLowerCase()}" style="background:var(--glass-hover); border:1px solid var(--glass-border); padding:4px 6px 4px 10px; border-radius:20px; display:flex; gap:5px; align-items:center; font-size:0.78rem; line-height:1.3;">
+                     <span style="font-weight:600;">${formatChipValor(key, c.valor)}</span>
+                     ${canEdit ? `<button onclick="window.deleteParametro('${c.id}')" style="background:none; border:none; color:var(--primary-red); cursor:pointer; opacity:0.5; font-size:0.95rem; padding:2px 4px; line-height:1;">&times;</button>` : ''}
                   </div>
                `).join('')}
            </div>
         </div>
     `;
+    };
 
     const formatMetaDisplay = (meta) => {
         if (!meta) return '—';
@@ -211,7 +239,7 @@ export const renderParams = async (renderLayout, navigateTo) => {
 
     // ── Panel: Catálogos ──
     const panelCatalogos = () => `
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px; align-items:start;">
           ${renderGroup('Marcas', 'Marca', grouped.Marca)}
           ${renderGroup('Tiendas', 'Tienda', grouped.Tienda)}
           ${renderGroup('Categorías', 'Categoria', grouped.Categoria)}
@@ -221,11 +249,11 @@ export const renderParams = async (renderLayout, navigateTo) => {
 
     // ── Panel: Logística y Envíos ──
     const panelLogistica = () => `
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:14px; align-items:start;">
           ${renderGroup('Bodegas USA', 'BodegaUSA', grouped.BodegaUSA)}
           ${renderGroup('Transp. Local USA', 'TranspUSA', grouped.TranspUSA)}
           ${renderGroup('Transp. (Local Colombia)', 'TranspCOL', grouped.TranspCOL)}
-          ${renderGroup('Valor Libra Envio EEUU - COLOMBIA', 'ValorLibra', grouped.ValorLibra)}
+          ${renderGroup('Valor Libra Envío EEUU-COL', 'ValorLibra', grouped.ValorLibra)}
       </div>
     `;
 
@@ -327,6 +355,18 @@ export const renderParams = async (renderLayout, navigateTo) => {
     });
 
     setTimeout(() => {
+        // Buscador en vivo de cada card de catálogo (Marcas, Tiendas, etc.)
+        document.querySelectorAll('.catalogo-buscador').forEach(input => {
+            input.addEventListener('input', () => {
+                const q = input.value.trim().toLowerCase();
+                const contenedor = document.getElementById(input.dataset.target);
+                if (!contenedor) return;
+                contenedor.querySelectorAll('.catalogo-chip').forEach(chip => {
+                    chip.style.display = (!q || chip.dataset.texto.includes(q)) ? 'flex' : 'none';
+                });
+            });
+        });
+
         // Guardar TRM Manual
         const btnTRM = document.getElementById('btn-guardar-trm');
         if (btnTRM) {
