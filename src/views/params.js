@@ -129,9 +129,9 @@ export const renderParams = async (renderLayout, navigateTo) => {
     const whatsappSoporteValor = whatsappSoporteParam ? whatsappSoporteParam.valor : '';
 
     const TRACKS_PROMESA = [
-        { clave: 'DIAS_PROMESA_COLOMBIA',    track: 'colombia',    label: '🇨🇴 Colombia (nacional)' },
-        { clave: 'DIAS_PROMESA_ENCARGO_USA', track: 'encargo_usa', label: '✈️ Encargo USA' },
-        { clave: 'DIAS_PROMESA_ENCARGO_WEB', track: 'encargo_web', label: '🛒 Web USA' },
+        { clave: 'DIAS_PROMESA_COLOMBIA',    track: 'colombia',    label: '🇨🇴 Colombia (stock, entrega inmediata)' },
+        { clave: 'DIAS_PROMESA_ENCARGO_WEB', track: 'encargo_web', label: '🛒 Encargo Web (pedido a USA desde Colombia)' },
+        { clave: 'DIAS_PROMESA_ENCARGO_USA', track: 'encargo_usa', label: '✈️ Encargo Viaje (comprado durante viaje a EEUU)' },
     ];
     const diasPromesaParams = {};
     TRACKS_PROMESA.forEach(t => { diasPromesaParams[t.track] = list.find(p => p.clave === t.clave) || null; });
