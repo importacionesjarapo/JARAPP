@@ -1036,8 +1036,10 @@ async function startApp() {
     }).catch(() => {});
   }).catch(() => {});
 
-  // Iniciar JaraBot para admin y gerente (solo una vez por sesión)
-  initJaraBot(auth);
+  // Iniciar JaraBot para admin y gerente (solo una vez por sesión) — es un
+  // módulo de plan (posible plus del plan Empresarial), no algo que traiga
+  // todo el mundo: si el plan actual no lo incluye, simplemente no se monta.
+  if (!auth.isModuleLockedByPlan('jarabot')) initJaraBot(auth);
 
   // Iniciar scheduler de scraping para admin y gerente
   if (['admin', 'gerente'].includes(auth.getUserRole())) {

@@ -21,28 +21,43 @@ const GROQ_KEY     = import.meta.env.VITE_GROQ_API_KEY;
 
 // Perfil de marca usado en el prompt de IA — configurable por tenant desde
 // Competitor Tracker → "⚙️ Configurar marca IA" (se guarda en Configuracion,
-// igual que GLOBAL_LOGO). Los valores de Jarapo quedan como default para no
-// romper su comportamiento actual si nunca los toca desde ese formulario.
+// igual que GLOBAL_LOGO). Estos valores por defecto son genéricos a
+// propósito: se usan en el prompt real de la IA si una empresa aún no
+// configuró su marca, y no deben hacerle creer a la IA (ni a quien lea el
+// contenido generado) que es una empresa distinta a la que realmente es.
 const PERFIL_MARCA_DEFAULTS = {
-  TRACKER_NOMBRE_EMPRESA: 'Importaciones Jarapo',
-  TRACKER_DESCRIPCION:    'una empresa colombiana de personal shopping que importa productos originales desde USA (calzado, ropa, accesorios, vitaminas, perfumes, tecnología)',
-  TRACKER_IG_HANDLE:      '@importaciones_jarapo',
-  TRACKER_IG_SEGUIDORES:  '36.3K seguidores verificados',
-  TRACKER_DESTINO_VIAJE:  'Orlando',
-  TRACKER_TONO:           '"copy violento" — impactante, aspiracional, emocional y directo',
-  TRACKER_WHATSAPP:       '573207761097',
+  TRACKER_NOMBRE_EMPRESA: 'EncargosPro',
+  TRACKER_DESCRIPCION:    'una empresa que trae productos originales desde el exterior para sus clientes',
+  TRACKER_IG_HANDLE:      '',
+  TRACKER_IG_SEGUIDORES:  '',
+  TRACKER_DESTINO_VIAJE:  'Estados Unidos',
+  TRACKER_TONO:           'cercano, directo y persuasivo',
+  TRACKER_WHATSAPP:       '',
+};
+
+// Ejemplos ilustrativos para el formulario de "Configurar marca IA" en
+// tracker.js (texto placeholder, nunca se guarda) — separados de los
+// defaults reales de arriba para no repetir un nombre de empresa ajeno.
+const PERFIL_MARCA_EJEMPLOS = {
+  TRACKER_NOMBRE_EMPRESA: 'Ej: Mi Tienda USA',
+  TRACKER_DESCRIPCION:    'Ej: Empresa que trae calzado y ropa originales desde USA a Colombia',
+  TRACKER_IG_HANDLE:      'Ej: @mimarca',
+  TRACKER_IG_SEGUIDORES:  'Ej: 15K seguidores',
+  TRACKER_DESTINO_VIAJE:  'Ej: Miami',
+  TRACKER_TONO:           'Ej: cercano y aspiracional',
+  TRACKER_WHATSAPP:       'Ej: 573001234567',
 };
 
 // Metadata para el formulario de "Configurar marca IA" en tracker.js — evita
 // duplicar la lista de claves/labels en dos archivos.
 export const PERFIL_MARCA_CAMPOS = [
-  { clave: 'TRACKER_NOMBRE_EMPRESA', label: 'Nombre de la empresa',        placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_NOMBRE_EMPRESA },
-  { clave: 'TRACKER_DESCRIPCION',    label: 'Descripción corta del negocio', placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_DESCRIPCION, textarea: true },
-  { clave: 'TRACKER_IG_HANDLE',      label: 'Usuario de Instagram',        placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_IG_HANDLE },
-  { clave: 'TRACKER_IG_SEGUIDORES',  label: 'Seguidores (texto libre)',    placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_IG_SEGUIDORES },
-  { clave: 'TRACKER_DESTINO_VIAJE',  label: 'Destino de viaje/compras',    placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_DESTINO_VIAJE },
-  { clave: 'TRACKER_TONO',           label: 'Tono de contenido',           placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_TONO },
-  { clave: 'TRACKER_WHATSAPP',       label: 'WhatsApp (solo números, sin +)', placeholder: PERFIL_MARCA_DEFAULTS.TRACKER_WHATSAPP },
+  { clave: 'TRACKER_NOMBRE_EMPRESA', label: 'Nombre de la empresa',        placeholder: PERFIL_MARCA_EJEMPLOS.TRACKER_NOMBRE_EMPRESA },
+  { clave: 'TRACKER_DESCRIPCION',    label: 'Descripción corta del negocio', placeholder: PERFIL_MARCA_EJEMPLOS.TRACKER_DESCRIPCION, textarea: true },
+  { clave: 'TRACKER_IG_HANDLE',      label: 'Usuario de Instagram',        placeholder: PERFIL_MARCA_EJEMPLOS.TRACKER_IG_HANDLE },
+  { clave: 'TRACKER_IG_SEGUIDORES',  label: 'Seguidores (texto libre)',    placeholder: PERFIL_MARCA_EJEMPLOS.TRACKER_IG_SEGUIDORES },
+  { clave: 'TRACKER_DESTINO_VIAJE',  label: 'Destino de viaje/compras',    placeholder: PERFIL_MARCA_EJEMPLOS.TRACKER_DESTINO_VIAJE },
+  { clave: 'TRACKER_TONO',           label: 'Tono de contenido',           placeholder: PERFIL_MARCA_EJEMPLOS.TRACKER_TONO },
+  { clave: 'TRACKER_WHATSAPP',       label: 'WhatsApp (solo números, sin +)', placeholder: PERFIL_MARCA_EJEMPLOS.TRACKER_WHATSAPP },
 ];
 
 export async function obtenerPerfilMarca() {

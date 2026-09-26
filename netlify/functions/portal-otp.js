@@ -10,9 +10,29 @@ function generarOTP() {
   return String(crypto.randomInt(100000, 999999))
 }
 
-async function enviarOTPWhatsApp({ telefono, otp, nombreEmpresa }) {
-  const subdomain = process.env.KOMMO_SUBDOMAIN
-  const accessToken = process.env.KOMMO_ACCESS_TOKEN
+/** Integración de Kommo configurada por empresa en Parámetros (Configuracion,
+ * claves KOMMO_*). Si una empresa no la configuró aún, se usan las variables
+ * de entorno globales como respaldo transitorio (la cuenta de Kommo original
+ * de Importaciones Jarapo), para no romper nada mientras cada tenant migra a
+ * su propia integración. */
+async function obtenerKommoConfig(empresaId) {
+  const config = {
+    subdomain: process.env.KOMMO_SUBDOMAIN || null,
+    accessToken: process.env.KOMMO_ACCESS_TOKEN || null,
+  }
+  if (!empresaId) return config
+  const { data } = await supabase
+    .from('Configuracion').select('clave, valor')
+    .in('clave', ['KOMMO_SUBDOMAIN', 'KOMMO_ACCESS_TOKEN']).eq('empresa_id', empresaId)
+  ;(data || []).forEach(row => {
+    if (row.clave === 'KOMMO_SUBDOMAIN' && row.valor) config.subdomain = row.valor
+    if (row.clave === 'KOMMO_ACCESS_TOKEN' && row.valor) config.accessToken = row.valor
+  })
+  return config
+}
+
+async function enviarOTPWhatsApp({ telefono, otp, nombreEmpresa, empresaId }) {
+  const { subdomain, accessToken } = await obtenerKommoConfig(empresaId)
   if (!subdomain || !accessToken) {
     console.log(`[DEV] OTP para ${telefono}: ${otp}`)
     return { ok: true, dev: true }
@@ -213,7 +233,7 @@ export const handler = async (event) => {
       return res(500, { error: 'Error generando código: ' + insertErr.message })
     }
     console.log('[OTP] Insert exitoso para', telefono)
-    await enviarOTPWhatsApp({ telefono, otp: codigo, nombreEmpresa: empresa?.nombre })
+    await enviarOTPWhatsApp({ telefono, otp: codigo, nombreEmpresa: empresa?.nombre, empresaId: empresa?.id })
 
     return res(200, { ok: true, mensaje: 'Código enviado por WhatsApp' })
   }

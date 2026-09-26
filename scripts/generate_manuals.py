@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 JARAPP PDF Manual Generator - v1.0
-Genera Manual Funcional y Manual Tecnico con estilos de marca Jarapo.
+Genera Manual Funcional y Manual Tecnico con estilos de marca EncargosPro.
 Uso: python scripts/generate_manuals.py
 """
 import sys
@@ -23,7 +23,7 @@ from reportlab.lib.colors import HexColor
 # ── Config ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-LOGO_PATH   = os.path.join(SCRIPT_DIR, 'logo_jarapo.png')
+LOGO_PATH   = os.path.join(PROJECT_DIR, 'public', 'logo-encargospro.png')
 OUTPUT_DIR  = os.path.join(PROJECT_DIR, 'docs')
 PAGE_W, PAGE_H = A4
 MARGIN = 2.0 * cm
@@ -223,7 +223,7 @@ def cover_fn(logo_path, accent, title1, title2, sub):
         canvas.setFont('Helvetica', 7)
         canvas.setFillColor(HexColor('#FFFFFF80'))
         canvas.drawCentredString(W / 2, 0.5 * cm,
-                                 'JARAPP v3.0  ·  Importaciones Jarapo  ·  2026  ·  Confidencial — Uso Interno')
+                                 'JARAPP v3.0  ·  EncargosPro  ·  2026  ·  Confidencial — Uso Interno')
         canvas.restoreState()
     return fn
 
@@ -261,7 +261,7 @@ def build_funcional():
     # ── 1. ¿Qué es JARAPP? ────────────────────────────────────────────────────
     story += section_hdr('1. ¿Qué es JARAPP?', st, accent)
     story.append(Paragraph(
-        'JARAPP es el sistema administrativo interno de Importaciones Jarapo. '
+        'JARAPP es el sistema administrativo interno de EncargosPro. '
         'Centraliza todas las operaciones del negocio — ventas, inventario, compras en USA, '
         'logística y finanzas — en una sola aplicación web instalable en cualquier dispositivo.',
         st['normal']))
@@ -754,7 +754,7 @@ def build_tecnico():
          Paragraph('id (uuid), nombre, marca, categoria, precio_usd, '
                    'precio_cop, stock_medellin, stock_usa, activo, '
                    'imagen_url, descripcion, peso_lb', st['td']),
-         Paragraph('imagen_url → Supabase Storage bucket jarapo-images', st['td'])],
+         Paragraph('imagen_url → Supabase Storage bucket productos-publico', st['td'])],
         [Paragraph('Logistica', st['td_bold']),
          Paragraph('id (texto), fase (1-7), tracking_usa, tracking_col, '
                    'fecha_compra, fecha_llegada_col, producto, compra_id, '
@@ -1042,7 +1042,7 @@ def generate_manual(output_path, accent, cover_title1, cover_title2, cover_sub,
         topMargin=MARGIN + 1.3 * cm,   # espacio para la barra del header
         bottomMargin=MARGIN,
         title=f'{cover_title1} — {cover_title2}',
-        author='Importaciones Jarapo',
+        author='EncargosPro',
         subject=manual_name,
         creator='JARAPP generate_manuals.py v1.0',
     )
@@ -1075,7 +1075,7 @@ def main():
         accent        = PRIMARY,
         cover_title1  = 'JARAPP',
         cover_title2  = 'Manual de Usuario',
-        cover_sub     = 'Guia completa para el equipo de Importaciones Jarapo - 2026',
+        cover_sub     = 'Guia completa para tu equipo - 2026',
         manual_name   = 'JARAPP - Manual Funcional v3.0',
         story_fn      = build_funcional,
     )

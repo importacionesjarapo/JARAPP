@@ -73,6 +73,7 @@ export const MODULE_LABELS = {
   calendario_eliminar: 'Calendario de Contenido — Eliminar',
   calendario_plantilla_editar: 'Calendario de Contenido — Editar Plantilla Semanal',
   calendario_fechas_editar: 'Calendario de Contenido — Editar Fechas Clave',
+  jarabot: 'JaraBot (Asistente IA)',
 };
 
 export const ROLE_LABELS = {
