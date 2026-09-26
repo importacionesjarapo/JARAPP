@@ -128,8 +128,16 @@ export const renderParams = async (renderLayout, navigateTo) => {
     const whatsappSoporteParam = list.find(p => p.clave === 'PORTAL_WHATSAPP_SOPORTE');
     const whatsappSoporteValor = whatsappSoporteParam ? whatsappSoporteParam.valor : '';
 
-    const diasPromesaParam = list.find(p => p.clave === 'DIAS_PROMESA_ENTREGA');
-    const diasPromesaValor = diasPromesaParam ? diasPromesaParam.valor : '20';
+    const TRACKS_PROMESA = [
+        { clave: 'DIAS_PROMESA_COLOMBIA',    track: 'colombia',    label: '🇨🇴 Colombia (nacional)' },
+        { clave: 'DIAS_PROMESA_ENCARGO_USA', track: 'encargo_usa', label: '✈️ Encargo USA' },
+        { clave: 'DIAS_PROMESA_ENCARGO_WEB', track: 'encargo_web', label: '🛒 Web USA' },
+    ];
+    const diasPromesaParams = {};
+    TRACKS_PROMESA.forEach(t => { diasPromesaParams[t.track] = list.find(p => p.clave === t.clave) || null; });
+
+    const mostrarBarraParam = list.find(p => p.clave === 'PORTAL_MOSTRAR_BARRA_PROGRESO');
+    const mostrarBarraActivo = mostrarBarraParam ? mostrarBarraParam.valor === 'true' : false;
 
     const html = `
       <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem;">
@@ -166,17 +174,30 @@ export const renderParams = async (renderLayout, navigateTo) => {
       </div>
 
       <!-- Días de Promesa de Entrega (Portal de Clientes) -->
-      <div class="glass-card" style="margin-bottom:2rem; display:flex; gap:20px; align-items:center;">
-          <div style="width:80px; height:80px; border-radius:16px; background:var(--glass-hover); display:flex; justify-content:center; align-items:center; flex-shrink:0; font-size:2rem;">
-             📅
+      <div class="glass-card" style="margin-bottom:2rem;">
+          <div style="display:flex; gap:16px; align-items:flex-start; margin-bottom:1.2rem;">
+              <div style="width:56px; height:56px; border-radius:14px; background:var(--glass-hover); display:flex; justify-content:center; align-items:center; flex-shrink:0; font-size:1.6rem;">📅</div>
+              <div>
+                  <h3 style="margin:0 0 4px 0;">Días de Promesa de Entrega (Portal de Clientes)</h3>
+                  <p style="margin:0; opacity:0.6; font-size:0.8rem;">Días hábiles (sin contar sábados, domingos ni festivos de Colombia) para la fecha estimada de entrega en el portal de tus clientes — cada tipo de venta puede tener un plazo distinto.</p>
+              </div>
           </div>
-          <div style="flex:1;">
-             <h3 style="margin-top:0;">Días de Promesa de Entrega (Portal de Clientes)</h3>
-             <p style="opacity:0.6; font-size:0.8rem; margin-bottom:10px;">Días hábiles (sin contar sábados ni domingos) que se muestran como fecha estimada de entrega en el portal de seguimiento de tus clientes, contados desde la fecha de venta.</p>
-             <input type="number" id="dias-promesa-input" min="1" step="1" placeholder="Ej: 20" value="${diasPromesaValor}" style="padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.9rem; font-family:inherit; width:120px;">
+          <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:1.4rem;">
+              ${TRACKS_PROMESA.map(t => `
+                  <div style="flex:1; min-width:160px;">
+                      <label class="form-label" style="margin-bottom:6px; display:block; font-size:0.8rem;">${t.label}</label>
+                      <input type="number" id="dias-promesa-input-${t.track}" min="1" step="1" placeholder="Ej: 20"
+                          value="${diasPromesaParams[t.track] ? diasPromesaParams[t.track].valor : '20'}"
+                          style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.9rem; font-family:inherit; box-sizing:border-box;">
+                  </div>
+              `).join('')}
           </div>
-          <div>
-             ${canEdit ? `<button id="btn-save-dias-promesa" class="btn-primary">Guardar</button>` : ''}
+          <div style="display:flex; justify-content:space-between; align-items:center; padding-top:1rem; border-top:1px solid var(--border-base);">
+              <label style="display:flex; align-items:center; gap:10px; font-size:0.85rem; cursor:${canEdit ? 'pointer' : 'default'};">
+                  <input type="checkbox" id="mostrar-barra-progreso-input" ${mostrarBarraActivo ? 'checked' : ''} ${canEdit ? '' : 'disabled'} style="width:18px; height:18px;">
+                  Mostrar a los clientes la barra de progreso hacia la entrega (incluye aviso de "Atrasado" con el motivo)
+              </label>
+              ${canEdit ? `<button id="btn-save-dias-promesa" class="btn-primary">Guardar</button>` : ''}
           </div>
       </div>
 
@@ -340,24 +361,36 @@ export const renderParams = async (renderLayout, navigateTo) => {
             };
         }
 
-        // Días de Promesa de Entrega (Portal de Clientes)
+        // Días de Promesa de Entrega por track + barra de progreso (Portal de Clientes)
         const btnDiasPromesa = document.getElementById('btn-save-dias-promesa');
         if (btnDiasPromesa) {
             btnDiasPromesa.onclick = async () => {
-                const input = document.getElementById('dias-promesa-input');
-                const valor = parseInt(input?.value, 10);
-                if (!valor || valor < 1) {
-                    showToast('Ingresa un número de días mayor a 0.', 'error');
-                    return;
+                const valores = {};
+                for (const t of TRACKS_PROMESA) {
+                    const input = document.getElementById(`dias-promesa-input-${t.track}`);
+                    const valor = parseInt(input?.value, 10);
+                    if (!valor || valor < 1) {
+                        showToast(`Ingresa un número de días válido para ${t.label}.`, 'error');
+                        return;
+                    }
+                    valores[t.track] = valor;
                 }
+                const mostrarBarra = document.getElementById('mostrar-barra-progreso-input')?.checked || false;
                 btnDiasPromesa.disabled = true;
                 btnDiasPromesa.textContent = 'Guardando...';
                 try {
-                    const payload = { id: diasPromesaParam ? diasPromesaParam.id : Date.now().toString(), clave: 'DIAS_PROMESA_ENTREGA', valor: String(valor) };
-                    const action = diasPromesaParam ? 'UPDATE' : 'INSERT';
-                    if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
-                    await db.postData('Configuracion', payload, action);
-                    showToast('✅ Días de promesa de entrega actualizados', 'success');
+                    for (const t of TRACKS_PROMESA) {
+                        const existente = diasPromesaParams[t.track];
+                        const payload = { id: existente ? existente.id : Date.now().toString() + '_' + t.track, clave: t.clave, valor: String(valores[t.track]) };
+                        const action = existente ? 'UPDATE' : 'INSERT';
+                        if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
+                        await db.postData('Configuracion', payload, action);
+                    }
+                    const payloadBarra = { id: mostrarBarraParam ? mostrarBarraParam.id : Date.now().toString() + '_barra', clave: 'PORTAL_MOSTRAR_BARRA_PROGRESO', valor: String(mostrarBarra) };
+                    const actionBarra = mostrarBarraParam ? 'UPDATE' : 'INSERT';
+                    if (actionBarra === 'INSERT') payloadBarra.empresa_id = auth.getEmpresaId();
+                    await db.postData('Configuracion', payloadBarra, actionBarra);
+                    showToast('✅ Configuración de entrega actualizada', 'success');
                     setTimeout(() => navigateTo('params'), 800);
                 } catch (e) {
                     showToast(e.message, 'error');

@@ -105,16 +105,42 @@ async function obtenerWhatsappSoporte(empresaId) {
 
 const DIAS_PROMESA_ENTREGA_DEFAULT = 20
 
-/** Días hábiles de promesa de entrega que cada empresa configura en
- * Parámetros (clave DIAS_PROMESA_ENTREGA) — cada negocio que usa el
- * software puede tener un plazo distinto. Sin configurar, se usa 20. */
-async function obtenerDiasPromesaEntrega(empresaId) {
-  if (!empresaId) return DIAS_PROMESA_ENTREGA_DEFAULT
+/** Cada track (colombia / encargo_usa / encargo_web) puede tener un plazo
+ * de entrega distinto — un envío nacional no es comparable a un encargo
+ * desde USA — así que cada uno se configura por separado en Parámetros. */
+const CLAVE_DIAS_PROMESA = {
+  colombia:    'DIAS_PROMESA_COLOMBIA',
+  encargo_usa: 'DIAS_PROMESA_ENCARGO_USA',
+  encargo_web: 'DIAS_PROMESA_ENCARGO_WEB',
+}
+
+async function obtenerDiasPromesaPorTrack(empresaId) {
+  const resultado = {
+    colombia: DIAS_PROMESA_ENTREGA_DEFAULT,
+    encargo_usa: DIAS_PROMESA_ENTREGA_DEFAULT,
+    encargo_web: DIAS_PROMESA_ENTREGA_DEFAULT,
+  }
+  if (!empresaId) return resultado
+  const { data } = await supabase
+    .from('Configuracion').select('clave, valor')
+    .in('clave', Object.values(CLAVE_DIAS_PROMESA)).eq('empresa_id', empresaId)
+  ;(data || []).forEach(row => {
+    const track = Object.keys(CLAVE_DIAS_PROMESA).find(t => CLAVE_DIAS_PROMESA[t] === row.clave)
+    const dias = parseInt(row.valor, 10)
+    if (track && Number.isFinite(dias) && dias > 0) resultado[track] = dias
+  })
+  return resultado
+}
+
+/** Cada empresa decide si le muestra o no a sus clientes la barra de
+ * progreso hacia la promesa de entrega (incluye el estado "Atrasado" con
+ * el motivo) — apagada por defecto hasta que la activen conscientemente. */
+async function obtenerMostrarBarraProgreso(empresaId) {
+  if (!empresaId) return false
   const { data } = await supabase
     .from('Configuracion').select('valor')
-    .eq('clave', 'DIAS_PROMESA_ENTREGA').eq('empresa_id', empresaId).maybeSingle()
-  const dias = parseInt(data?.valor, 10)
-  return Number.isFinite(dias) && dias > 0 ? dias : DIAS_PROMESA_ENTREGA_DEFAULT
+    .eq('clave', 'PORTAL_MOSTRAR_BARRA_PROGRESO').eq('empresa_id', empresaId).maybeSingle()
+  return data?.valor === 'true'
 }
 
 const CORS = {
@@ -135,12 +161,13 @@ export const handler = async (event) => {
   if (accion === 'empresa_por_slug') {
     const empresa = await resolverEmpresaPorSlug(empresa_slug)
     if (!empresa) return res(404, { error: 'Empresa no encontrada' })
-    const [logo_url, whatsapp_soporte, dias_promesa_entrega] = await Promise.all([
+    const [logo_url, whatsapp_soporte, dias_promesa, mostrar_barra_progreso] = await Promise.all([
       obtenerLogoEmpresa(empresa.id),
       obtenerWhatsappSoporte(empresa.id),
-      obtenerDiasPromesaEntrega(empresa.id),
+      obtenerDiasPromesaPorTrack(empresa.id),
+      obtenerMostrarBarraProgreso(empresa.id),
     ])
-    return res(200, { ok: true, nombre: empresa.nombre, logo_url, whatsapp_soporte, dias_promesa_entrega })
+    return res(200, { ok: true, nombre: empresa.nombre, logo_url, whatsapp_soporte, dias_promesa, mostrar_barra_progreso })
   }
 
   // ── SOLICITAR OTP ──
@@ -274,15 +301,16 @@ export const handler = async (event) => {
 
     const { data: empresa } = await supabase
       .from('Empresas').select('nombre').eq('id', cliente.empresa_id).maybeSingle()
-    const [empresa_logo_url, empresa_whatsapp_soporte, empresa_dias_promesa_entrega] = await Promise.all([
+    const [empresa_logo_url, empresa_whatsapp_soporte, empresa_dias_promesa, empresa_mostrar_barra_progreso] = await Promise.all([
       obtenerLogoEmpresa(cliente.empresa_id),
       obtenerWhatsappSoporte(cliente.empresa_id),
-      obtenerDiasPromesaEntrega(cliente.empresa_id),
+      obtenerDiasPromesaPorTrack(cliente.empresa_id),
+      obtenerMostrarBarraProgreso(cliente.empresa_id),
     ])
 
     return res(200, {
       ok: true,
-      cliente: { ...cliente, empresa_nombre: empresa?.nombre, empresa_logo_url, empresa_whatsapp_soporte, empresa_dias_promesa_entrega },
+      cliente: { ...cliente, empresa_nombre: empresa?.nombre, empresa_logo_url, empresa_whatsapp_soporte, empresa_dias_promesa, empresa_mostrar_barra_progreso },
     })
   }
 
