@@ -6,14 +6,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
-function validarFirmaKommo(body, signature) {
-  if (!process.env.KOMMO_WEBHOOK_SECRET) return true
-  const expected = crypto
-    .createHmac('sha1', process.env.KOMMO_WEBHOOK_SECRET)
-    .update(body)
-    .digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature || ''))
-}
+const APP_URL = process.env.APP_URL || 'https://app.encargospro.com'
 
 function generarToken() {
   return crypto.randomBytes(32).toString('hex')
@@ -27,23 +20,70 @@ function normalizarTelefono(tel) {
   return limpio
 }
 
-async function enviarLinkPortalWhatsApp({ telefono, nombre, portalUrl, leadId }) {
-  const subdomain = process.env.KOMMO_SUBDOMAIN
-  const accessToken = process.env.KOMMO_ACCESS_TOKEN
-  if (!subdomain || !accessToken) {
-    console.warn('Kommo WA no configurado — omitiendo envío')
+/** Cada empresa registra su propio webhook de Kommo apuntando a esta misma
+ * función con ?empresa=<slug> en la URL — así identificamos de qué tenant
+ * es el lead sin depender de nada que Kommo incluya en el payload. */
+async function resolverEmpresaPorSlug(slug) {
+  if (!slug) return null
+  const { data } = await supabase
+    .from('Empresas').select('id, nombre, slug').eq('slug', slug).maybeSingle()
+  return data || null
+}
+
+/** Integración de Kommo configurada por empresa en Parámetros (Configuracion,
+ * claves KOMMO_*). Si una empresa no la configuró aún, se usan las variables
+ * de entorno globales como respaldo transitorio (la cuenta de Kommo original
+ * de Importaciones Jarapo), para no romper nada mientras cada tenant migra a
+ * su propia integración. */
+async function obtenerKommoConfig(empresaId) {
+  const config = {
+    subdomain: process.env.KOMMO_SUBDOMAIN || null,
+    accessToken: process.env.KOMMO_ACCESS_TOKEN || null,
+    estadoGanadoId: parseInt(process.env.KOMMO_WON_STATUS_ID || '142', 10),
+    webhookSecret: process.env.KOMMO_WEBHOOK_SECRET || null,
+  }
+  if (!empresaId) return config
+  const { data } = await supabase
+    .from('Configuracion').select('clave, valor')
+    .in('clave', ['KOMMO_SUBDOMAIN', 'KOMMO_ACCESS_TOKEN', 'KOMMO_WON_STATUS_ID', 'KOMMO_WEBHOOK_SECRET'])
+    .eq('empresa_id', empresaId)
+  ;(data || []).forEach(row => {
+    if (row.clave === 'KOMMO_SUBDOMAIN' && row.valor) config.subdomain = row.valor
+    if (row.clave === 'KOMMO_ACCESS_TOKEN' && row.valor) config.accessToken = row.valor
+    if (row.clave === 'KOMMO_WON_STATUS_ID' && row.valor) config.estadoGanadoId = parseInt(row.valor, 10)
+    if (row.clave === 'KOMMO_WEBHOOK_SECRET' && row.valor) config.webhookSecret = row.valor
+  })
+  return config
+}
+
+function validarFirmaKommo(body, signature, webhookSecret) {
+  if (!webhookSecret) return true
+  const expected = crypto
+    .createHmac('sha1', webhookSecret)
+    .update(body)
+    .digest('hex')
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature || ''))
+  } catch {
+    return false
+  }
+}
+
+async function enviarLinkPortalWhatsApp({ telefono, nombre, portalUrl, leadId, empresaNombre, kommo }) {
+  if (!kommo.subdomain || !kommo.accessToken) {
+    console.warn(`[Kommo] Integración no configurada — omitiendo envío (empresa: ${empresaNombre || 's/n'})`)
     return { ok: false }
   }
   const mensaje =
     `¡Hola ${nombre}! 👋\n\n` +
-    `Tu pedido en *Importaciones Jarapo* ha sido confirmado. ` +
+    `Tu pedido en *${empresaNombre || 'EncargosPro'}* ha sido confirmado. ` +
     `Puedes hacer seguimiento aquí:\n\n` +
     `🔗 ${portalUrl}\n\n` +
     `Guarda este link para ver el estado de tu pedido siempre. ¡Gracias! 🛍️`
   try {
-    const res = await fetch(`https://${subdomain}.kommo.com/api/v4/talks`, {
+    const res = await fetch(`https://${kommo.subdomain}.kommo.com/api/v4/talks`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${kommo.accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ entity_type: 'leads', entity_id: leadId, origin: 'whatsapp', message: mensaje })
     })
     return { ok: res.ok }
@@ -56,17 +96,25 @@ async function enviarLinkPortalWhatsApp({ telefono, nombre, portalUrl, leadId })
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method not allowed' }
 
+  const empresaSlug = event.queryStringParameters?.empresa
+  const empresa = await resolverEmpresaPorSlug(empresaSlug)
+  if (!empresa) {
+    console.error(`[Kommo] Webhook recibido sin empresa válida (slug="${empresaSlug || ''}"). Configura la URL del webhook en Kommo como: ${APP_URL}/.netlify/functions/kommo-webhook?empresa=<tu-slug>`)
+    return { statusCode: 400, body: 'Falta o es inválido el parámetro empresa en la URL del webhook' }
+  }
+
+  const kommo = await obtenerKommoConfig(empresa.id)
+
   const signature = event.headers['x-kommo-signature'] || event.headers['x-signature']
-  if (!validarFirmaKommo(event.body, signature)) return { statusCode: 401, body: 'Unauthorized' }
+  if (!validarFirmaKommo(event.body, signature, kommo.webhookSecret)) return { statusCode: 401, body: 'Unauthorized' }
 
   let payload
   try { payload = JSON.parse(event.body) } catch { return { statusCode: 400, body: 'Invalid JSON' } }
 
   const leads = payload?.leads?.update || payload?.leads?.add || []
-  const ESTADO_GANADO_ID = parseInt(process.env.KOMMO_WON_STATUS_ID || '142')
 
   for (const lead of leads) {
-    if (lead.status_id !== ESTADO_GANADO_ID) continue
+    if (lead.status_id !== kommo.estadoGanadoId) continue
 
     const leadId = lead.id?.toString()
     const camposContacto = lead._embedded?.contacts?.[0]?.custom_fields_values || []
@@ -78,14 +126,16 @@ export const handler = async (event) => {
 
     let clienteId
     const { data: clienteExistente } = await supabase
-      .from('Clientes').select('id, portal_token').eq('telefono', telefono).maybeSingle()
+      .from('Clientes').select('id, portal_token')
+      .eq('telefono', telefono).eq('empresa_id', empresa.id).maybeSingle()
 
     if (clienteExistente) {
       clienteId = clienteExistente.id
       await supabase.from('Clientes').update({ numero_lead_kommo: leadId }).eq('id', clienteId)
     } else {
       const { data: nuevo, error } = await supabase
-        .from('Clientes').insert({ nombre: nombreContacto, telefono, numero_lead_kommo: leadId, tipo_cliente: 'b2c' })
+        .from('Clientes')
+        .insert({ nombre: nombreContacto, telefono, numero_lead_kommo: leadId, tipo_cliente: 'b2c', empresa_id: empresa.id })
         .select('id').single()
       if (error) { console.error('Error creando cliente:', error); continue }
       clienteId = nuevo.id
@@ -103,9 +153,9 @@ export const handler = async (event) => {
       await supabase.from('Clientes').update({ portal_token: portalToken }).eq('id', clienteId)
     }
 
-    const portalUrl = `${process.env.APP_URL}/portal?t=${portalToken}`
-    await enviarLinkPortalWhatsApp({ telefono, nombre: nombreContacto, portalUrl, leadId })
-    console.log(`Lead ${leadId} procesado — portal: ${portalUrl}`)
+    const portalUrl = `${APP_URL}/portal/${empresa.slug}?t=${portalToken}`
+    await enviarLinkPortalWhatsApp({ telefono, nombre: nombreContacto, portalUrl, leadId, empresaNombre: empresa.nombre, kommo })
+    console.log(`[${empresa.nombre}] Lead ${leadId} procesado — portal: ${portalUrl}`)
   }
 
   return { statusCode: 200, body: JSON.stringify({ ok: true }) }

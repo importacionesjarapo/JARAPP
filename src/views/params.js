@@ -7,12 +7,15 @@ import { ConfigService } from '../services/config.js';
 let _paramsActiveTab = 'marca'; // 'marca' | 'metas' | 'catalogos' | 'logistica' | 'finanzas'
 
 const TABS = [
-    { id: 'marca',      label: '🎨 Marca y Portal' },
-    { id: 'metas',      label: '🎯 Metas y Umbrales' },
-    { id: 'catalogos',  label: '🏷️ Catálogos' },
-    { id: 'logistica',  label: '🚚 Logística y Envíos' },
-    { id: 'finanzas',   label: '💰 Finanzas' },
+    { id: 'marca',         label: '🎨 Marca y Portal' },
+    { id: 'metas',         label: '🎯 Metas y Umbrales' },
+    { id: 'catalogos',     label: '🏷️ Catálogos' },
+    { id: 'logistica',     label: '🚚 Logística y Envíos' },
+    { id: 'finanzas',      label: '💰 Finanzas' },
+    { id: 'integraciones', label: '🔗 Integraciones' },
 ];
+
+const APP_URL_PROD = 'https://app.encargospro.com';
 
 const TRACKS_PROMESA = [
     { clave: 'DIAS_PROMESA_COLOMBIA',    track: 'colombia',    label: '🇨🇴 Colombia (stock, entrega inmediata)' },
@@ -177,6 +180,18 @@ export const renderParams = async (renderLayout, navigateTo) => {
     const mostrarBarraParam = list.find(p => p.clave === 'PORTAL_MOSTRAR_BARRA_PROGRESO');
     const mostrarBarraActivo = mostrarBarraParam ? mostrarBarraParam.valor === 'true' : false;
 
+    const KOMMO_CAMPOS = [
+        { clave: 'KOMMO_SUBDOMAIN',      label: 'Subdominio de Kommo', tipo: 'text', placeholder: 'ej: tuempresa (de tuempresa.kommo.com)' },
+        { clave: 'KOMMO_ACCESS_TOKEN',   label: 'Access Token (Long-Lived Token)', tipo: 'password', placeholder: 'Token de la integración en Kommo' },
+        { clave: 'KOMMO_WON_STATUS_ID',  label: 'ID del estado "Ganado"', tipo: 'number', placeholder: 'ej: 142' },
+        { clave: 'KOMMO_WEBHOOK_SECRET', label: 'Secreto del Webhook (opcional)', tipo: 'password', placeholder: 'Solo si tu integración firma el webhook' },
+    ];
+    const kommoParams = {};
+    KOMMO_CAMPOS.forEach(c => { kommoParams[c.clave] = list.find(p => p.clave === c.clave) || null; });
+    const kommoConfigurado = !!(kommoParams.KOMMO_SUBDOMAIN?.valor && kommoParams.KOMMO_ACCESS_TOKEN?.valor);
+    const empresaSlug = auth.getEmpresaSlug() || '';
+    const kommoWebhookUrl = `${APP_URL_PROD}/.netlify/functions/kommo-webhook?empresa=${empresaSlug}`;
+
     // ── Panel: Marca y Portal ──
     const panelMarca = () => `
       <div class="glass-card" style="margin-bottom:2rem; display:flex; gap:20px; align-items:center;">
@@ -318,12 +333,55 @@ export const renderParams = async (renderLayout, navigateTo) => {
       </div>
     `;
 
+    // ── Panel: Integraciones ──
+    const panelIntegraciones = () => `
+      <div class="glass-card" style="margin-bottom:2rem;">
+          <div style="display:flex; gap:16px; align-items:flex-start; margin-bottom:1.2rem;">
+              <div style="width:56px; height:56px; border-radius:14px; background:var(--glass-hover); display:flex; justify-content:center; align-items:center; flex-shrink:0; font-size:1.6rem;">🔗</div>
+              <div style="flex:1;">
+                  <h3 style="margin:0 0 4px 0; display:flex; align-items:center; gap:8px;">
+                      Kommo (WhatsApp)
+                      <span style="font-size:0.68rem; font-weight:800; padding:2px 9px; border-radius:20px; ${kommoConfigurado ? 'background:rgba(34,197,94,0.15); color:#16a34a;' : 'background:rgba(107,114,128,0.15); color:#6b7280;'}">
+                          ${kommoConfigurado ? '● Configurado' : '○ Sin configurar'}
+                      </span>
+                  </h3>
+                  <p style="margin:0; opacity:0.6; font-size:0.8rem;">Conecta tu propia cuenta de Kommo para enviar por WhatsApp el código de acceso al portal de clientes y el link de seguimiento cuando ganas un lead. Cada empresa usa su propia cuenta — nada se comparte entre negocios.</p>
+              </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:14px; max-width:480px; margin-bottom:1.4rem;">
+              ${KOMMO_CAMPOS.map(c => `
+                  <div>
+                      <label class="form-label" style="margin-bottom:6px; display:block; font-size:0.8rem;">${c.label}</label>
+                      <input type="${c.tipo}" id="kommo-input-${c.clave}" placeholder="${c.placeholder}"
+                          value="${kommoParams[c.clave] ? kommoParams[c.clave].valor : ''}"
+                          style="width:100%; padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--surface-2); color:var(--text-main); font-size:0.9rem; font-family:inherit; box-sizing:border-box;">
+                  </div>
+              `).join('')}
+          </div>
+
+          ${canEdit ? `<button id="btn-save-kommo" class="btn-primary">Guardar Integración</button>` : ''}
+
+          <div style="margin-top:1.4rem; padding-top:1.2rem; border-top:1px solid var(--border-base);">
+              <label class="form-label" style="margin-bottom:6px; display:block; font-size:0.8rem;">URL del Webhook (pégala en Kommo → Ajustes → Webhooks)</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                  <input type="text" id="kommo-webhook-url" readonly value="${kommoWebhookUrl}"
+                      style="flex:1; padding:8px 12px; border-radius:10px; border:1px solid var(--border-base); background:var(--bg-main); color:var(--text-main); font-size:0.8rem; font-family:monospace;">
+                  <button class="btn-action" id="btn-copiar-webhook-url" type="button">Copiar</button>
+              </div>
+              ${!empresaSlug ? `<p style="font-size:0.72rem; color:var(--primary-red); margin-top:6px;">⚠️ Tu empresa todavía no tiene un slug asignado — pide que te lo configuren antes de usar este webhook.</p>` : ''}
+              <p style="font-size:0.72rem; opacity:0.5; margin-top:6px;">Configura este webhook para el evento "Cambio de estado del lead" (Status changed), y en Kommo marca cuál es tu ID de estado "Ganado" arriba.</p>
+          </div>
+      </div>
+    `;
+
     const PANELES = {
-        marca:     panelMarca,
-        metas:     renderMetasSection,
-        catalogos: panelCatalogos,
-        logistica: panelLogistica,
-        finanzas:  panelFinanzas,
+        marca:         panelMarca,
+        metas:         renderMetasSection,
+        catalogos:     panelCatalogos,
+        logistica:     panelLogistica,
+        finanzas:      panelFinanzas,
+        integraciones: panelIntegraciones,
     };
 
     const html = `
@@ -489,6 +547,50 @@ export const renderParams = async (renderLayout, navigateTo) => {
                     showToast(e.message, 'error');
                     btnDiasPromesa.disabled = false;
                     btnDiasPromesa.textContent = 'Guardar';
+                }
+            };
+        }
+
+        // Integración Kommo (WhatsApp) por empresa
+        const btnKommo = document.getElementById('btn-save-kommo');
+        if (btnKommo) {
+            btnKommo.onclick = async () => {
+                btnKommo.disabled = true;
+                btnKommo.textContent = 'Guardando...';
+                try {
+                    for (const c of KOMMO_CAMPOS) {
+                        const input = document.getElementById(`kommo-input-${c.clave}`);
+                        const valor = (input?.value || '').trim();
+                        const existente = kommoParams[c.clave];
+                        // Campos opcionales (token/secreto) se pueden dejar vacíos; si no
+                        // existía el registro y sigue vacío, no hay nada que guardar.
+                        if (!valor && !existente) continue;
+                        const payload = { id: existente ? existente.id : Date.now().toString() + '_' + c.clave, clave: c.clave, valor };
+                        const action = existente ? 'UPDATE' : 'INSERT';
+                        if (action === 'INSERT') payload.empresa_id = auth.getEmpresaId();
+                        await db.postData('Configuracion', payload, action);
+                    }
+                    showToast('✅ Integración de Kommo actualizada', 'success');
+                    setTimeout(() => navigateTo('params'), 800);
+                } catch (e) {
+                    showToast(e.message, 'error');
+                    btnKommo.disabled = false;
+                    btnKommo.textContent = 'Guardar Integración';
+                }
+            };
+        }
+
+        // Copiar URL del webhook de Kommo
+        const btnCopiarWebhook = document.getElementById('btn-copiar-webhook-url');
+        if (btnCopiarWebhook) {
+            btnCopiarWebhook.onclick = async () => {
+                const input = document.getElementById('kommo-webhook-url');
+                try {
+                    await navigator.clipboard.writeText(input.value);
+                    showToast('✅ URL copiada', 'success');
+                } catch {
+                    input.select();
+                    showToast('Selecciona y copia manualmente (Ctrl+C)', 'info');
                 }
             };
         }
