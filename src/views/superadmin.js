@@ -45,6 +45,7 @@ const MODULOS_PLAN_TOGGLES = [
   { key: 'admin', label: 'Administración' },
   { key: 'calendario_ver', label: 'Calendario de Contenido' },
   { key: 'tracker', label: 'Competitor Tracker' },
+  { key: 'jarabot', label: 'JaraBot (Asistente IA)' },
 ];
 
 /** Construye el objeto "modulos" de un plan (Planes.modulos) a partir de los toggles marcados. */
