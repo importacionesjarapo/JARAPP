@@ -692,6 +692,53 @@ export const handler = async (event) => {
     return res(200, { ok: true, plan: data })
   }
 
+  // Contenido de marketing de la tarjeta de este plan en la landing
+  // (sección "Precios") — separado de guardar_plan (módulos/límites,
+  // que gatea el acceso real) para no arriesgar esos datos por un
+  // error de tipeo en el precio o los bullets.
+  if (accion === 'guardar_plan_marketing') {
+    const { plan_id, nombre_publico, precio_mensual, precio_texto, bullets_publico, destacado, visible_landing } = body
+    if (!plan_id) return res(400, { error: 'plan_id es obligatorio.' })
+    if (!Array.isArray(bullets_publico)) return res(400, { error: 'bullets_publico debe ser un arreglo de texto.' })
+    const updates = {
+      nombre_publico: nombre_publico || null,
+      precio_mensual: precio_mensual === null || precio_mensual === '' ? null : parseInt(precio_mensual, 10),
+      precio_texto: precio_texto || null,
+      bullets_publico,
+      destacado: !!destacado,
+      visible_landing: visible_landing !== false,
+      updated_at: new Date().toISOString(),
+    }
+    const { data, error } = await supabase.from('Planes')
+      .update(updates).eq('id', plan_id).select().maybeSingle()
+    if (error) return res(500, { error: error.message })
+    if (!data) return res(404, { error: `No existe el plan "${plan_id}".` })
+    return res(200, { ok: true, plan: data })
+  }
+
+  // ── PROMOCIÓN DE LA LANDING (banner activable en la sección Precios) ──
+
+  if (accion === 'obtener_promocion_landing') {
+    const { data, error } = await supabase.from('PromocionLanding').select('*').eq('id', 1).maybeSingle()
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true, promocion: data || { id: 1, activo: false } })
+  }
+
+  if (accion === 'guardar_promocion_landing') {
+    const { activo, badge_texto, titulo, descripcion } = body
+    const updates = {
+      activo: !!activo,
+      badge_texto: badge_texto || null,
+      titulo: titulo || null,
+      descripcion: descripcion || null,
+      updated_at: new Date().toISOString(),
+    }
+    const { data, error } = await supabase.from('PromocionLanding')
+      .upsert({ id: 1, ...updates }).select().maybeSingle()
+    if (error) return res(500, { error: error.message })
+    return res(200, { ok: true, promocion: data })
+  }
+
   // Crea la empresa + perfil admin del usuario que se acaba de registrar
   // solo desde la landing (self-serve) — nunca desde un superadmin. El
   // caller ya viene verificado como "cualquier usuario autenticado" más

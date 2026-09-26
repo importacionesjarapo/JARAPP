@@ -82,24 +82,27 @@ export const renderSuperadmin = async (renderLayout) => {
   let planes = [];
   let semillas = [];
   let loadError = null;
+  let promocion = { id: 1, activo: false };
   try {
-    const [dataEmpresas, dataPlanes, dataSemillas] = await Promise.all([
+    const [dataEmpresas, dataPlanes, dataSemillas, dataPromocion] = await Promise.all([
       callAdminEmpresas({ accion: 'listar_empresas' }),
       callAdminEmpresas({ accion: 'listar_planes' }),
       callAdminEmpresas({ accion: 'listar_datos_semilla' }),
+      callAdminEmpresas({ accion: 'obtener_promocion_landing' }),
     ]);
     empresas = dataEmpresas.empresas || [];
     planes = dataPlanes.planes || [];
     semillas = dataSemillas.items || [];
+    promocion = dataPromocion.promocion || promocion;
   } catch (err) {
     loadError = err.message;
   }
 
-  renderLayout(buildHTML(empresas, planes, semillas, loadError));
-  bindEvents(renderLayout, planes, semillas);
+  renderLayout(buildHTML(empresas, planes, semillas, loadError, promocion));
+  bindEvents(renderLayout, planes, semillas, promocion);
 };
 
-function buildHTML(empresas, planes, semillas, error) {
+function buildHTML(empresas, planes, semillas, error, promocion) {
   return `
     <div class="module-header">
       <div>
@@ -207,6 +210,7 @@ function buildHTML(empresas, planes, semillas, error) {
                 <th>Usuarios máx.</th>
                 <th>Días de prueba</th>
                 <th>Módulos incluidos</th>
+                <th>Precio landing</th>
                 <th class="text-right">Acciones</th>
               </tr>
             </thead>
@@ -217,12 +221,48 @@ function buildHTML(empresas, planes, semillas, error) {
                   <td>${p.max_usuarios ?? 'Sin límite'}</td>
                   <td>${p.id === 'trial' ? (p.dias_prueba ?? '—') : '—'}</td>
                   <td>${Object.entries(p.modulos || {}).filter(([k, v]) => v && k !== 'dashboard').length} de ${MODULOS_PLAN_TOGGLES.length}</td>
+                  <td style="font-size:0.78rem;">
+                    ${p.id === 'trial' ? '—' : `
+                      ${p.precio_mensual != null ? '$' + Number(p.precio_mensual).toLocaleString('es-CO') + '/mes' : (p.precio_texto || '—')}
+                      ${p.visible_landing === false ? '<div style="color:var(--text-faint);">(oculto)</div>' : ''}
+                      ${p.destacado ? '<div style="color:var(--primary-red);">★ destacado</div>' : ''}
+                    `}
+                  </td>
                   <td class="text-right"><button class="btn-action sa-btn-editar-plan" data-id="${p.id}">Editar</button></td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div class="glass-card" style="margin-top:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem;">
+          <div>
+            <h3 style="margin:0 0 4px 0;">🎉 Promoción de la Landing</h3>
+            <p style="margin:0; opacity:0.55; font-size:0.82rem;">Banner activable en la sección Precios de la landing pública — apagado por defecto.</p>
+          </div>
+          <label class="admin-toggle-wrap" style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="sa-promo-activo" ${promocion.activo ? 'checked' : ''} />
+            <span class="admin-toggle-slider"></span>
+            <span class="admin-toggle-label">${promocion.activo ? 'Activa' : 'Inactiva'}</span>
+          </label>
+        </div>
+        <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:1.2rem;">
+          <div class="form-group" style="flex:1; min-width:200px;">
+            <label class="form-label">Badge corto</label>
+            <input type="text" id="sa-promo-badge" class="form-input" placeholder="Ej: 🔥 25% OFF" value="${promocion.badge_texto || ''}">
+          </div>
+          <div class="form-group" style="flex:2; min-width:240px;">
+            <label class="form-label">Título</label>
+            <input type="text" id="sa-promo-titulo" class="form-input" placeholder="Ej: 25% de descuento en tu primer mes" value="${promocion.titulo || ''}">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:1.2rem;">
+          <label class="form-label">Descripción</label>
+          <input type="text" id="sa-promo-descripcion" class="form-input" placeholder="Ej: Válido hasta el 30 de septiembre, aplica en todos los planes." value="${promocion.descripcion || ''}">
+        </div>
+        <button class="btn-primary" id="sa-btn-guardar-promo">Guardar Promoción</button>
       </div>
     </div>
 
@@ -259,7 +299,28 @@ function buildHTML(empresas, planes, semillas, error) {
   `;
 }
 
-function bindEvents(renderLayout, planes, semillas) {
+function bindEvents(renderLayout, planes, semillas, promocion) {
+  document.getElementById('sa-promo-activo')?.addEventListener('change', (e) => {
+    const label = e.target.closest('.admin-toggle-wrap')?.querySelector('.admin-toggle-label');
+    if (label) label.textContent = e.target.checked ? 'Activa' : 'Inactiva';
+  });
+  document.getElementById('sa-btn-guardar-promo')?.addEventListener('click', async () => {
+    const btn = document.getElementById('sa-btn-guardar-promo');
+    const activo = document.getElementById('sa-promo-activo').checked;
+    const badge_texto = document.getElementById('sa-promo-badge').value.trim();
+    const titulo = document.getElementById('sa-promo-titulo').value.trim();
+    const descripcion = document.getElementById('sa-promo-descripcion').value.trim();
+    if (activo && !titulo) return showToast('Ingresa al menos un título para activar la promoción.', 'error');
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+      await callAdminEmpresas({ accion: 'guardar_promocion_landing', activo, badge_texto, titulo, descripcion });
+      showToast('✅ Promoción actualizada', 'success');
+      renderSuperadmin(renderLayout);
+    } catch (err) {
+      showToast(err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Guardar Promoción';
+    }
+  });
   document.getElementById('sa-tab-empresas')?.addEventListener('click', () => {
     _superadminActiveTab = 'empresas';
     renderSuperadmin(renderLayout);
@@ -415,6 +476,42 @@ function modalEditarPlan(plan, renderLayout) {
             </div>
           `).join('')}
         </div>
+
+        ${!esTrial ? `
+        <div style="margin-top:1.6rem;padding-top:1.4rem;border-top:1px solid var(--border-base);">
+          <label class="form-label" style="display:block;margin-bottom:0.6rem;">🌐 Tarjeta en la Landing (sección Precios)</label>
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+            <div class="form-group" style="max-width:200px;">
+              <label class="form-label">Nombre público</label>
+              <input type="text" id="sp-nombre-publico" class="form-input" placeholder="${plan.nombre}" value="${plan.nombre_publico || ''}">
+            </div>
+            <div class="form-group" style="max-width:180px;">
+              <label class="form-label">Precio mensual (COP)</label>
+              <input type="number" id="sp-precio-mensual" class="form-input" min="0" placeholder="Ej: 79000" value="${plan.precio_mensual ?? ''}">
+            </div>
+            <div class="form-group" style="max-width:200px;">
+              <label class="form-label">Texto de precio (si no es fijo)</label>
+              <input type="text" id="sp-precio-texto" class="form-input" placeholder="Ej: A la medida" value="${plan.precio_texto || ''}">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:1rem;">
+            <label class="form-label">Bullets (uno por línea)</label>
+            <textarea id="sp-bullets" class="form-input" rows="4" placeholder="Hasta 2 usuarios&#10;Ventas, Clientes, Inventario y Calculadora&#10;Soporte por WhatsApp">${(plan.bullets_publico || []).join('\n')}</textarea>
+          </div>
+          <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+            <label class="admin-toggle-wrap" style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="sp-destacado" ${plan.destacado ? 'checked' : ''} />
+              <span class="admin-toggle-slider"></span>
+              <span class="admin-toggle-label">Badge "MÁS ELEGIDO"</span>
+            </label>
+            <label class="admin-toggle-wrap" style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="sp-visible-landing" ${plan.visible_landing !== false ? 'checked' : ''} />
+              <span class="admin-toggle-slider"></span>
+              <span class="admin-toggle-label">Visible en la landing</span>
+            </label>
+          </div>
+        </div>
+        ` : ''}
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="window.closeModal()">Cancelar</button>
@@ -436,6 +533,20 @@ function modalEditarPlan(plan, renderLayout) {
     btn.disabled = true; btn.textContent = 'Guardando...';
     try {
       await callAdminEmpresas({ accion: 'guardar_plan', plan_id: plan.id, max_usuarios, dias_prueba, modulos });
+      if (!esTrial) {
+        const bullets_publico = document.getElementById('sp-bullets').value
+          .split('\n').map(s => s.trim()).filter(Boolean);
+        await callAdminEmpresas({
+          accion: 'guardar_plan_marketing',
+          plan_id: plan.id,
+          nombre_publico: document.getElementById('sp-nombre-publico').value.trim(),
+          precio_mensual: document.getElementById('sp-precio-mensual').value,
+          precio_texto: document.getElementById('sp-precio-texto').value.trim(),
+          bullets_publico,
+          destacado: document.getElementById('sp-destacado').checked,
+          visible_landing: document.getElementById('sp-visible-landing').checked,
+        });
+      }
       window.closeModal();
       showToast(`✅ Plan ${plan.nombre} actualizado`, 'success');
       renderSuperadmin(renderLayout);

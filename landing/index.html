@@ -258,6 +258,10 @@
   .plan-card ul li{display:flex; gap:9px; align-items:flex-start;}
   .plan-card ul svg{width:18px;height:18px;color:var(--success); flex-shrink:0; margin-top:1px;}
   .plan-nota{text-align:center; color:var(--fog-soft); font-size:.85rem; margin-top:36px;}
+  .promo-banner{display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; background:var(--grad-brand); color:#fff; border-radius:16px; padding:16px 26px; margin-bottom:32px; text-align:center;}
+  .promo-banner .promo-badge{background:rgba(255,255,255,.22); font-size:.7rem; font-weight:800; letter-spacing:.04em; padding:5px 12px; border-radius:999px; text-transform:uppercase; flex-shrink:0;}
+  .promo-banner .promo-titulo{font-size:.95rem; font-weight:700;}
+  .promo-banner .promo-desc{font-size:.85rem; opacity:.92;}
 
   /* ================= FAQ ================= */
   .faq-wrap{max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px;}
@@ -918,36 +922,15 @@
       <h2 class="h-title" style="margin-top:14px;">Elige según el tamaño de tu equipo</h2>
       <p class="h-sub">Si tu operación no encaja exacto, lo ajustamos — todo se cierra por WhatsApp.</p>
     </div>
-    <div class="planes-grid rv-stag">
-      <div class="plan-card">
-        <div class="plan-name">Starter</div>
-        <div class="plan-price">$79.000<span>/mes</span></div>
-        <ul>
-          <li><svg><use href="#i-check"/></svg> Hasta 2 usuarios</li>
-          <li><svg><use href="#i-check"/></svg> Ventas, Clientes, Inventario y Calculadora</li>
-          <li><svg><use href="#i-check"/></svg> Soporte por WhatsApp</li>
-        </ul>
-      </div>
-      <div class="plan-card feat">
-        <span class="plan-badge">MÁS ELEGIDO</span>
-        <div class="plan-name">Pro</div>
-        <div class="plan-price">$149.000<span>/mes</span></div>
-        <ul>
-          <li><svg><use href="#i-check"/></svg> Hasta 8 usuarios</li>
-          <li><svg><use href="#i-check"/></svg> Todos los módulos operativos + Cotizador</li>
-          <li><svg><use href="#i-check"/></svg> Finanzas y Dashboard 360°</li>
-          <li><svg><use href="#i-check"/></svg> Soporte prioritario</li>
-        </ul>
-      </div>
-      <div class="plan-card">
-        <div class="plan-name">Empresarial</div>
-        <div class="plan-price" style="font-size:1.5rem;">A la medida</div>
-        <ul>
-          <li><svg><use href="#i-check"/></svg> Usuarios ilimitados</li>
-          <li><svg><use href="#i-check"/></svg> Todos los módulos + Calendario de Contenido</li>
-          <li><svg><use href="#i-check"/></svg> Onboarding acompañado</li>
-        </ul>
-      </div>
+    <div id="promo-banner" class="promo-banner" style="display:none;">
+      <span class="promo-badge" id="promo-badge"></span>
+      <span class="promo-titulo" id="promo-titulo"></span>
+      <span class="promo-desc" id="promo-descripcion"></span>
+    </div>
+    <div class="planes-grid rv-stag" id="planes-grid">
+      <!-- Tarjetas de planes: se arman dinámicamente desde Supabase (tabla
+           Planes, editable desde Superadmin → Planes) — ver script "Planes
+           dinámicos de la landing" más abajo. -->
     </div>
     <p class="plan-nota">Precios en pesos colombianos, facturación mensual.</p>
     <div class="rv" style="text-align:center;margin-top:28px;">
@@ -1267,6 +1250,71 @@
       }
     });
   });
+</script>
+
+<!-- ============ PLANES Y PROMOCIÓN DINÁMICOS (editables desde Superadmin) ============ -->
+<script>
+(function(){
+  var supaPub = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+
+  // Mismo contenido que antes vivía hardcodeado acá — se usa solo si la
+  // consulta a Supabase falla o no trae datos, para que la sección de
+  // Precios nunca quede en blanco para un visitante.
+  var FALLBACK_PLANES = [
+    { nombre_publico: 'Starter', precio_mensual: 79000, precio_texto: null, destacado: false,
+      bullets_publico: ['Hasta 2 usuarios', 'Ventas, Clientes, Inventario y Calculadora', 'Soporte por WhatsApp'] },
+    { nombre_publico: 'Pro', precio_mensual: 149000, precio_texto: null, destacado: true,
+      bullets_publico: ['Hasta 8 usuarios', 'Todos los módulos operativos + Cotizador', 'Finanzas y Dashboard 360°', 'Soporte prioritario'] },
+    { nombre_publico: 'Empresarial', precio_mensual: null, precio_texto: 'A la medida', destacado: false,
+      bullets_publico: ['Usuarios ilimitados', 'Todos los módulos + Calendario de Contenido', 'Onboarding acompañado'] },
+  ];
+
+  function escHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function copFmt(n){ return '$' + Math.round(n).toLocaleString('es-CO'); }
+
+  function renderPlanes(planes){
+    var grid = document.getElementById('planes-grid');
+    if (!grid || !planes || !planes.length) return;
+    grid.innerHTML = planes.map(function(p){
+      var nombre = p.nombre_publico || p.nombre || '';
+      var precioHtml = (p.precio_mensual != null)
+        ? copFmt(p.precio_mensual) + '<span>/mes</span>'
+        : escHtml(p.precio_texto || '');
+      var precioStyle = (p.precio_mensual == null) ? ' style="font-size:1.5rem;"' : '';
+      var bullets = Array.isArray(p.bullets_publico) ? p.bullets_publico : [];
+      return '<div class="plan-card' + (p.destacado ? ' feat' : '') + '">' +
+          (p.destacado ? '<span class="plan-badge">MÁS ELEGIDO</span>' : '') +
+          '<div class="plan-name">' + escHtml(nombre) + '</div>' +
+          '<div class="plan-price"' + precioStyle + '>' + precioHtml + '</div>' +
+          '<ul>' + bullets.map(function(b){
+            return '<li><svg><use href="#i-check"/></svg> ' + escHtml(b) + '</li>';
+          }).join('') + '</ul>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderPromo(promo){
+    if (!promo || !promo.activo) return;
+    var banner = document.getElementById('promo-banner');
+    if (!banner) return;
+    document.getElementById('promo-badge').textContent = promo.badge_texto || '🎉 Promoción';
+    document.getElementById('promo-titulo').textContent = promo.titulo || '';
+    document.getElementById('promo-descripcion').textContent = promo.descripcion || '';
+    banner.style.display = 'flex';
+  }
+
+  supaPub.from('Planes').select('*').eq('visible_landing', true).order('orden')
+    .then(function(r){ renderPlanes((!r.error && r.data && r.data.length) ? r.data : FALLBACK_PLANES); })
+    .catch(function(){ renderPlanes(FALLBACK_PLANES); });
+
+  supaPub.from('PromocionLanding').select('*').eq('id', 1).maybeSingle()
+    .then(function(r){ if (!r.error) renderPromo(r.data); })
+    .catch(function(){});
+})();
 </script>
 
 <!-- ============ EMPIEZA GRATIS: registro self-serve ============ -->
