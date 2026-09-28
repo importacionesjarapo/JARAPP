@@ -28,6 +28,43 @@ function formatCOP(n) {
   return '$' + Math.round(n || 0).toLocaleString('es-CO')
 }
 
+/** Envuelve el contenido del correo en un documento HTML completo que
+ * fuerza modo claro siempre, sin importar el modo oscuro del dispositivo
+ * — Gmail/Outlook/Apple Mail auto-invierten colores en correos sin estas
+ * señales, y el logo (con fondo transparente) queda ilegible sobre un
+ * fondo oscuro que nunca se diseñó para él. Mismo wrapper en las otras
+ * funciones que envían correo (alertas-vencimiento.js, admin-empresas.js). */
+function construirEmailHTML(contenidoInterior) {
+  return `<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<title></title>
+<style>
+  :root { color-scheme: light only; supported-color-schemes: light only; }
+  body { margin:0; padding:0; }
+  @media (prefers-color-scheme: dark) {
+    .email-bg { background-color:#F2F3F6 !important; }
+    .email-card, .email-card td { background-color:#FFFFFF !important; }
+    .email-text { color:#161B2E !important; }
+    .email-muted { color:#8891A6 !important; }
+  }
+  [data-ogsc] .email-bg { background-color:#F2F3F6 !important; }
+  [data-ogsc] .email-card, [data-ogsc] .email-card td { background-color:#FFFFFF !important; }
+  [data-ogsc] .email-text { color:#161B2E !important; }
+  [data-ogsc] .email-muted { color:#8891A6 !important; }
+</style>
+</head>
+<body class="email-bg" style="margin:0;padding:0;background-color:#F2F3F6;" bgcolor="#F2F3F6">
+${contenidoInterior}
+</body>
+</html>`
+}
+
 async function enviarInformeGerencial({ email, empresa, resumen }) {
   if (!process.env.RESEND_API_KEY) return { enviado: false, error: 'RESEND_API_KEY no configurada' }
   try {
@@ -38,43 +75,43 @@ async function enviarInformeGerencial({ email, empresa, resumen }) {
         from: 'EncargosPro <no-reply@mail.encargospro.com>',
         to: [email],
         subject: `Informe diario de ${empresa} — ${resumen.fechaLabel}`,
-        html: `<div style="background-color:#F2F3F6;padding:32px 16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
-          <table role="presentation" width="100%" style="max-width:520px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid rgba(22,27,46,0.08);">
-            <tr><td style="background:#FFFFFF;padding:32px 32px 20px;text-align:center;border-bottom:1px solid rgba(22,27,46,0.08);">
+        html: construirEmailHTML(`<div class="email-bg" style="background-color:#F2F3F6;padding:32px 16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;" bgcolor="#F2F3F6">
+          <table role="presentation" width="100%" class="email-card" style="max-width:520px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid rgba(22,27,46,0.08);" bgcolor="#FFFFFF">
+            <tr><td style="background:#FFFFFF;padding:32px 32px 20px;text-align:center;border-bottom:1px solid rgba(22,27,46,0.08);" bgcolor="#FFFFFF">
               <img src="https://encargospro.com/logo-full.png" alt="EncargosPro" height="56" style="height:56px;">
             </td></tr>
-            <tr><td style="padding:32px;">
-              <h1 style="margin:0 0 4px;font-size:19px;color:#161B2E;">Informe diario de gestión</h1>
-              <p style="margin:0 0 24px;font-size:13px;color:#8891A6;">${empresa} · ${resumen.fechaLabel}</p>
+            <tr><td style="padding:32px;background:#FFFFFF;" bgcolor="#FFFFFF">
+              <h1 class="email-text" style="margin:0 0 4px;font-size:19px;color:#161B2E;">Informe diario de gestión</h1>
+              <p class="email-muted" style="margin:0 0 24px;font-size:13px;color:#8891A6;">${empresa} · ${resumen.fechaLabel}</p>
               <table role="presentation" width="100%" style="border-collapse:collapse;">
                 <tr>
-                  <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Ventas registradas</td>
-                  <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;font-weight:700;color:#161B2E;text-align:right;">${resumen.numVentas}</td>
+                  <td class="email-muted" style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Ventas registradas</td>
+                  <td class="email-text" style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;font-weight:700;color:#161B2E;text-align:right;">${resumen.numVentas}</td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Total facturado</td>
-                  <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;font-weight:700;color:#161B2E;text-align:right;">${formatCOP(resumen.totalFacturado)}</td>
+                  <td class="email-muted" style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Total facturado</td>
+                  <td class="email-text" style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;font-weight:700;color:#161B2E;text-align:right;">${formatCOP(resumen.totalFacturado)}</td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Ganancia calculada</td>
+                  <td class="email-muted" style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Ganancia calculada</td>
                   <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;font-weight:700;color:#0E9C5A;text-align:right;">${formatCOP(resumen.totalGanancia)}</td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Gastos del día</td>
+                  <td class="email-muted" style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;color:#5B6478;">Gastos del día</td>
                   <td style="padding:12px 0;border-bottom:1px solid #ECEDF2;font-size:14px;font-weight:700;color:#910E59;text-align:right;">${formatCOP(resumen.totalGastos)}</td>
                 </tr>
                 <tr>
-                  <td style="padding:12px 0;font-size:14px;color:#5B6478;">Cartera pendiente por cobrar</td>
-                  <td style="padding:12px 0;font-size:14px;font-weight:700;color:#161B2E;text-align:right;">${formatCOP(resumen.carteraPendiente)}</td>
+                  <td class="email-muted" style="padding:12px 0;font-size:14px;color:#5B6478;">Cartera pendiente por cobrar</td>
+                  <td class="email-text" style="padding:12px 0;font-size:14px;font-weight:700;color:#161B2E;text-align:right;">${formatCOP(resumen.carteraPendiente)}</td>
                 </tr>
               </table>
-              <p style="margin:24px 0 0;font-size:12px;color:#8891A6;">Entra a EncargosPro para ver el detalle completo en el Dashboard.</p>
+              <p class="email-muted" style="margin:24px 0 0;font-size:12px;color:#8891A6;">Entra a EncargosPro para ver el detalle completo en el Dashboard.</p>
             </td></tr>
-            <tr><td style="padding:20px 32px;background:#F8F9FB;text-align:center;">
-              <p style="margin:0;font-size:12px;color:#8891A6;">EncargosPro · Gestión para personal shoppers e importadores</p>
+            <tr><td style="padding:20px 32px;background:#F8F9FB;text-align:center;" bgcolor="#F8F9FB">
+              <p class="email-muted" style="margin:0;font-size:12px;color:#8891A6;">EncargosPro · Gestión para personal shoppers e importadores</p>
             </td></tr>
           </table>
-        </div>`,
+        </div>`),
       }),
     })
     if (!resp.ok) {
