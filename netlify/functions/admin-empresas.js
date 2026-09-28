@@ -222,9 +222,61 @@ Leído, entendido y aceptado electrónicamente por el SUSCRIPTOR al momento de c
  * si falla — el registro de la empresa/perfil ya se hizo y no debe
  * revertirse por un problema de envío; el error queda logueado en la fila
  * de ContratosAceptados para poder reintentar/revisar manualmente. */
+/** Envuelve el contenido del correo en un documento HTML completo que
+ * fuerza modo claro siempre, sin importar el modo oscuro del dispositivo
+ * — Gmail/Outlook/Apple Mail auto-invierten colores en correos sin estas
+ * señales, y el logo (con fondo transparente) queda ilegible sobre un
+ * fondo oscuro que nunca se diseñó para él. Mismo wrapper en las otras
+ * funciones que envían correo (informe-gerencial.js, alertas-vencimiento.js). */
+function construirEmailHTML(contenidoInterior) {
+  return `<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">
+<title></title>
+<style>
+  :root { color-scheme: light only; supported-color-schemes: light only; }
+  body { margin:0; padding:0; }
+  @media (prefers-color-scheme: dark) {
+    .email-bg { background-color:#F2F3F6 !important; }
+    .email-card, .email-card td { background-color:#FFFFFF !important; }
+    .email-text { color:#161B2E !important; }
+    .email-muted { color:#8891A6 !important; }
+  }
+  [data-ogsc] .email-bg { background-color:#F2F3F6 !important; }
+  [data-ogsc] .email-card, [data-ogsc] .email-card td { background-color:#FFFFFF !important; }
+  [data-ogsc] .email-text { color:#161B2E !important; }
+  [data-ogsc] .email-muted { color:#8891A6 !important; }
+</style>
+</head>
+<body class="email-bg" style="margin:0;padding:0;background-color:#F2F3F6;" bgcolor="#F2F3F6">
+${contenidoInterior}
+</body>
+</html>`
+}
+
 async function enviarCorreoContrato({ email, nombreCompleto, textoContrato }) {
   if (!process.env.RESEND_API_KEY) return { enviado: false, error: 'RESEND_API_KEY no configurada' }
   try {
+    const contenido = `<div class="email-bg" style="background-color:#F2F3F6;padding:32px 16px;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;" bgcolor="#F2F3F6">
+      <table role="presentation" width="100%" class="email-card" style="max-width:560px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid rgba(22,27,46,0.08);" bgcolor="#FFFFFF">
+        <tr><td style="background:#FFFFFF;padding:32px 32px 20px;text-align:center;border-bottom:1px solid rgba(22,27,46,0.08);" bgcolor="#FFFFFF">
+          <img src="https://encargospro.com/logo-full.png" alt="EncargosPro" height="56" style="height:56px;">
+        </td></tr>
+        <tr><td style="padding:32px;background:#FFFFFF;" bgcolor="#FFFFFF">
+          <p class="email-text" style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#161B2E;">Hola ${nombreCompleto || ''},</p>
+          <p class="email-text" style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#161B2E;">Gracias por registrarte en EncargosPro. Abajo va la copia del contrato de suscripción que aceptaste al crear tu cuenta.</p>
+          <pre class="email-text" style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.5;color:#161B2E;margin:0;">${textoContrato.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
+        </td></tr>
+        <tr><td style="padding:20px 32px;background:#F8F9FB;text-align:center;" bgcolor="#F8F9FB">
+          <p class="email-muted" style="margin:0;font-size:12px;color:#8891A6;">EncargosPro · Gestión para personal shoppers e importadores</p>
+        </td></tr>
+      </table>
+    </div>`
     const resp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -232,7 +284,7 @@ async function enviarCorreoContrato({ email, nombreCompleto, textoContrato }) {
         from: 'EncargosPro <no-reply@mail.encargospro.com>',
         to: [email],
         subject: 'Tu contrato de suscripción a EncargosPro',
-        html: `<p>Hola ${nombreCompleto || ''},</p><p>Gracias por registrarte en EncargosPro. Adjunto va la copia del contrato de suscripción que aceptaste al crear tu cuenta.</p><pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.5;">${textoContrato.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
+        html: construirEmailHTML(contenido),
       }),
     })
     if (!resp.ok) {
