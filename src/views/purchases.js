@@ -21,6 +21,9 @@ let _currentView = 'tabla';
 let _purStartDate = '';
 let _purEndDate = '';
 let _purFiltered = [];
+// Compras USA se divide en 2 submódulos: "general" (Stock + encargos de
+// Compras Online) y "viaje" (solo lo que viene de ventas "En Viaje USA").
+let _purSubmodulo = 'general';
 
 // ─── Helper: format date label ─────────────────────────────────────────────────
 const formatDateLabel = (dateStr) => {
@@ -192,6 +195,7 @@ function _montarTablaCompras() {
         containerId: 'compras-tabla-container',
         tabla: 'Compras',
         supabase: db.client,
+        filtrosExtra: { es_viaje: _purSubmodulo === 'viaje' },
         searchColumns: ['proveedor', 'estado_compra', 'numero_factura'],
         columnas: [
             { key: 'id', label: 'ID', width: '90px',
@@ -241,7 +245,8 @@ function _renderPurchasePanel(tab) {
         panel.innerHTML = `<div id="compras-tabla-container"></div>`;
         _montarTablaCompras();
     } else {
-        panel.innerHTML = getPanelHTML(tab, { ..._cache, compras: _purFiltered });
+        const comprasDelSubmodulo = _purFiltered.filter(c => !!c.es_viaje === (_purSubmodulo === 'viaje'));
+        panel.innerHTML = getPanelHTML(tab, { ..._cache, compras: comprasDelSubmodulo });
     }
     attachGroupToggles();
 }
@@ -510,11 +515,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         });
 
         // Re-inject KPI and Panel using filtered array
-        const kpi = document.querySelector('.kpi-strip'); // Replace exact strip if needed, here we recreate HTML below so we only need it on init, but for dynamic updating we need wrappers.
-        // It's easier if we re-render the layout using a wrapper if we want dynamic KPIs. 
-        // We will make `window.switchPurchaseView` handle panel updates.
         const kpiCont = document.getElementById('pur-kpi-container');
-        if (kpiCont) kpiCont.innerHTML = renderKPIStrip(_purFiltered);
+        if (kpiCont) kpiCont.innerHTML = renderKPIStrip(comprasSubmodulo(_purFiltered, _purSubmodulo));
 
         _renderPurchasePanel(_currentView);
     };
@@ -545,12 +547,19 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
     // Excluir encargos que ya tienen compra registrada en BD
     const comprasVentaIds = new Set((_cache.compras || []).map(c => c.venta_id?.toString()).filter(Boolean));
-    const pendientes = (ventas || []).filter(v =>
+    const pendientesTodos = (ventas || []).filter(v =>
         v.tipo_venta === 'Encargo' &&
         v.estado_orden === 'Validando Compra EEUU' &&
         !comprasVentaIds.has(v.id?.toString())
     );
-    
+    // Solo cuentan como "de viaje" los encargos tomados en una venta
+    // "En Viaje USA" — el resto (Compras Online) va siempre al submódulo
+    // general, sin importar si hay un viaje activo en este momento.
+    const pendientesGeneral = pendientesTodos.filter(v => !v.comprado_en_viaje);
+    const pendientesViaje = pendientesTodos.filter(v => v.comprado_en_viaje);
+
+    const comprasSubmodulo = (lista, sub) => lista.filter(c => !!c.es_viaje === (sub === 'viaje'));
+
     // Initial Filter
     _purFiltered = [..._cache.compras];
     const _s = _purStartDate ? new Date(_purStartDate + 'T00:00:00') : null;
@@ -567,6 +576,23 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
         });
         _renderPurchasePanel(tab);
+    };
+
+    window.switchPurSubmodulo = (sub) => {
+        _purSubmodulo = sub;
+
+        const btnGeneral = document.getElementById('pur-sub-general');
+        const btnViaje = document.getElementById('pur-sub-viaje');
+        if (btnGeneral) { btnGeneral.style.background = sub === 'general' ? 'var(--brand-magenta)' : 'transparent'; btnGeneral.style.color = sub === 'general' ? '#fff' : 'var(--text-main)'; btnGeneral.style.opacity = sub === 'general' ? '1' : '0.6'; }
+        if (btnViaje) { btnViaje.style.background = sub === 'viaje' ? '#D97706' : 'transparent'; btnViaje.style.color = sub === 'viaje' ? '#fff' : 'var(--text-main)'; btnViaje.style.opacity = sub === 'viaje' ? '1' : '0.6'; }
+
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(sub === 'viaje' ? pendientesViaje : pendientesGeneral, _cache.productos);
+
+        const kpiCont = document.getElementById('pur-kpi-container');
+        if (kpiCont) kpiCont.innerHTML = renderKPIStrip(comprasSubmodulo(_purFiltered, sub));
+
+        _renderPurchasePanel(_currentView);
     };
 
     window.togglePurchaseGroup = (cardId) => {
@@ -668,6 +694,9 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         { id: 'timeline', icon: '📅', label: 'Línea de Tiempo' },
     ];
 
+    const pendientesActivos = _purSubmodulo === 'viaje' ? pendientesViaje : pendientesGeneral;
+    const comprasDelSubmoduloInicial = comprasSubmodulo(_purFiltered, _purSubmodulo);
+
     const html = `
       <div class="module-header">
         <div>
@@ -676,6 +705,13 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
           <p style="opacity:0.5; font-size:0.82rem; margin-top:4px;">Adquisiciones para inventario o fulfilling de encargos.</p>
         </div>
         ${auth.canEdit('purchases') ? `<button class="btn-primary" style="padding:12px 28px;font-size:0.9rem;" onclick="window.modalCompra()">+ Registrar Compra</button>` : ''}
+      </div>
+
+      <!-- Submódulos: Compras Online (general) vs. Compras en Viaje (solo lo
+           que vino de ventas "En Viaje USA") -->
+      <div style="display:flex;background:var(--surface-2);border:1px solid var(--border-base);border-radius:12px;padding:4px;gap:4px;margin-bottom:1.2rem;width:fit-content;">
+        <button id="pur-sub-general" onclick="window.switchPurSubmodulo('general')" style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:0.85rem;font-weight:700;background:${_purSubmodulo==='general'?'var(--brand-magenta)':'transparent'};color:${_purSubmodulo==='general'?'#fff':'var(--text-main)'};opacity:${_purSubmodulo==='general'?'1':'0.6'};">🛍️ Compras Online</button>
+        <button id="pur-sub-viaje" onclick="window.switchPurSubmodulo('viaje')" style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:0.85rem;font-weight:700;background:${_purSubmodulo==='viaje'?'#D97706':'transparent'};color:${_purSubmodulo==='viaje'?'#fff':'var(--text-main)'};opacity:${_purSubmodulo==='viaje'?'1':'0.6'};">✈️ Compras en Viaje</button>
       </div>
 
       <div class="module-filters-bar" style="margin-bottom:1.5rem;">
@@ -690,10 +726,12 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
           <button class="btn-excel" onclick="window.exportPurExcel()">📥 Excel</button>
       </div>
 
-      ${renderPendingAlert(pendientes, _cache.productos)}
+      <div id="pur-pending-container">
+        ${renderPendingAlert(pendientesActivos, _cache.productos)}
+      </div>
 
       <div id="pur-kpi-container">
-        ${renderKPIStrip(_purFiltered)}
+        ${renderKPIStrip(comprasDelSubmoduloInicial)}
       </div>
 
       <!-- View Switcher + separator -->
@@ -709,7 +747,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
       <!-- Active view panel -->
       <div id="purchase-view-container">
-        ${_currentView === 'tabla' ? `<div id="compras-tabla-container"></div>` : getPanelHTML(_currentView, { ..._cache, compras: _purFiltered })}
+        ${_currentView === 'tabla' ? `<div id="compras-tabla-container"></div>` : getPanelHTML(_currentView, { ..._cache, compras: comprasDelSubmoduloInicial })}
       </div>
     `;
 
@@ -751,21 +789,14 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
 
     const encargos = (ventas || []).filter(v => v.tipo_venta === 'Encargo');
 
-    // Si hay un viaje activo en el módulo Viaje USA, esta compra se vincula
-    // automáticamente a él (igual que ya hace Ventas para "En Viaje USA") —
-    // antes solo se podía vincular una compra a un viaje después de creada,
-    // desde dentro del módulo Viaje, una por una.
+    // Si hay un viaje activo en el módulo Viaje USA, las compras de Stock se
+    // vinculan automáticamente a él. Las compras de un Encargo, en cambio,
+    // heredan el viaje de la venta que las originó (si esa venta se registró
+    // como "En Viaje USA") — así que el banner se recalcula según lo que el
+    // usuario vaya seleccionando (ver window.updateViajeBanner más abajo).
     let viajeActivo = null;
     try { viajeActivo = await ViajeService.getActivo(); } catch (_) { /* sin viaje activo */ }
-    const viajeBannerHTML = !viajeActivo
-        ? `<div id="pc-viaje-banner" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(239,68,68,0.08);border-radius:12px;border:1px solid rgba(239,68,68,0.25);margin-bottom:1.2rem;">
-             <span>⚠️</span>
-             <span style="font-size:0.82rem;color:var(--primary-red);font-weight:700;">No hay un viaje activo en este momento — esta compra se registrará normal, sin vincular a un viaje.</span>
-           </div>`
-        : `<div id="pc-viaje-banner" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(217,119,6,0.08);border-radius:12px;border:1px solid rgba(217,119,6,0.3);margin-bottom:1.2rem;">
-             <span>✈️</span>
-             <span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio})</span>
-           </div>`;
+    const viajeBannerHTML = `<div id="pc-viaje-banner" style="display:none;align-items:center;gap:10px;padding:0.8rem 1.2rem;border-radius:12px;margin-bottom:1.2rem;"></div>`;
     // Con viaje activo, el registro se agiliza: solo tienda/costo quedan
     // fijos y obligatorios, el resto se agrega bajo demanda desde el
     // checklist "Campos Adicionales" — mismo patrón que Ventas · En Viaje
@@ -901,7 +932,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         
                         <div class="form-group" id="pc-encargo-section">
                             <label class="form-label">Orden de Encargo *</label>
-                            <select id="pc-venta-select" onchange="window.updateEncargoBanner()">
+                            <select id="pc-venta-select" onchange="window.updateEncargoBanner(); window.updateViajeBanner();">
                                 <option value="">-- Seleccionar Encargo --</option>
                                 ${[...encargos].sort((a, b) => (b.comprado_en_viaje ? 1 : 0) - (a.comprado_en_viaje ? 1 : 0)).map(v => {
                                     const prod = productos.find(p => p.id?.toString() === v.producto_id?.toString());
@@ -1003,7 +1034,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
         </div>`;
     container.style.display = 'flex';
 
-    setTimeout(() => { attachComprobanteInput('comp-purchase-file'); }, 100);
+    setTimeout(() => { attachComprobanteInput('comp-purchase-file'); window.updateViajeBanner(); }, 100);
 
     window.toggleSeccionCamposAdicionalesCompra = () => {
         const el = document.getElementById('pc-seccion-campos-adicionales');
@@ -1023,6 +1054,40 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             if (banner) banner.style.display = 'none';
         } else {
             window.updateEncargoBanner();
+        }
+        window.updateViajeBanner();
+    };
+
+    // A qué viaje (si aplica) quedará vinculada la compra según lo que el
+    // usuario va seleccionando — ver la misma lógica en window.submitPurchase.
+    window.updateViajeBanner = () => {
+        const banner = document.getElementById('pc-viaje-banner');
+        if (!banner) return;
+        const tipo = document.getElementById('pc-tipo')?.value;
+        const estilo = (bg, border) => { banner.style.background = bg; banner.style.border = `1px solid ${border}`; };
+
+        if (tipo === 'encargo') {
+            const ventaId = document.getElementById('pc-venta-select')?.value;
+            const ventaTarget = ventaId ? encargos.find(v => v.id.toString() === ventaId) : null;
+            if (!ventaTarget) { banner.style.display = 'none'; return; }
+            if (ventaTarget.comprado_en_viaje && ventaTarget.viaje_id) {
+                const nombreViaje = (_cache?.viajes || []).find(v => v.id?.toString() === ventaTarget.viaje_id.toString())?.nombre || 'un viaje de encargos';
+                estilo('rgba(217,119,6,0.08)', 'rgba(217,119,6,0.3)');
+                banner.innerHTML = `<span>✈️</span><span style="font-size:0.82rem;color:#D97706;font-weight:700;">Este encargo se tomó "En Viaje USA" — la compra quedará vinculada al viaje: <strong>${nombreViaje}</strong>.</span>`;
+            } else {
+                estilo('var(--surface-2)', 'var(--border-base)');
+                banner.innerHTML = `<span>🛍️</span><span style="font-size:0.82rem;opacity:0.7;font-weight:700;">Este encargo es de Compras Online — la compra se registrará sin vincular a ningún viaje, así haya uno activo ahora.</span>`;
+            }
+            banner.style.display = 'flex';
+        } else {
+            if (viajeActivo) {
+                estilo('rgba(217,119,6,0.08)', 'rgba(217,119,6,0.3)');
+                banner.innerHTML = `<span>✈️</span><span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio}).</span>`;
+            } else {
+                estilo('rgba(239,68,68,0.08)', 'rgba(239,68,68,0.25)');
+                banner.innerHTML = `<span>⚠️</span><span style="font-size:0.82rem;color:var(--primary-red);font-weight:700;">No hay un viaje activo en este momento — esta compra se registrará normal, sin vincular a un viaje.</span>`;
+            }
+            banner.style.display = 'flex';
         }
     };
 
@@ -1126,10 +1191,25 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             }
             const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile, 'comprobantes') : "";
 
-            // Re-verificar el viaje activo al momento de guardar (pudo cerrarse
-            // mientras se llenaba el formulario) antes de vincular la compra.
+            // A qué viaje (si aplica) queda vinculada esta compra:
+            // - Encargo cuya venta se registró como "En Viaje USA": hereda el
+            //   viaje de esa venta, sin importar si ese viaje sigue activo hoy
+            //   — la compra siempre pertenece al mismo viaje que el encargo.
+            // - Encargo de "Compras Online" (no fue venta de viaje): nunca se
+            //   vincula a un viaje, así haya uno activo en este momento — el
+            //   submódulo de Compras en Viaje solo debe recibir lo que vino de
+            //   ventas "En Viaje USA".
+            // - Stock (sin venta asociada): no hay venta que lo clasifique, así
+            //   que se vincula solo si hay un viaje activo ahora mismo.
             let viajeIdCompra = null;
-            try { const activoAlGuardar = await ViajeService.getActivo(); viajeIdCompra = activoAlGuardar?.id || null; } catch (_) { /* sin viaje activo */ }
+            if (tipo === 'encargo' && ventaId) {
+                const ventaTarget = encargos.find(v => v.id.toString() === ventaId);
+                if (ventaTarget?.comprado_en_viaje && ventaTarget?.viaje_id) {
+                    viajeIdCompra = ventaTarget.viaje_id;
+                }
+            } else {
+                try { const activoAlGuardar = await ViajeService.getActivo(); viajeIdCompra = activoAlGuardar?.id || null; } catch (_) { /* sin viaje activo */ }
+            }
 
             const payload = {
                 id: Date.now().toString(),
@@ -1143,6 +1223,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                 codigo_producto_factura: codFact,
                 estado_compra: estado,
                 viaje_id: viajeIdCompra,
+                es_viaje: !!viajeIdCompra,
                 empresa_id: auth.getEmpresaId()
             };
             if (ventaId) payload.venta_id = ventaId;

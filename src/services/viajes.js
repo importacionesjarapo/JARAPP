@@ -102,7 +102,7 @@ export const ViajeService = {
   async vincularCompra(compraId, viajeId) {
     const { error } = await client()
       .from('Compras')
-      .update({ viaje_id: viajeId })
+      .update({ viaje_id: viajeId, es_viaje: true })
       .eq('id', compraId);
     if (error) throw new Error(error.message);
 
