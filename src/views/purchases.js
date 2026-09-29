@@ -766,6 +766,47 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
              <span>✈️</span>
              <span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio})</span>
            </div>`;
+    // Con viaje activo, el registro se agiliza: solo tienda/costo quedan
+    // fijos y obligatorios, el resto se agrega bajo demanda desde el
+    // checklist "Campos Adicionales" — mismo patrón que Ventas · En Viaje
+    // USA · En Tienda, porque en un viaje se registran muchísimas compras
+    // seguidas y cada campo de más cuenta.
+    const esViajeCompra = !!viajeActivo;
+    const CAMPOS_COMPRA_AGIL = [
+        { key:'costo_cop',     label:'Valor descontado banco (COP)' },
+        { key:'num_factura',   label:'Número de Factura' },
+        { key:'codigo_factura',label:'Código producto en factura' },
+    ];
+    const campoCompraHTML = (key) => {
+        switch (key) {
+            case 'costo_cop': return `<div class="form-group" data-campo-compra="costo_cop">
+                <label class="form-label">Valor descontado banco (COP)</label>
+                <input type="number" id="pc-costo-cop" placeholder="0" step="1">
+            </div>`;
+            case 'num_factura': return `<div class="form-group" data-campo-compra="num_factura">
+                <label class="form-label">Número de Factura</label>
+                <input type="text" id="pc-num-factura" placeholder="Ej. SHOP-9988">
+            </div>`;
+            case 'codigo_factura': return `<div class="form-group" data-campo-compra="codigo_factura">
+                <label class="form-label">Código producto en factura</label>
+                <input type="text" id="pc-codigo-factura" placeholder="Ej. SKU-7766">
+            </div>`;
+            default: return '';
+        }
+    };
+    window.toggleCampoCompra = (key, activo) => {
+        const cont = document.getElementById('pc-campos-agregados');
+        if (!cont) return;
+        const fila = document.getElementById(`fila-campo-compra-${key}`);
+        const dot = fila?.querySelector('.admin-perm-dot');
+        if (activo) {
+            if (!cont.querySelector(`[data-campo-compra="${key}"]`)) cont.insertAdjacentHTML('beforeend', campoCompraHTML(key));
+            dot?.classList.add('active');
+        } else {
+            cont.querySelector(`[data-campo-compra="${key}"]`)?.remove();
+            dot?.classList.remove('active');
+        }
+    };
 
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
@@ -862,9 +903,10 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                             <label class="form-label">Orden de Encargo *</label>
                             <select id="pc-venta-select" onchange="window.updateEncargoBanner()">
                                 <option value="">-- Seleccionar Encargo --</option>
-                                ${encargos.map(v => {
+                                ${[...encargos].sort((a, b) => (b.comprado_en_viaje ? 1 : 0) - (a.comprado_en_viaje ? 1 : 0)).map(v => {
                                     const prod = productos.find(p => p.id?.toString() === v.producto_id?.toString());
-                                    return `<option value="${v.id}" ${ventaIdPrefill && ventaIdPrefill.toString() === v.id.toString() ? 'selected' : ''}>${prod ? prod.nombre_producto : 'Prod #'+v.producto_id} — Orden #${v.id.toString().slice(-4)}</option>`;
+                                    const tag = v.comprado_en_viaje ? '✈️ ' : '🛍️ ';
+                                    return `<option value="${v.id}" ${ventaIdPrefill && ventaIdPrefill.toString() === v.id.toString() ? 'selected' : ''}>${tag}${prod ? prod.nombre_producto : 'Prod #'+v.producto_id} — Orden #${v.id.toString().slice(-4)}</option>`;
                                 }).join('')}
                             </select>
                         </div>
@@ -891,11 +933,6 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Valor descontado banco (COP)</label>
-                            <input type="number" id="pc-costo-cop" placeholder="0" step="1">
-                        </div>
-
-                        <div class="form-group">
                             <label class="form-label">Comprobante de Pago</label>
                             ${buildComprobanteUploadHTML('comp-purchase-file')}
                         </div>
@@ -906,16 +943,6 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Número de Factura *</label>
-                            <input type="text" id="pc-num-factura" placeholder="Ej. SHOP-9988" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Código producto en factura (Opcional)</label>
-                            <input type="text" id="pc-codigo-factura" placeholder="Ej. SKU-7766">
-                        </div>
-
-                        <div class="form-group">
                             <label class="form-label">Estado Inicial</label>
                             <select id="pc-estado">
                                 <option value="Comprado en tienda EEUU">Comprado en tienda EEUU</option>
@@ -923,7 +950,47 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                                 <option value="Bodega USA">Bodega USA</option>
                             </select>
                         </div>
+
+                        ${esViajeCompra ? '' : `
+                        <div class="form-group">
+                            <label class="form-label">Valor descontado banco (COP)</label>
+                            <input type="number" id="pc-costo-cop" placeholder="0" step="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Número de Factura *</label>
+                            <input type="text" id="pc-num-factura" placeholder="Ej. SHOP-9988" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Código producto en factura (Opcional)</label>
+                            <input type="text" id="pc-codigo-factura" placeholder="Ej. SKU-7766">
+                        </div>
+                        `}
                     </div>
+
+                    ${esViajeCompra ? `
+                    <div class="form-group full-width" style="margin-top:1.5rem;">
+                        <button type="button" id="btn-campos-adicionales-compra" class="btn-action" style="font-size:0.8rem;padding:8px 16px;" onclick="window.toggleSeccionCamposAdicionalesCompra()">▸ Campos Adicionales</button>
+                        <div id="pc-seccion-campos-adicionales" style="display:none;margin-top:12px;">
+                            <div class="admin-perms-grid">
+                                ${CAMPOS_COMPRA_AGIL.map(c => `
+                                <div class="admin-perm-row" id="fila-campo-compra-${c.key}">
+                                    <div class="admin-perm-label">
+                                        <span class="admin-perm-dot"></span>
+                                        <span>${c.label}</span>
+                                    </div>
+                                    <div class="admin-perm-controls">
+                                        <label class="admin-toggle-wrap">
+                                            <input type="checkbox" class="chk-campo-compra" value="${c.key}" onchange="window.toggleCampoCompra('${c.key}', this.checked)" />
+                                            <span class="admin-toggle-slider"></span>
+                                            <span class="admin-toggle-label">Incluido</span>
+                                        </label>
+                                    </div>
+                                </div>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div id="pc-campos-agregados" class="form-grid-3" style="margin-top:1rem;"></div>
+                    ` : ''}
 
                     <div id="pc-error" style="display:none; color:var(--primary-red); background:rgba(229,19,101,0.1); padding:10px; border-radius:8px; font-size:0.85rem; margin-top:1rem; text-align:center; font-weight:600;"></div>
                 </div>
@@ -935,8 +1002,17 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             </form>
         </div>`;
     container.style.display = 'flex';
-    
+
     setTimeout(() => { attachComprobanteInput('comp-purchase-file'); }, 100);
+
+    window.toggleSeccionCamposAdicionalesCompra = () => {
+        const el = document.getElementById('pc-seccion-campos-adicionales');
+        const btn = document.getElementById('btn-campos-adicionales-compra');
+        if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'block';
+        if (btn) btn.textContent = showing ? '▸ Campos Adicionales' : '▾ Campos Adicionales';
+    };
 
     window.togglePurchaseType = () => {
         const tipo = document.getElementById('pc-tipo').value;
@@ -1014,18 +1090,20 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
         const tipo = document.getElementById('pc-tipo').value;
         const proveedor = document.getElementById('pc-proveedor').value.trim();
         const costo = parseFloat(document.getElementById('pc-costo').value);
-        const costoCop = parseFloat(document.getElementById('pc-costo-cop').value) || 0;
+        // En modo ágil (viaje activo) estos 3 campos pueden no existir en el
+        // DOM si el usuario no los agregó desde "Campos Adicionales".
+        const costoCop = parseFloat(document.getElementById('pc-costo-cop')?.value) || 0;
         const compFileInput = document.getElementById('comp-purchase-file');
         const compFile = compFileInput && compFileInput.files[0] ? compFileInput.files[0] : null;
         const fechaComp = document.getElementById('pc-fecha').value;
-        const numFact = document.getElementById('pc-num-factura').value;
-        const codFact = document.getElementById('pc-codigo-factura').value;
+        const numFact = document.getElementById('pc-num-factura')?.value || '';
+        const codFact = document.getElementById('pc-codigo-factura')?.value || '';
         const estado = document.getElementById('pc-estado').value;
         const ventaId = tipo === 'encargo' ? document.getElementById('pc-venta-select').value : null;
         const productoId = tipo === 'stock' ? document.getElementById('pc-producto-select').value : null;
 
         const errEl = document.getElementById('pc-error');
-        if (!proveedor || isNaN(costo) || costo <= 0 || !fechaComp || !numFact) {
+        if (!proveedor || isNaN(costo) || costo <= 0 || !fechaComp || (!numFact && !esViajeCompra)) {
             errEl.textContent = 'Completa los campos obligatorios correctamente.';
             errEl.style.display = '';
             return;
