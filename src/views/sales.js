@@ -861,9 +861,18 @@ export const renderSales = async (renderLayout, navigateTo) => {
 // internet. Por eso "Nueva Venta" ahora abre primero esta pantalla de
 // selección, y cada tipo lleva a un formulario distinto (ver createSaleModal).
 const SALE_TYPE_CARDS = [
-    { tipo:'Stock',   icon:'🛒', color:'var(--success-green)', titulo:'Stock Local',    desc:'Producto físico disponible en Medellín. Entrega inmediata al cliente.' },
+    { tipo:'Stock',   icon:'🛒', color:'var(--success-green)', titulo:'Stock Local',    desc:'Producto físico disponible en bodega (Colombia). Entrega inmediata al cliente.' },
     { tipo:'Encargo', icon:'🛍️', color:'var(--brand-magenta)', titulo:'Compras Online', desc:'Encargo cotizado y comprado por internet desde Colombia, sin viaje.' },
-    { tipo:'Viaje',   icon:'✈️', color:'#D97706',             titulo:'En Viaje USA',    desc:'Encargo tomado durante un viaje a EEUU. Registro ágil, pocos campos obligatorios.' },
+    { tipo:'Viaje',   icon:'✈️', color:'#D97706',             titulo:'En Viaje USA',    desc:'Encargo tomado durante un viaje a EEUU, comprado online o en tienda física.' },
+];
+
+// Durante un viaje, el mismo producto se puede comprar de 2 formas: por
+// internet (misma dinámica/campos que "Compras Online", solo que además
+// queda vinculado al viaje activo) o en una tienda física en persona (sin
+// URL/cotización previa — registro más ágil, con menos campos obligatorios).
+const MODO_COMPRA_VIAJE_CARDS = [
+    { modo:'online', icon:'🛍️', color:'var(--brand-magenta)', titulo:'Online', desc:'Se cotiza y compra por internet durante el viaje. Mismos datos que Compras Online.' },
+    { modo:'tienda',  icon:'🏬', color:'#D97706',             titulo:'En Tienda', desc:'Se compra en persona en una tienda física. Registro ágil, pocos campos obligatorios.' },
 ];
 
 const renderSaleTypeSelector = () => {
@@ -893,10 +902,44 @@ const renderSaleTypeSelector = () => {
     container.style.display = 'flex';
 };
 
+const renderModoCompraViajeSelector = () => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Nueva Venta — ✈️ En Viaje USA</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="opacity:0.6;font-size:0.85rem;margin:0 0 1.5rem;">¿Cómo se va a comprar este producto durante el viaje?</p>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1.2rem;">
+                    ${MODO_COMPRA_VIAJE_CARDS.map(c => `
+                    <button type="button" onclick="window.modalVenta('Viaje','${c.modo}')"
+                        style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:2rem 1.2rem;background:var(--surface-1);border:2px solid var(--border-base);border-radius:18px;cursor:pointer;font-family:inherit;transition:all .15s ease;"
+                        onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateY(-3px)';"
+                        onmouseout="this.style.borderColor='var(--border-base)';this.style.transform='translateY(0)';">
+                        <div style="font-size:2.6rem;line-height:1;">${c.icon}</div>
+                        <h3 style="margin:0;font-size:1rem;font-weight:800;color:${c.color};">${c.titulo}</h3>
+                        <p style="margin:0;font-size:0.78rem;opacity:0.65;line-height:1.5;">${c.desc}</p>
+                    </button>`).join('')}
+                </div>
+                <button type="button" class="btn-action" style="margin-top:1.5rem;font-size:0.78rem;" onclick="window.modalVenta()">⬅️ Volver</button>
+            </div>
+        </div>`;
+    container.style.display = 'flex';
+};
+
 // ─── Create Sale Modal ──────────────────────────────────────────────────────
-export const createSaleModal = async (navigateTo, tipoUI) => {
+export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
     if (!tipoUI) { renderSaleTypeSelector(); return; }
-    const esViajeUSA = tipoUI === 'Viaje';
+    if (tipoUI === 'Viaje' && !modoCompra) { renderModoCompraViajeSelector(); return; }
+    const esViaje = tipoUI === 'Viaje';
+    // Registro ágil (menos campos obligatorios) solo aplica a compras en
+    // tienda física durante el viaje — comprar por internet en viaje sigue
+    // los mismos datos que "Compras Online", solo que además queda
+    // vinculado al viaje activo.
+    const esRegistroAgil = esViaje && modoCompra === 'tienda';
     const tipoVentaDB = tipoUI === 'Stock' ? 'Stock' : 'Encargo';
 
     const container = document.getElementById('modal-container');
@@ -905,7 +948,7 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
     container.style.display = 'flex';
 
     let viajeActivo = null;
-    if (esViajeUSA) {
+    if (esViaje) {
         try { viajeActivo = await ViajeService.getActivo(); } catch (_) { /* sin viaje activo */ }
     }
 
@@ -940,10 +983,12 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
         });
     }
 
-    const req = esViajeUSA ? '' : 'required';
-    const reqLbl = () => esViajeUSA ? '<span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>' : '<span style="color:var(--primary-red);">*</span>';
-    const tipoCard = SALE_TYPE_CARDS.find(c => c.tipo === tipoUI) || SALE_TYPE_CARDS[0];
-    const viajeBannerHTML = !esViajeUSA ? '' : (viajeActivo
+    const req = esRegistroAgil ? '' : 'required';
+    const reqLbl = () => esRegistroAgil ? '<span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>' : '<span style="color:var(--primary-red);">*</span>';
+    const tipoCardBase = SALE_TYPE_CARDS.find(c => c.tipo === tipoUI) || SALE_TYPE_CARDS[0];
+    const modoCompraCard = esViaje ? MODO_COMPRA_VIAJE_CARDS.find(c => c.modo === modoCompra) : null;
+    const tipoCard = modoCompraCard ? { ...tipoCardBase, titulo: `${tipoCardBase.titulo} · ${modoCompraCard.titulo}` } : tipoCardBase;
+    const viajeBannerHTML = !esViaje ? '' : (viajeActivo
         ? `<div class="form-group full-width" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(217,119,6,0.08);border-radius:12px;border:1px solid rgba(217,119,6,0.3);margin-bottom:1.2rem;">
              <span>✈️</span>
              <span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio})</span>
@@ -1059,11 +1104,11 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
                         <input type="hidden" name="producto_id" id="sel-producto-id" ${tipoUI==='Stock'?'required':''}>
                     </div>
 
-                <div id="section-encargo" style="display:${esViajeUSA || tipoUI==='Encargo' ? 'block':'none'};">
+                <div id="section-encargo" style="display:${esViaje || tipoUI==='Encargo' ? 'block':'none'};">
                     <div style="height:1px; background:var(--border-base); margin:2rem 0;"></div>
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--brand-magenta);">
                         <span>📋</span>
-                        <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto ${esViajeUSA?'(Registro Ágil en Viaje)':'por Encargo'}</h3>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto ${esRegistroAgil?'(Registro Ágil en Viaje)':'por Encargo'}</h3>
                     </div>
                     ${viajeBannerHTML}
                     <div class="form-grid-3">
@@ -1088,7 +1133,7 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
                             </div>
                         </div>
 
-                        ${esViajeUSA ? `
+                        ${esRegistroAgil ? `
                         <div class="form-group full-width">
                             <button type="button" class="btn-action" style="font-size:0.78rem;padding:8px 16px;" onclick="window.toggleDetallesOpcionalesViaje()" id="btn-toggle-viaje-opcionales">➕ Agregar detalles opcionales (categoría, marca, talla, enlace...)</button>
                         </div>
@@ -1134,7 +1179,7 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
                             <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) ${reqLbl()}</label>
                             <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" ${req}>
                         </div>
-                        ${esViajeUSA ? `</div>` : ''}
+                        ${esRegistroAgil ? `</div>` : ''}
                     </div>
                 </div>
 
@@ -1199,7 +1244,7 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
     // es de tipo calzado/ropa — no aplica en modo Viaje USA (esos campos
     // quedan siempre opcionales ahí, forman parte del registro ágil).
     window.updateEncargoRequirements = () => {
-        if (esViajeUSA) return;
+        if (esRegistroAgil) return;
         const cat = document.getElementById('enc_tipo')?.value || '';
         const condCats = ['Tenis', 'Calzado', 'Ropa', 'Accesorios'];
         const isCond = condCats.includes(cat);
@@ -1520,7 +1565,7 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
             // Re-verificar el viaje activo al momento de guardar (pudo cerrarse
             // mientras se llenaba el formulario) antes de vincular la venta.
             let viajeIdVenta = null;
-            if (esViajeUSA) {
+            if (esViaje) {
                 try { const activoAlGuardar = await ViajeService.getActivo(); viajeIdVenta = activoAlGuardar?.id || null; } catch (_) { /* sin viaje activo */ }
             }
 
@@ -1542,7 +1587,7 @@ export const createSaleModal = async (navigateTo, tipoUI) => {
                 trm_cotizada: trm,
                 valor_envio_internacional: valorEnvioInt,
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
-                comprado_en_viaje: esViajeUSA,
+                comprado_en_viaje: esViaje,
                 viaje_id: viajeIdVenta,
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
                 analista_id: auth.getProfile()?.id || null,
