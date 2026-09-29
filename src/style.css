@@ -1130,61 +1130,58 @@ input:focus, select:focus, textarea:focus {
 @media (max-width: 800px)  { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
 
 .kpi-strip-card {
-  background: var(--glass-bg);
+  --kpi-color: var(--brand-magenta);
+  background: linear-gradient(165deg, var(--glass-bg), var(--surface-1));
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  padding: 1rem 1.2rem;
+  border-radius: 18px;
+  padding: 1.2rem 1.3rem;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   position: relative;
   overflow: hidden;
-  transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.4s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
   cursor: pointer;
 }
 .kpi-strip-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-module);
-}
-/* Sello diagonal — etiqueta de carga */
-.kpi-strip-card::before {
-  content: '';
-  position: absolute;
-  top: 8px; right: 10px;
-  width: 6px; height: 6px;
-  background: var(--primary);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  opacity: 0.8;
-  z-index: 1;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(0,0,0,0.18);
+  border-color: color-mix(in srgb, var(--kpi-color) 45%, var(--glass-border));
 }
 .kpi-strip-card::after {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--brand-magenta), var(--brand-green));
+  height: 3px;
+  background: var(--kpi-color);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.3s ease;
 }
 .kpi-strip-card:hover::after { transform: scaleX(1); }
 .kpi-strip-icon {
-  font-size: 1.4rem;
-  margin-bottom: 0.3rem;
-  display: block;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  margin-bottom: 0.7rem;
+  background: color-mix(in srgb, var(--kpi-color) 16%, transparent);
 }
 .kpi-strip-value {
   font-family: var(--font-mono);
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   font-weight: 800;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.6px;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
-  margin-bottom: 0.25rem;
+  line-height: 1.15;
+  margin-bottom: 0.3rem;
 }
 .kpi-strip-label {
-  font-size: 0.58rem;
+  font-size: 0.64rem;
   font-weight: 700;
-  letter-spacing: 1.4px;
+  letter-spacing: 1.1px;
   text-transform: uppercase;
   color: var(--text-faint);
 }
@@ -2179,6 +2176,77 @@ body.sidebar-collapsed .sidebar-user-info { display: none; }
   font-weight: 600;
   color: var(--text-faint);
   user-select: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUSCADOR DE CLIENTES — Autocomplete (reemplaza el <datalist> nativo)
+   ═══════════════════════════════════════════════════════════════ */
+.cliente-search-wrap { position: relative; }
+
+.cliente-search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  z-index: 60;
+  background: var(--surface-0);
+  border: 1px solid var(--border-base);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.22);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.cliente-search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.cliente-search-item:hover,
+.cliente-search-item.active {
+  background: var(--brand-magenta-dim);
+}
+
+.cliente-search-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.cliente-search-info { min-width: 0; flex: 1; }
+.cliente-search-nombre {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cliente-search-meta {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.cliente-search-empty {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--text-faint);
+  line-height: 1.6;
 }
 
 /* ═══════════════════════════════════════════════════════════════

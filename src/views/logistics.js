@@ -282,20 +282,22 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
     };
 
     const html = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:2rem; flex-wrap:wrap; gap:15px;">
-        <div><h2>Seguimiento de Cargas</h2><p style="opacity:0.5;">Monitoreo de envíos internacionales por etapas (Kanban).</p></div>
-        <div class="module-filters-bar">
-            <div class="date-filter-wrap">
-                <label>Desde</label>
-                <input type="date" id="log-date-start" class="date-filter-input" value="${_logStartDate}">
-                <label style="margin-left:5px;">Hasta</label>
-                <input type="date" id="log-date-end" class="date-filter-input" value="${_logEndDate}">
-                <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyLogDateFilter()">Filtrar</button>
-            </div>
-            <button class="btn-excel" onclick="window.exportLogExcel()">📥 Excel</button>
-            <input type="text" id="find-it" value="${_logSearchTerm.replace(/"/g,'&quot;')}" placeholder="Filtrar por guía, cliente, producto o fase..." style="background:var(--input-bg); color:var(--text-main); padding:10px 15px; border-radius:12px; border:1px solid var(--glass-border); width:260px; outline:none;">
-            ${auth.canEdit('logistics') ? `<button class="btn-primary" onclick="window.modalLogistica()">+ Agregar Seguimiento</button>` : ''}
-        </div>
+      <div class="module-header">
+        <div><h2 class="page-title">Seguimiento de Cargas</h2><p style="opacity:0.5;">Monitoreo de envíos internacionales por etapas (Kanban).</p></div>
+        ${auth.canEdit('logistics') ? `<button class="btn-primary" style="padding:12px 28px;font-size:0.9rem;" onclick="window.modalLogistica()">+ Agregar Seguimiento</button>` : ''}
+      </div>
+
+      <div class="module-filters-bar" style="margin-bottom:2rem;">
+          <div class="date-filter-wrap">
+              <label>Desde</label>
+              <input type="date" id="log-date-start" class="date-filter-input" value="${_logStartDate}">
+              <label style="margin-left:5px;">Hasta</label>
+              <input type="date" id="log-date-end" class="date-filter-input" value="${_logEndDate}">
+              <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyLogDateFilter()">Filtrar</button>
+          </div>
+          <input type="text" id="find-it" value="${_logSearchTerm.replace(/"/g,'&quot;')}" placeholder="🔍 Filtrar por guía, cliente, producto o fase..." style="max-width:280px;">
+          <div style="flex:1 1 auto;"></div>
+          <button class="btn-excel" onclick="window.exportLogExcel()">📥 Excel</button>
       </div>
 
       <div class="module-tabs" style="display:flex; gap:10px; margin-bottom:2rem; border-bottom:1px solid var(--glass-border); padding-bottom:10px;">

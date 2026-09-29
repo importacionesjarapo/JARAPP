@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { formatCOP, formatUSD, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel, readExcelFile, buscarColumna } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
+import { ViajeService } from '../services/viajes.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let localVentasCache = [];
@@ -33,30 +34,40 @@ const labelDate = (s) => {
     } catch { return s; }
 };
 
+// ─── Sub-tipo de una venta "Encargo" ────────────────────────────────────────
+// tipo_venta sigue siendo 'Stock'/'Encargo' en BD (no se tocó el esquema
+// existente ni el track colombia/encargo_usa/encargo_web del portal); acá
+// solo distinguimos visualmente Compras Online vs. En Viaje USA usando el
+// flag comprado_en_viaje que ya se guarda con cada venta.
+const tipoVentaBadge = (v) => {
+    if (v.tipo_venta !== 'Encargo') return { icon:'🛒', label:'Stock Local', color:'var(--success-green)' };
+    return v.comprado_en_viaje
+        ? { icon:'✈️', label:'En Viaje USA', color:'#D97706' }
+        : { icon:'🛍️', label:'Compras Online', color:'var(--violet)' };
+};
+
 // ─── KPI Strip ─────────────────────────────────────────────────────────────────
+// #Facturación Total y Abonos Recibidos se sacaron del strip — esa misma
+// información ya vive en el Dashboard 360°, no hace falta duplicarla acá.
 const renderSalesKPI = (ventas) => {
-    const totalFacturado = ventas.reduce((a,v) => a + (parseFloat(v.valor_total_cop)||0), 0);
-    const totalAbonos    = ventas.reduce((a,v) => a + (parseFloat(v.abonos_acumulados)||0), 0);
     const totalSaldo     = ventas.reduce((a,v) => a + (parseFloat(v.saldo_pendiente)||0), 0);
     const encargos       = ventas.filter(v => v.tipo_venta === 'Encargo').length;
     const stockLocal     = ventas.filter(v => v.tipo_venta !== 'Encargo').length;
 
     let kpis = [
-        { icon:'💰', value: formatCOP(totalFacturado), label:'Facturación Total',      color:'var(--info-blue)' },
-        { icon:'✅', value: formatCOP(totalAbonos),    label:'Abonos Recibidos',        color:'var(--success-green)' },
         { icon:'⚠️', value: formatCOP(totalSaldo),     label:'Saldos Pendientes',       color: totalSaldo > 0 ? 'var(--primary-red)' : 'var(--success-green)' },
         { icon:'📦', value: encargos,                  label:'Encargos Internacionales', color:'var(--warning-orange)' },
         { icon:'🛒', value: stockLocal,                label:'Ventas Stock Local',       color:'var(--brand-green)' },
     ];
 
     if (!auth.canAccess('feat_money')) {
-        kpis = kpis.filter(k => !['Facturación Total', 'Abonos Recibidos'].includes(k.label));
+        kpis = kpis.filter(k => k.label !== 'Saldos Pendientes');
     }
 
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
-        <div class="kpi-strip-card" onclick="window.openSalesKPI('${k.label}')">
+        <div class="kpi-strip-card" style="--kpi-color:${k.color};" onclick="window.openSalesKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
@@ -104,7 +115,7 @@ const renderSalesFaseCards = (ventas) => {
     return `
     <div class="kpi-strip" style="margin-top:0.8rem;">
         ${entries.map(([fase, count]) => `
-        <div class="kpi-strip-card" onclick="window.openSalesFase('${fase.replace(/'/g,"\\'")}')">
+        <div class="kpi-strip-card" style="--kpi-color:${getLogisticaColor(fase)};" onclick="window.openSalesFase('${fase.replace(/'/g,"\\'")}')">
             <span class="kpi-strip-icon">${faseIconVenta(fase)}</span>
             <div class="kpi-strip-value" style="color:${getLogisticaColor(fase)};">${count}</div>
             <div class="kpi-strip-label">${fase}</div>
@@ -117,12 +128,7 @@ window.openSalesKPI = (kpiName) => {
     let subtitle = '';
     let ventasFiltradas = [...localVentasFiltered].reverse(); // Recientes primero
     
-    if (kpiName === 'Facturación Total') {
-        subtitle = 'Todas las ventas que suman a la facturación total.';
-    } else if (kpiName === 'Abonos Recibidos') {
-        ventasFiltradas = ventasFiltradas.filter(v => (parseFloat(v.abonos_acumulados)||0) > 0);
-        subtitle = 'Ventas que tienen abonos registrados.';
-    } else if (kpiName === 'Saldos Pendientes') {
+    if (kpiName === 'Saldos Pendientes') {
         ventasFiltradas = ventasFiltradas.filter(v => (parseFloat(v.saldo_pendiente)||0) > 0);
         subtitle = 'Ventas con saldo pendiente por pagar.';
     } else if (kpiName === 'Encargos Internacionales') {
@@ -238,9 +244,8 @@ function _montarTablaVentas() {
               render: (_v, row) => {
                   const fase = getLogisticaFase(row.id, localLogisticaCache, row.estado_orden||'Procesando');
                   const col  = getLogisticaColor(fase);
-                  const tipo = row.tipo_venta === 'Encargo'
-                      ? '<span style="color:var(--violet);font-size:0.68rem;font-weight:700">📦 Encargo</span>'
-                      : '<span style="color:var(--success-green);font-size:0.68rem;font-weight:700">🛍️ Stock Local</span>';
+                  const b = tipoVentaBadge(row);
+                  const tipo = `<span style="color:${b.color};font-size:0.68rem;font-weight:700">${b.icon} ${b.label}</span>`;
                   return `<div style="margin-bottom:5px;">${tipo}</div><span class="status-badge" style="background:${col};">${fase}</span>`;
               } },
             { key: 'valor_total_cop', label: 'Total COP', width: '120px',
@@ -487,6 +492,9 @@ function injectSalesView(view) {
     else if (view === 'tipo')   html = renderViewTipo(ventas);
     else if (view === 'fase')   html = renderViewFase(ventas);
     else if (view === 'timeline') html = renderViewTimeline(ventas);
+    // La búsqueda vive dentro de cada vista (no en la barra superior del
+    // módulo) — la vista "Tabla" ya trae la suya propia (TablaPro).
+    html = `<div style="margin-bottom:1.2rem;"><input type="text" id="find-sale" placeholder="🔍 Buscar cliente, producto..." style="max-width:320px;"></div>` + html;
     area.style.opacity = '0';
     setTimeout(() => { area.innerHTML = html; area.style.opacity = '1'; area.style.transition = 'opacity 0.25s'; attachSalesSearch(); attachGroupToggles(); }, 100);
 }
@@ -793,29 +801,29 @@ export const renderSales = async (renderLayout, navigateTo) => {
     ];
 
     const html = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:15px;">
+    <div class="module-header">
         <div>
             <span class="page-eyebrow">Stock Local · Encargos · Abonos</span>
             <h2 class="page-title">Módulo de Ventas</h2>
             <p style="opacity:0.5;font-size:0.82rem;margin-top:4px;">Facturación, cartera pendiente y seguimiento por fase logística.</p>
         </div>
-        <div class="module-filters-bar">
-            <div class="date-filter-wrap">
-                <label>Desde</label>
-                <input type="date" id="sales-date-start" class="date-filter-input" value="${_salesStartDate}">
-                <label style="margin-left:5px;">Hasta</label>
-                <input type="date" id="sales-date-end" class="date-filter-input" value="${_salesEndDate}">
-                <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applySalesDateFilter()">Filtrar</button>
-            </div>
-            <button class="btn-excel" onclick="window.exportSalesExcel()">📥 Excel</button>
-            <input type="text" id="find-sale" placeholder="Buscar cliente, producto..." style="background:var(--glass-hover);padding:10px 15px;border-radius:12px;color:var(--text-main);border:1px solid var(--glass-border);width:230px;outline:none;">
-            <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="window._navigateTo('cotizador')">📋 Nueva cotización</button>
-            ${auth.canEdit('sales') ? `
-                <input type="file" id="sale-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarVentasExcel(this.files[0])">
-                <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="document.getElementById('sale-import-input').click()">📤 Importar Excel</button>
-                <button class="btn-primary" onclick="window.modalVenta()">+ Nueva Venta</button>
-            ` : ''}
+        ${auth.canEdit('sales') ? `<button class="btn-primary" style="padding:12px 28px;font-size:0.9rem;" onclick="window.modalVenta()">+ Nueva Venta</button>` : ''}
+    </div>
+
+    <div class="module-filters-bar" style="margin-bottom:1.5rem;">
+        <div class="date-filter-wrap">
+            <label>Desde</label>
+            <input type="date" id="sales-date-start" class="date-filter-input" value="${_salesStartDate}">
+            <label style="margin-left:5px;">Hasta</label>
+            <input type="date" id="sales-date-end" class="date-filter-input" value="${_salesEndDate}">
+            <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applySalesDateFilter()">Filtrar</button>
         </div>
+        <div style="flex:1 1 auto;"></div>
+        <button class="btn-excel" onclick="window.exportSalesExcel()">📥 Excel</button>
+        ${auth.canEdit('sales') ? `
+            <input type="file" id="sale-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarVentasExcel(this.files[0])">
+            <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="document.getElementById('sale-import-input').click()">📤 Importar Excel</button>
+        ` : ''}
     </div>
 
     <div id="sales-kpi-container">
@@ -843,12 +851,102 @@ export const renderSales = async (renderLayout, navigateTo) => {
     setTimeout(() => { attachGroupToggles(); }, 150);
 };
 
-// ─── Create Sale Modal (unchanged) ────────────────────────────────────────────
-export const createSaleModal = async (navigateTo) => {
+// ─── Selector de Tipo de Transacción (pantalla previa al formulario) ──────────
+// El 90% de la operación real ocurre durante viajes de encargos a EEUU, con
+// un ritmo de registro mucho más ágil que el de un encargo cotizado por
+// internet. Por eso "Nueva Venta" ahora abre primero esta pantalla de
+// selección, y cada tipo lleva a un formulario distinto (ver createSaleModal).
+const SALE_TYPE_CARDS = [
+    { tipo:'Stock',   icon:'🛒', color:'var(--success-green)', titulo:'Stock Local',    desc:'Producto físico disponible en bodega (Colombia). Entrega inmediata al cliente.' },
+    { tipo:'Encargo', icon:'🛍️', color:'var(--brand-magenta)', titulo:'Compras Online', desc:'Encargo cotizado y comprado por internet desde Colombia, sin viaje.' },
+    { tipo:'Viaje',   icon:'✈️', color:'#D97706',             titulo:'En Viaje USA',    desc:'Encargo tomado durante un viaje a EEUU, comprado online o en tienda física.' },
+];
+
+// Durante un viaje, el mismo producto se puede comprar de 2 formas: por
+// internet (misma dinámica/campos que "Compras Online", solo que además
+// queda vinculado al viaje activo) o en una tienda física en persona (sin
+// URL/cotización previa — registro más ágil, con menos campos obligatorios).
+const MODO_COMPRA_VIAJE_CARDS = [
+    { modo:'online', icon:'🛍️', color:'var(--brand-magenta)', titulo:'Online', desc:'Se cotiza y compra por internet durante el viaje. Mismos datos que Compras Online.' },
+    { modo:'tienda',  icon:'🏬', color:'#D97706',             titulo:'En Tienda', desc:'Se compra en persona en una tienda física. Registro ágil, pocos campos obligatorios.' },
+];
+
+const renderSaleTypeSelector = () => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Nueva Venta</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="opacity:0.6;font-size:0.85rem;margin:0 0 1.5rem;">¿Qué tipo de transacción vas a registrar?</p>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;">
+                    ${SALE_TYPE_CARDS.map(c => `
+                    <button type="button" onclick="window.modalVenta('${c.tipo}')"
+                        style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:2rem 1.2rem;background:var(--surface-1);border:2px solid var(--border-base);border-radius:18px;cursor:pointer;font-family:inherit;transition:all .15s ease;"
+                        onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateY(-3px)';"
+                        onmouseout="this.style.borderColor='var(--border-base)';this.style.transform='translateY(0)';">
+                        <div style="font-size:2.6rem;line-height:1;">${c.icon}</div>
+                        <h3 style="margin:0;font-size:1rem;font-weight:800;color:${c.color};">${c.titulo}</h3>
+                        <p style="margin:0;font-size:0.78rem;opacity:0.65;line-height:1.5;">${c.desc}</p>
+                    </button>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    container.style.display = 'flex';
+};
+
+const renderModoCompraViajeSelector = () => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Nueva Venta — ✈️ En Viaje USA</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="opacity:0.6;font-size:0.85rem;margin:0 0 1.5rem;">¿Cómo se va a comprar este producto durante el viaje?</p>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1.2rem;">
+                    ${MODO_COMPRA_VIAJE_CARDS.map(c => `
+                    <button type="button" onclick="window.modalVenta('Viaje','${c.modo}')"
+                        style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:2rem 1.2rem;background:var(--surface-1);border:2px solid var(--border-base);border-radius:18px;cursor:pointer;font-family:inherit;transition:all .15s ease;"
+                        onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateY(-3px)';"
+                        onmouseout="this.style.borderColor='var(--border-base)';this.style.transform='translateY(0)';">
+                        <div style="font-size:2.6rem;line-height:1;">${c.icon}</div>
+                        <h3 style="margin:0;font-size:1rem;font-weight:800;color:${c.color};">${c.titulo}</h3>
+                        <p style="margin:0;font-size:0.78rem;opacity:0.65;line-height:1.5;">${c.desc}</p>
+                    </button>`).join('')}
+                </div>
+                <button type="button" class="btn-action" style="margin-top:1.5rem;font-size:0.78rem;" onclick="window.modalVenta()">⬅️ Volver</button>
+            </div>
+        </div>`;
+    container.style.display = 'flex';
+};
+
+// ─── Create Sale Modal ──────────────────────────────────────────────────────
+export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
+    if (!tipoUI) { renderSaleTypeSelector(); return; }
+    if (tipoUI === 'Viaje' && !modoCompra) { renderModoCompraViajeSelector(); return; }
+    const esViaje = tipoUI === 'Viaje';
+    // Registro ágil (menos campos obligatorios) solo aplica a compras en
+    // tienda física durante el viaje — comprar por internet en viaje sigue
+    // los mismos datos que "Compras Online", solo que además queda
+    // vinculado al viaje activo.
+    const esRegistroAgil = esViaje && modoCompra === 'tienda';
+    const tipoVentaDB = tipoUI === 'Stock' ? 'Stock' : 'Encargo';
+
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
     content.innerHTML = `<div style="text-align:center;padding:2rem;"><div class="loader"></div> Preparando módulo de facturación...</div>`;
     container.style.display = 'flex';
+
+    let viajeActivo = null;
+    if (esViaje) {
+        try { viajeActivo = await ViajeService.getActivo(); } catch (_) { /* sin viaje activo */ }
+    }
 
     const [clientsList, productsList, configList] = await Promise.all([
         db.fetchData('Clientes'),
@@ -881,13 +979,146 @@ export const createSaleModal = async (navigateTo) => {
         });
     }
 
+    // Registro ágil (En Tienda durante viaje): Nombre, Cantidad, Tienda a
+    // Cotizar, Valor de Venta y Foto son obligatorios/fijos siempre (ver
+    // más abajo); estos otros quedan bajo "Campos Adicionales", colapsados
+    // hasta que el usuario los active uno por uno.
+    const CAMPOS_VIAJE_AGIL = [
+        { key:'categoria',   label:'Categoría' },
+        { key:'marca',       label:'Marca' },
+        { key:'genero',      label:'Género' },
+        { key:'talla',       label:'Talla' },
+        { key:'link',        label:'Enlace del Producto (URL)' },
+        { key:'precio_usd',  label:'Valor Cotizado (USD)' },
+        { key:'peso',        label:'Peso Estimado (Libras)' },
+        { key:'trm',         label:'TRM Cotizada' },
+        { key:'ganancia',    label:'Ganancia Calculada (COP)' },
+    ];
+    // El toggle de cada fila del checklist (arriba) es el único control de
+    // visibilidad — se activa/desactiva ahí, no con un botón dentro del campo.
+    const campoViajeHTML = (key) => {
+        switch (key) {
+            case 'categoria': return `<div class="form-group" data-campo-viaje="categoria">
+                <label class="form-label">Categoría</label>
+                <select id="enc_tipo" required><option value="">-- Selecciona --</option>${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+            </div>`;
+            case 'marca': return `<div class="form-group" data-campo-viaje="marca">
+                <label class="form-label">Marca</label>
+                <select id="enc_marca" required><option value="">-- Selecciona --</option>${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+            </div>`;
+            case 'genero': return `<div class="form-group" data-campo-viaje="genero">
+                <label class="form-label" id="lbl-enc-genero">Género</label>
+                <select id="enc_genero"><option value="">-- Selecciona --</option>${generos.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+            </div>`;
+            case 'talla': return `<div class="form-group" data-campo-viaje="talla">
+                <label class="form-label" id="lbl-enc-talla">Talla</label>
+                <input type="text" id="enc_talla" placeholder="Ej. 9US">
+            </div>`;
+            case 'link': return `<div class="form-group full-width" style="grid-column: span 3;" data-campo-viaje="link">
+                <label class="form-label">Enlace del Producto (URL)</label>
+                <input type="url" id="enc_link" placeholder="https://..." required>
+            </div>`;
+            case 'precio_usd': return `<div class="form-group" data-campo-viaje="precio_usd">
+                <label class="form-label">Valor Cotizado (USD)</label>
+                <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" required>
+            </div>`;
+            case 'peso': return `<div class="form-group" data-campo-viaje="peso">
+                <label class="form-label">Peso Estimado (Libras)</label>
+                <input type="text" id="sale-peso" name="peso_producto" placeholder="0.0" inputmode="decimal" required>
+            </div>`;
+            case 'trm': return `<div class="form-group" data-campo-viaje="trm">
+                <label class="form-label">TRM Cotizada</label>
+                <input type="text" id="sale-trm" name="trm_cotizada" placeholder="Ej. 3700" inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}" required>
+            </div>`;
+            case 'ganancia': return `<div class="form-group" data-campo-viaje="ganancia">
+                <label class="form-label">Ganancia Calculada (COP)</label>
+                <input type="number" id="sale-ganancia-calc" name="ganancia_calculada" min="0" placeholder="0">
+                <p id="sale-ganancia-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
+            </div>`;
+            default: return '';
+        }
+    };
+
+    const tipoCardBase = SALE_TYPE_CARDS.find(c => c.tipo === tipoUI) || SALE_TYPE_CARDS[0];
+    const modoCompraCard = esViaje ? MODO_COMPRA_VIAJE_CARDS.find(c => c.modo === modoCompra) : null;
+    const tipoCard = modoCompraCard ? { ...tipoCardBase, titulo: `${tipoCardBase.titulo} · ${modoCompraCard.titulo}` } : tipoCardBase;
+    const viajeBannerHTML = !esViaje ? '' : (viajeActivo
+        ? `<div class="form-group full-width" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(217,119,6,0.08);border-radius:12px;border:1px solid rgba(217,119,6,0.3);margin-bottom:1.2rem;">
+             <span>✈️</span>
+             <span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio})</span>
+           </div>`
+        : `<div class="form-group full-width" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(239,68,68,0.08);border-radius:12px;border:1px solid rgba(239,68,68,0.25);margin-bottom:1.2rem;">
+             <span>⚠️</span>
+             <span style="font-size:0.82rem;color:var(--primary-red);font-weight:700;">No hay un viaje activo en este momento — esta venta se registrará normal, sin vincular a un viaje.</span>
+           </div>`);
+
+    // ── Buscador de clientes (autocomplete propio, reemplaza el datalist
+    // nativo — poco elegante y con tipografía pobre en todos los navegadores).
+    const clienteInitials = (nombre) => {
+        const partes = (nombre || '').trim().split(/\s+/).filter(Boolean);
+        if (!partes.length) return '?';
+        return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
+    };
+    const CLIENTE_AVATAR_COLORS = ['#EA168F','#7C3AED','#0EA5E9','#16A34A','#D97706','#DC2626','#0D9488','#4F46E5'];
+    const clienteAvatarColor = (seed) => {
+        const s = String(seed || '');
+        let hash = 0;
+        for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+        return CLIENTE_AVATAR_COLORS[hash % CLIENTE_AVATAR_COLORS.length];
+    };
+    let _clienteSearchResults = [];
+    const renderClienteDropdown = (query) => {
+        const dropdown = document.getElementById('cliente-search-dropdown');
+        if (!dropdown) return;
+        const q = (query || '').trim().toLowerCase();
+        _clienteSearchResults = (q
+            ? clientsList.filter(c => (c.nombre || '').toLowerCase().includes(q) || (c.numero_identificacion || '').toLowerCase().includes(q))
+            : clientsList
+        ).slice(0, 8);
+        dropdown.dataset.activeIdx = '-1';
+        if (!_clienteSearchResults.length) {
+            dropdown.innerHTML = `<div class="cliente-search-empty">Sin resultados${q ? ` para "${q}"` : ''}.<br>Usa "+ Cliente Nuevo" para crearlo.</div>`;
+        } else {
+            dropdown.innerHTML = _clienteSearchResults.map((c, i) => `
+                <div class="cliente-search-item" data-idx="${i}" onmousedown="window.seleccionarClienteBusqueda(${i})">
+                    <div class="cliente-search-avatar" style="background:${clienteAvatarColor(c.id)};">${clienteInitials(c.nombre)}</div>
+                    <div class="cliente-search-info">
+                        <div class="cliente-search-nombre">${c.nombre || 'Sin nombre'}</div>
+                        <div class="cliente-search-meta">CC: ${c.numero_identificacion || '—'}${c.whatsapp ? ` · 📱 ${c.whatsapp.split(' | ').pop()}` : ''}</div>
+                    </div>
+                </div>`).join('');
+        }
+        dropdown.style.display = 'block';
+    };
+    window._seleccionarClienteEnFormulario = (client) => {
+        if (!client) return;
+        document.getElementById('sel-cliente-text').value = `${client.nombre} (CC: ${client.numero_identificacion || '-'})`;
+        document.getElementById('sel-cliente-id').value = client.id;
+        const btnEdit = document.getElementById('btn-edit-inline-client');
+        if (btnEdit) btnEdit.style.display = 'block';
+        const addrBox = document.getElementById('address-selection-box');
+        const selAddr = document.getElementById('sel-direccion-envio');
+        if (addrBox) addrBox.style.display = 'block';
+        if (selAddr) {
+            if (client.direccion) {
+                const history = client.direccion.split(' | ').reverse();
+                selAddr.innerHTML = history.map(d => `<option value="${d}">${d}</option>`).join('');
+            } else {
+                selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
+            }
+        }
+        const dropdown = document.getElementById('cliente-search-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+    };
+    window.seleccionarClienteBusqueda = (idx) => window._seleccionarClienteEnFormulario(_clienteSearchResults[idx]);
+
     content.innerHTML = `
         <div class="modal-content modal-wide">
             <div class="modal-header">
-                <h2>Registrar Nueva Venta</h2>
+                <h2>Registrar Nueva Venta — ${tipoCard.icon} ${tipoCard.titulo}</h2>
                 <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
             </div>
-            
+
             <form id="form-sale" onsubmit="return false;">
                 <div class="modal-body">
                     <!-- Sección de Transacción y Cliente -->
@@ -898,14 +1129,15 @@ export const createSaleModal = async (navigateTo) => {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Tipo de Transacción</label>
-                            <div style="display:flex; gap:2.5rem; padding:10px 0;">
-                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color: var(--text-main);">
-                                    <input type="radio" name="tipo_venta" value="Stock" checked onchange="window.toggleSaleType(this.value)" style="width:20px; height:20px; margin:0;"> 🛒 Stock Local
-                                </label>
-                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color: var(--brand-magenta);">
-                                    <input type="radio" name="tipo_venta" value="Encargo" onchange="window.toggleSaleType(this.value)" style="width:20px; height:20px; margin:0;"> 📦 Por Encargo (USA)
-                                </label>
+                            <div style="display:flex; align-items:center; gap:12px; padding:10px 0;">
+                                <span style="display:inline-flex; align-items:center; gap:8px; font-weight:800; padding:8px 16px; border-radius:12px; background:var(--surface-2); color:${tipoCard.color};">
+                                    ${tipoCard.icon} ${tipoCard.titulo}
+                                </span>
+                                <button type="button" class="btn-action" style="font-size:0.72rem; padding:6px 12px;" onclick="window.modalVenta()">Cambiar</button>
                             </div>
+                            <input type="hidden" name="tipo_venta" id="hid-tipo-venta" value="${tipoVentaDB}">
+                            <input type="hidden" id="sale-ui-tipo" value="${tipoUI}">
+                            <input type="hidden" id="sale-viaje-activo-id" value="${viajeActivo?.id || ''}">
                         </div>
 
                         <div class="form-group">
@@ -916,8 +1148,10 @@ export const createSaleModal = async (navigateTo) => {
                                     <button type="button" class="btn-action" style="font-size:0.75rem; padding:6px 12px; font-weight:700; display:none;" id="btn-edit-inline-client" onclick="window.toggleInlineClient('EDIT')">✏️ Editar</button>
                                 </div>
                             </div>
-                            <input type="text" list="dl-clientes" id="sel-cliente-text" placeholder="Buscar por nombre o identificación..." required autocomplete="off">
-                            <datalist id="dl-clientes">${clientsList.map(c=>`<option data-id="${c.id}" value="${c.nombre} (CC: ${c.numero_identificacion||'-'})"></option>`).join('')}</datalist>
+                            <div class="cliente-search-wrap">
+                                <input type="text" id="sel-cliente-text" class="cliente-search-input" placeholder="Buscar por nombre o identificación..." required autocomplete="off">
+                                <div id="cliente-search-dropdown" class="cliente-search-dropdown" style="display:none;"></div>
+                            </div>
                             <input type="hidden" name="cliente_id" id="sel-cliente-id" required>
                         </div>
                     </div>
@@ -977,55 +1211,85 @@ export const createSaleModal = async (navigateTo) => {
                             </div>
                         </div>
 
-                    <div id="section-stock" class="form-group full-width">
+                    <div id="section-stock" class="form-group full-width" style="display:${tipoUI==='Stock'?'block':'none'};">
                         <label class="form-label">Seleccionar Producto Físico</label>
-                        <input type="text" list="dl-productos" id="sel-producto-text" placeholder="Escribe nombre o SKU..." required autocomplete="off">
+                        <input type="text" list="dl-productos" id="sel-producto-text" placeholder="Escribe nombre o SKU..." ${tipoUI==='Stock'?'required':''} autocomplete="off">
                         <datalist id="dl-productos">
                             ${productsList.filter(p=>p.estado_producto==='Disponible entrega inmediata'&&parseInt(p.stock_medellin)>0).map(p=>`<option data-id="${p.id}" data-price="${p.precio_cop}" value="${p.nombre_producto} | SKU: ${p.sku} | COP ${formatCOP(p.precio_cop)} [Disp: ${p.stock_medellin}]"></option>`).join('')}
                         </datalist>
-                        <input type="hidden" name="producto_id" id="sel-producto-id" required>
+                        <input type="hidden" name="producto_id" id="sel-producto-id" ${tipoUI==='Stock'?'required':''}>
                     </div>
 
-                <div id="section-encargo" style="display:none;">
+                <div id="section-encargo" style="display:${esViaje || tipoUI==='Encargo' ? 'block':'none'};">
                     <div style="height:1px; background:var(--border-base); margin:2rem 0;"></div>
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--brand-magenta);">
                         <span>📋</span>
-                        <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto por Encargo</h3>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto ${esRegistroAgil?'(Registro Ágil en Viaje)':'por Encargo'}</h3>
                     </div>
-                    <div class="form-group full-width" style="display:flex; align-items:center; gap:12px; padding:0.7rem 1rem; background:rgba(217,119,6,0.08); border-radius:12px; border:1px solid rgba(217,119,6,0.3); margin-bottom:1.2rem;">
-                        <input type="checkbox" id="enc_viaje_encargos" style="width:20px; height:20px; cursor:pointer;" onchange="window.updateEncargoRequirements()">
-                        <label for="enc_viaje_encargos" style="font-weight:700; color:#D97706; cursor:pointer; margin:0; text-transform:none; font-size:0.85rem;">Comprado en viaje de encargos (EEUU) — URL, foto, valor USD y peso quedan opcionales</label>
-                    </div>
+                    ${viajeBannerHTML}
                     <div class="form-grid-3">
+                        <div class="form-group full-width">
+                            <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
+                            <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Cantidad <span style="color:var(--primary-red);">*</span></label>
+                            <input type="number" id="enc_cantidad" value="1" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tienda a Cotizar <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_tienda" required>
+                                <option value="">-- Selecciona --</option>
+                                ${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Foto de Referencia <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
+                            <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
+                                <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                                    <span style="font-size:0.6rem; opacity:0.4;">FOTO</span>
+                                </div>
+                                <div style="flex:1;">
+                                    <input type="file" id="enc-file-img" accept="image/*" style="font-size:0.8rem; border:none; background:transparent; padding:0;">
+                                    <input type="hidden" id="enc_url" value="">
+                                </div>
+                            </div>
+                        </div>
+
+                        ${esRegistroAgil ? `
+                        <div class="form-group full-width" style="grid-column:1/-1;">
+                            <button type="button" id="btn-campos-adicionales" class="btn-action" style="font-size:0.8rem;padding:8px 16px;" onclick="window.toggleSeccionCamposAdicionales()">▸ Campos Adicionales</button>
+                            <div id="seccion-campos-adicionales" style="display:none;margin-top:12px;">
+                                <div class="admin-perms-grid">
+                                    ${CAMPOS_VIAJE_AGIL.map(c => `
+                                    <div class="admin-perm-row" id="fila-campo-viaje-${c.key}">
+                                        <div class="admin-perm-label">
+                                            <span class="admin-perm-dot"></span>
+                                            <span>${c.label}</span>
+                                        </div>
+                                        <div class="admin-perm-controls">
+                                            <label class="admin-toggle-wrap">
+                                                <input type="checkbox" class="chk-campo-viaje" value="${c.key}" onchange="window.toggleCampoViaje('${c.key}', this.checked)" />
+                                                <span class="admin-toggle-slider"></span>
+                                                <span class="admin-toggle-label">Incluido</span>
+                                            </label>
+                                        </div>
+                                    </div>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        <div id="viaje-campos-agregados" class="form-grid-3 full-width" style="grid-column:1/-1;"></div>
+                        ` : `
                         <div class="form-group">
                             <label class="form-label">Categoría <span style="color:var(--primary-red);">*</span></label>
-                            <select id="enc_tipo">
+                            <select id="enc_tipo" required>
                                 <option value="">-- Selecciona --</option>
                                 ${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Tienda a Cotizar <span style="color:var(--primary-red);">*</span></label>
-                            <select id="enc_tienda">
-                                <option value="">-- Selecciona --</option>
-                                ${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group full-width">
-                            <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
-                            <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue">
-                        </div>
-                        <div class="form-group" style="grid-column: span 3;">
-                            <label class="form-label" id="lbl-enc-link">Enlace del Producto (URL) <span style="color:var(--primary-red);">*</span></label>
-                            <input type="url" id="enc_link" placeholder="https://...">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) <span style="color:var(--primary-red);">*</span></label>
-                            <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00">
-                        </div>
-                        <div class="form-group">
                             <label class="form-label">Marca <span style="color:var(--primary-red);">*</span></label>
-                            <select id="enc_marca">
+                            <select id="enc_marca" required>
                                 <option value="">-- Selecciona --</option>
                                 ${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
@@ -1041,22 +1305,15 @@ export const createSaleModal = async (navigateTo) => {
                             <label class="form-label" id="lbl-enc-talla">Talla</label>
                             <input type="text" id="enc_talla" placeholder="Ej. 9US">
                         </div>
+                        <div class="form-group" style="grid-column: span 3;">
+                            <label class="form-label" id="lbl-enc-link">Enlace del Producto (URL) <span style="color:var(--primary-red);">*</span></label>
+                            <input type="url" id="enc_link" placeholder="https://..." required>
+                        </div>
                         <div class="form-group">
-                            <label class="form-label">Cantidad <span style="color:var(--primary-red);">*</span></label>
-                            <input type="number" id="enc_cantidad" value="1" min="1">
+                            <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) <span style="color:var(--primary-red);">*</span></label>
+                            <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" required>
                         </div>
-                        <div class="form-group full-width">
-                            <label class="form-label">Foto de Referencia <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
-                            <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
-                                <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
-                                    <span style="font-size:0.6rem; opacity:0.4;">FOTO</span>
-                                </div>
-                                <div style="flex:1;">
-                                    <input type="file" id="enc-file-img" accept="image/*" style="font-size:0.8rem; border:none; background:transparent; padding:0;">
-                                    <input type="hidden" id="enc_url" value="">
-                                </div>
-                            </div>
-                        </div>
+                        `}
                     </div>
                 </div>
 
@@ -1067,6 +1324,7 @@ export const createSaleModal = async (navigateTo) => {
                 </div>
                 
                 <div class="form-grid-3">
+                    ${esRegistroAgil ? '' : `
                     <div class="form-group">
                         <label class="form-label" id="lbl-sale-peso">Peso Estimado (Libras) <span style="color:var(--primary-red);">*</span></label>
                         <input type="text" name="peso_producto" id="sale-peso" placeholder="0.0" required inputmode="decimal">
@@ -1074,12 +1332,15 @@ export const createSaleModal = async (navigateTo) => {
                     <div class="form-group">
                         <label class="form-label">TRM Cotizada <span style="color:var(--primary-red);">*</span></label>
                         <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" required inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}">
-                    </div>
+                    </div>`}
                     <div class="form-group">
                         <label class="form-label">Valor Venta (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="valor_total_cop" id="sale-total" required min="1" placeholder="0">
                         <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
                     </div>
+                    ${esRegistroAgil ? `
+                    <input type="hidden" name="gastos_administrativos_cop" value="${gastosAdminTotal}">
+                    ` : `
                     <div class="form-group">
                         <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
@@ -1091,6 +1352,7 @@ export const createSaleModal = async (navigateTo) => {
                         <input type="hidden" name="gastos_administrativos_cop" value="${gastosAdminTotal}">
                         <p style="font-size:0.68rem;opacity:0.5;margin-top:4px;">Suma de conceptos activos en Admin → Calculadora. Se guarda con la venta para poder discriminarlo después.</p>
                     </div>
+                    `}
 
                     <div class="form-group full-width" style="background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px; border:1px solid var(--brand-magenta-glow); display:grid; grid-template-columns:1fr 1fr; gap:2rem; align-items:center;">
                         <div class="form-group" style="margin:0;">
@@ -1117,7 +1379,11 @@ export const createSaleModal = async (navigateTo) => {
         </form>
     </div>`;
 
+    // Género/Talla solo se vuelven obligatorios cuando la categoría elegida
+    // es de tipo calzado/ropa — no aplica en modo Viaje USA (esos campos
+    // quedan siempre opcionales ahí, forman parte del registro ágil).
     window.updateEncargoRequirements = () => {
+        if (esRegistroAgil) return;
         const cat = document.getElementById('enc_tipo')?.value || '';
         const condCats = ['Tenis', 'Calzado', 'Ropa', 'Accesorios'];
         const isCond = condCats.includes(cat);
@@ -1137,114 +1403,116 @@ export const createSaleModal = async (navigateTo) => {
             if (lblGen) lblGen.innerHTML = `Género`;
             if (lblTalla) lblTalla.innerHTML = `Talla`;
         }
-
-        // #26 — comprado en viaje: no hay link/valor USD de tienda online ni
-        // peso de flete que calcular (el viajero lo trae en la maleta).
-        const esViaje = document.getElementById('enc_viaje_encargos')?.checked;
-        const campos = [
-            { input: 'enc_link',       label: 'lbl-enc-link',       texto: 'Enlace del Producto (URL)' },
-            { input: 'enc_precio_usd', label: 'lbl-enc-precio-usd', texto: 'Valor Cotizado (USD)' },
-            { input: 'sale-peso',      label: 'lbl-sale-peso',      texto: 'Peso Estimado (Libras)' },
-        ];
-        campos.forEach(({ input, label, texto }) => {
-            const el = document.getElementById(input);
-            const lbl = document.getElementById(label);
-            if (!el) return;
-            if (esViaje) {
-                el.removeAttribute('required');
-                if (lbl) lbl.innerHTML = `${texto} <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>`;
-            } else {
-                el.setAttribute('required', 'true');
-                if (lbl) lbl.innerHTML = `${texto} <span style="color:var(--primary-red);">*</span>`;
-            }
-        });
     };
 
-    window.toggleSaleType = (val) => {
-        const secStock   = document.getElementById('section-stock');
-        const secEncargo = document.getElementById('section-encargo');
-        const selStockTx = document.getElementById('sel-producto-text');
-        const reqEncAlways = ['enc_tipo','enc_tienda','enc_nombre','enc_link','enc_precio_usd','enc_marca','enc_cantidad'];
-        const reqEncCond = ['enc_genero', 'enc_talla'];
-
-        if (val==='Stock') { 
-            secStock.style.display='block'; 
-            secEncargo.style.display='none'; 
-            selStockTx.setAttribute('required','true'); 
-            [...reqEncAlways, ...reqEncCond].forEach(id=>document.getElementById(id)?.removeAttribute('required')); 
-        } else { 
-            secStock.style.display='none'; 
-            secEncargo.style.display='block'; 
-            selStockTx.removeAttribute('required'); 
-            reqEncAlways.forEach(id=>document.getElementById(id)?.setAttribute('required','true'));
-            window.updateEncargoRequirements();
+    // Modo Viaje USA · En Tienda: cada fila del checklist tiene su propio
+    // interruptor — al activarlo se agrega el campo al formulario, al
+    // desactivarlo se quita. Mismo patrón visual que "Módulos incluidos"
+    // en Superadmin (admin-perm-row / admin-toggle-wrap).
+    window.toggleCampoViaje = (key, activo) => {
+        const cont = document.getElementById('viaje-campos-agregados');
+        if (!cont) return;
+        const fila = document.getElementById(`fila-campo-viaje-${key}`);
+        const dot = fila?.querySelector('.admin-perm-dot');
+        if (activo) {
+            if (!cont.querySelector(`[data-campo-viaje="${key}"]`)) {
+                cont.insertAdjacentHTML('beforeend', campoViajeHTML(key));
+            }
+            dot?.classList.add('active');
+        } else {
+            cont.querySelector(`[data-campo-viaje="${key}"]`)?.remove();
+            dot?.classList.remove('active');
         }
+    };
+
+    // Colapsa/expande el bloque de "Campos Adicionales" — arranca cerrado
+    // para no sobrecargar el formulario ágil apenas se abre.
+    window.toggleSeccionCamposAdicionales = () => {
+        const el = document.getElementById('seccion-campos-adicionales');
+        const btn = document.getElementById('btn-campos-adicionales');
+        if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'block';
+        if (btn) btn.textContent = showing ? '▸ Campos Adicionales' : '▾ Campos Adicionales';
     };
 
     setTimeout(() => {
         const fi=document.getElementById('enc-file-img'),pv=document.getElementById('enc-img-preview');
         if(fi&&pv) fi.onchange=(e)=>{ const f=e.target.files[0]; if(f){ const r=new FileReader(); r.onload=(re)=>{ pv.innerHTML=`<img src="${re.target.result}" style="height:100%;object-fit:cover;border-radius:6px;">`; }; r.readAsDataURL(f); } };
         const inpCli=document.getElementById('sel-cliente-text'),hidCli=document.getElementById('sel-cliente-id');
-        if(inpCli) inpCli.addEventListener('input',(e)=>{ 
-            hidCli.value=''; 
-            let found = false;
-            document.querySelectorAll('#dl-clientes option').forEach(o=>{ 
-                if(o.value===e.target.value){
-                    hidCli.value=o.getAttribute('data-id');
-                    found = true;
-                } 
-            }); 
-            const btnEdit = document.getElementById('btn-edit-inline-client');
-            const addrBox = document.getElementById('address-selection-box');
-            const selAddr = document.getElementById('sel-direccion-envio');
-            
-            if(btnEdit) btnEdit.style.display = found ? 'block' : 'none';
-            
-            if (found) {
-                const cId = hidCli.value;
-                const client = clientsList.find(c => c.id.toString() === cId.toString());
-                addrBox.style.display = 'block';
-                if (client && client.direccion) {
-                    const history = client.direccion.split(' | ').reverse();
-                    selAddr.innerHTML = history.map(d => `<option value="${d}">${d}</option>`).join('');
-                } else {
-                    selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
-                }
-            } else {
-                addrBox.style.display = 'none';
-            }
-        });
+        if (inpCli) {
+            inpCli.addEventListener('input', (e) => {
+                hidCli.value = '';
+                const btnEdit = document.getElementById('btn-edit-inline-client');
+                const addrBox = document.getElementById('address-selection-box');
+                if (btnEdit) btnEdit.style.display = 'none';
+                if (addrBox) addrBox.style.display = 'none';
+                renderClienteDropdown(e.target.value);
+            });
+            inpCli.addEventListener('focus', () => renderClienteDropdown(hidCli.value ? '' : inpCli.value));
+            inpCli.addEventListener('blur', () => {
+                setTimeout(() => { const dd = document.getElementById('cliente-search-dropdown'); if (dd) dd.style.display = 'none'; }, 150);
+            });
+            inpCli.addEventListener('keydown', (e) => {
+                const dropdown = document.getElementById('cliente-search-dropdown');
+                if (!dropdown || dropdown.style.display === 'none') return;
+                const items = dropdown.querySelectorAll('.cliente-search-item');
+                if (!items.length) return;
+                let idx = parseInt(dropdown.dataset.activeIdx || '-1');
+                if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+                else if (e.key === 'Enter') { if (idx >= 0) { e.preventDefault(); window.seleccionarClienteBusqueda(idx); } return; }
+                else if (e.key === 'Escape') { dropdown.style.display = 'none'; return; }
+                else return;
+                dropdown.dataset.activeIdx = String(idx);
+                items.forEach((el, i) => el.classList.toggle('active', i === idx));
+                items[idx]?.scrollIntoView({ block: 'nearest' });
+            });
+        }
         const pSel=document.getElementById('sel-producto-text'),pHide=document.getElementById('sel-producto-id');
-        const vTot=document.getElementById('sale-total'),vAb=document.getElementById('sale-abono'),lblS=document.getElementById('lbl-saldo');
-        const vGan=document.getElementById('sale-ganancia-calc'),hintGan=document.getElementById('sale-ganancia-hint');
-        const encCant=document.getElementById('enc_cantidad'),hintTot=document.getElementById('sale-total-hint');
         // #26 — en Encargo, "Valor Venta" y "Ganancia Calculada" son
         // unitarios; el saldo/total/ganancia mostrados ya reflejan
-        // unitario × cantidad, no solo lo que se tecleó.
+        // unitario × cantidad, no solo lo que se tecleó. Los elementos se
+        // vuelven a buscar en cada llamada (en vez de cachear la referencia)
+        // porque en el registro ágil de Viaje USA, "Cantidad"/"Valor de
+        // Venta" pueden no existir todavía al momento de montar el modal —
+        // se agregan después, dinámicamente, desde el checklist de campos.
         const updS=()=>{
-            const tipoActual = document.querySelector('input[name="tipo_venta"]:checked')?.value;
+            const tipoActual = document.getElementById('hid-tipo-venta')?.value;
+            const encCant = document.getElementById('enc_cantidad');
+            const vTot = document.getElementById('sale-total');
+            const vAb = document.getElementById('sale-abono');
+            const lblS = document.getElementById('lbl-saldo');
+            if (!vTot || !vAb || !lblS) return;
             const cant = tipoActual === 'Encargo' ? (parseInt(encCant?.value) || 1) : 1;
             const unit = parseInt(vTot.value||0);
             const t = unit * cant;
             const a = parseInt(vAb.value||0);
             lblS.innerText=formatCOP(Math.max(0,t-a));
+            const hintTot = document.getElementById('sale-total-hint');
             if (hintTot) {
                 if (cant > 1) { hintTot.style.display='block'; hintTot.textContent = `Total a cobrar (${cant} × ${formatCOP(unit)}) = ${formatCOP(t)}`; }
                 else hintTot.style.display='none';
             }
+            const hintGan = document.getElementById('sale-ganancia-hint');
             if (hintGan) {
-                const unitGan = parseInt(vGan?.value||0);
+                const unitGan = parseInt(document.getElementById('sale-ganancia-calc')?.value||0);
                 if (cant > 1) { hintGan.style.display='block'; hintGan.textContent = `Ganancia total (${cant} × ${formatCOP(unitGan)}) = ${formatCOP(unitGan * cant)}`; }
                 else hintGan.style.display='none';
             }
         };
-        if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); if(pr){vTot.value=pr;vAb.value=pr;updS();}} }); });
-        if(vTot&&vAb){vTot.addEventListener('input',updS);vAb.addEventListener('input',updS);}
-        if(vGan) vGan.addEventListener('input',updS);
-        if(encCant) encCant.addEventListener('input',updS);
-        const encTipo = document.getElementById('enc_tipo');
-        if (encTipo) encTipo.onchange = () => window.updateEncargoRequirements();
-        
+        if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); const vT=document.getElementById('sale-total'),vA=document.getElementById('sale-abono'); if(pr && vT && vA){vT.value=pr;vA.value=pr;updS();}} }); });
+        // Delegación en el <form>: cubre también los campos que "Cantidad"/
+        // "Valor de Venta"/"Ganancia Calculada" que se agreguen después de
+        // montado el modal (registro ágil de Viaje USA).
+        const formSale = document.getElementById('form-sale');
+        formSale.addEventListener('input', (e) => {
+            if (['enc_cantidad','sale-total','sale-abono','sale-ganancia-calc'].includes(e.target.id)) updS();
+        });
+        formSale.addEventListener('change', (e) => {
+            if (e.target.id === 'enc_tipo') window.updateEncargoRequirements();
+        });
+
         attachComprobanteInput('comp-sale-file');
 
         window.toggleInlineClient = (mode) => {
@@ -1305,22 +1573,9 @@ export const createSaleModal = async (navigateTo) => {
                             // Actualizar en la lista en memoria
                             const dupIdx = clientsList.findIndex(c => c.id.toString() === existing.id.toString());
                             if (dupIdx !== -1) clientsList[dupIdx] = existing; else clientsList.push(existing);
-                            
-                            document.getElementById('sel-cliente-text').value = `${existing.nombre} (CC: ${existing.numero_identificacion||'-'})`;
-                            document.getElementById('sel-cliente-id').value = existing.id;
-                            document.getElementById('btn-edit-inline-client').style.display = 'block';
+
+                            window._seleccionarClienteEnFormulario(existing);
                             document.getElementById('inline-client-form').style.display = 'none';
-                            
-                            // Mostrar dirección directamente sin depender del listener
-                            const addrBox2 = document.getElementById('address-selection-box');
-                            const selAddr2 = document.getElementById('sel-direccion-envio');
-                            addrBox2.style.display = 'block';
-                            if (existing.direccion) {
-                                const history2 = existing.direccion.split(' | ').reverse();
-                                selAddr2.innerHTML = history2.map(d => `<option value="${d}">${d}</option>`).join('');
-                            } else {
-                                selAddr2.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
-                            }
                         }
                         return;
                     } else {
@@ -1329,31 +1584,12 @@ export const createSaleModal = async (navigateTo) => {
                         const payload = { id: newId, nombre, numero_identificacion:nid, numero_lead_kommo:kommo, direccion:fullDir, ciudad:ciu, whatsapp:wa, fecha_registro:new Date().toLocaleDateString(), empresa_id: auth.getEmpresaId() };
                         await db.postData('Clientes', payload, 'INSERT');
                         showToast('Cliente creado', 'success');
-                        
-                        // Agregar a la lista en memoria para que el listener lo encuentre
+
+                        // Agregar a la lista en memoria para que el buscador lo encuentre
                         clientsList.push(payload);
-                        
-                        const dl = document.getElementById('dl-clientes');
-                        const optValue = `${nombre} (CC: ${nid||'-'})`;
-                        const newOpt = document.createElement('option');
-                        newOpt.setAttribute('data-id', newId);
-                        newOpt.value = optValue;
-                        dl.appendChild(newOpt);
-                        
-                        document.getElementById('sel-cliente-text').value = optValue;
-                        document.getElementById('sel-cliente-id').value = newId;
-                        document.getElementById('btn-edit-inline-client').style.display = 'block';
+
+                        window._seleccionarClienteEnFormulario(payload);
                         document.getElementById('inline-client-form').style.display = 'none';
-                        
-                        // Mostrar dirección directamente sin depender del listener
-                        const addrBox = document.getElementById('address-selection-box');
-                        const selAddr = document.getElementById('sel-direccion-envio');
-                        addrBox.style.display = 'block';
-                        if (fullDir) {
-                            selAddr.innerHTML = `<option value="${fullDir}">${fullDir}</option>`;
-                        } else {
-                            selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
-                        }
                     }
                 } else if (mode === 'EDIT') {
                     const selId = document.getElementById('sel-cliente-id').value;
@@ -1429,7 +1665,8 @@ export const createSaleModal = async (navigateTo) => {
         const gananciaCalc=parseInt(fd.get('ganancia_calculada')||0) * cantidadEnc;
         
         if (valorTotal <= 0) return window.showToast('El Valor Total debe ser mayor a 0.', 'error');
-        if (gananciaCalc <= 0) return window.showToast('La Ganancia Calculada debe ser mayor a 0.', 'error');
+        // En el registro ágil de Viaje USA la Ganancia Calculada es opcional.
+        if (gananciaCalc <= 0 && !esRegistroAgil) return window.showToast('La Ganancia Calculada debe ser mayor a 0.', 'error');
 
         const abonoIni=parseInt(fd.get('abono_inicial')||0);
         const saldoP=valorTotal-abonoIni;
@@ -1442,7 +1679,10 @@ export const createSaleModal = async (navigateTo) => {
             if(tipoVenta==='Encargo'&&uploadFile){ btn.innerText='Subiendo Foto...'; finalImageUrl=await uploadImageToSupabase(uploadFile); }
             if(tipoVenta==='Encargo'){
                 const newProdId=Date.now().toString(); finalProductId=newProdId;
-                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre').value||'Producto sin nombre', marca:document.getElementById('enc_marca').value, categoria:document.getElementById('enc_tipo').value, genero:document.getElementById('enc_genero').value, talla:document.getElementById('enc_talla').value, tienda_cotizacion:document.getElementById('enc_tienda').value, url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?document.getElementById('enc_link').value:'', cantidad_encargada:document.getElementById('enc_cantidad').value, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?document.getElementById('enc_precio_usd').value:'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU', ganancia_calculada: gananciaCalc, empresa_id: auth.getEmpresaId() };
+                // Registro ágil de Viaje USA: varios de estos campos pueden no
+                // existir en el DOM si el usuario no los agregó desde el
+                // checklist — se leen con optional chaining y quedan vacíos.
+                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre')?.value||'Producto sin nombre', marca:document.getElementById('enc_marca')?.value||'', categoria:document.getElementById('enc_tipo')?.value||'', genero:document.getElementById('enc_genero')?.value||'', talla:document.getElementById('enc_talla')?.value||'', tienda_cotizacion:document.getElementById('enc_tienda')?.value||'', url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?.value||'', cantidad_encargada:document.getElementById('enc_cantidad')?.value||1, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?.value||'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU', ganancia_calculada: gananciaCalc, empresa_id: auth.getEmpresaId() };
                 showToast('Creando ficha del producto...','info');
                 await db.postData('Productos',pp,'INSERT');
             } else {
@@ -1466,6 +1706,13 @@ export const createSaleModal = async (navigateTo) => {
             const valorLibraUSD = libParam ? parseFloat(libParam.valor || 0) : 0;
             const valorEnvioInt = Math.round(peso * valorLibraUSD * trm);
 
+            // Re-verificar el viaje activo al momento de guardar (pudo cerrarse
+            // mientras se llenaba el formulario) antes de vincular la venta.
+            let viajeIdVenta = null;
+            if (esViaje) {
+                try { const activoAlGuardar = await ViajeService.getActivo(); viajeIdVenta = activoAlGuardar?.id || null; } catch (_) { /* sin viaje activo */ }
+            }
+
             const pvId = Date.now().toString();
             const pv={ 
                 id:pvId, 
@@ -1484,7 +1731,8 @@ export const createSaleModal = async (navigateTo) => {
                 trm_cotizada: trm,
                 valor_envio_internacional: valorEnvioInt,
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
-                comprado_en_viaje: tipoVenta === 'Encargo' ? !!document.getElementById('enc_viaje_encargos')?.checked : false,
+                comprado_en_viaje: esViaje,
+                viaje_id: viajeIdVenta,
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
                 analista_id: auth.getProfile()?.id || null,
                 empresa_id: auth.getEmpresaId()
@@ -1509,13 +1757,14 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
     const content=document.getElementById('modal-content');
     content.innerHTML=`<div style="text-align:center;padding:3rem;"><div class="loader" style="margin:0 auto 15px auto;"></div> Cargando Ficha del Pedido...</div>`;
     container.style.display='flex';
-    const [ventasData,clientesData,productosData,logisticaData,abonosData,comprasData]=await Promise.all([
+    const [ventasData,clientesData,productosData,logisticaData,abonosData,comprasData,viajesData]=await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Clientes'),
         db.fetchData('Productos'),
         db.fetchData('Logistica'),
         db.fetchWhere('Abonos','venta_id', ventaId.toString()),
-        db.fetchData('Compras')
+        db.fetchData('Compras'),
+        db.fetchData('viajes'),
     ]);
     if(ventasData.error){content.innerHTML=`<div style="color:var(--primary-red);padding:2rem;text-align:center;">Error: ${ventasData.error.message||'Desconocido'}</div>`;return;}
     const v=ventasData.find(it=>it.id.toString()===ventaId.toString());
@@ -1593,8 +1842,8 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                 <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
                     📅 ${fechaCorta}
                 </span>
-                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:${v.tipo_venta==='Encargo'?'var(--violet-dim)':'rgba(6,214,160,0.1)'}; border-radius:22px; border:1px solid ${v.tipo_venta==='Encargo'?'rgba(139,124,246,0.3)':'rgba(6,214,160,0.3)'}; font-weight:700; color:${v.tipo_venta==='Encargo'?'var(--violet)':'var(--success-green)'}; white-space:nowrap;">
-                    ${v.tipo_venta==='Encargo'?'📦 Encargo':'🛒 Stock'}
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:${v.tipo_venta==='Encargo'?'var(--violet-dim)':'rgba(6,214,160,0.1)'}; border-radius:22px; border:1px solid ${v.tipo_venta==='Encargo'?'rgba(139,124,246,0.3)':'rgba(6,214,160,0.3)'}; font-weight:700; color:${tipoVentaBadge(v).color}; white-space:nowrap;">
+                    ${tipoVentaBadge(v).icon} ${tipoVentaBadge(v).label}
                 </span>
                 <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
                     ⚖️ ${v.peso_producto||0} Lbs
@@ -1710,7 +1959,8 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                 <div style="text-align:right; border-left:1px solid var(--border-base); padding-left:2rem;">
                     <h4 style="margin:0 0 1.2rem 0; opacity:0.5; text-transform:uppercase; font-size:0.65rem; letter-spacing:1.5px; color:var(--text-main);">Seguimiento Logístico</h4>
                     <span style="font-size:0.8rem; padding:8px 18px; border-radius:30px; font-weight:800; color:#fff; background:${_faseColor}; box-shadow:0 4px 12px ${_faseColor}40;">${estadoLogistica}</span>
-                    <p style="margin:20px 0 0; opacity:0.7; font-size:0.9rem;">Canal de Origen: <strong style="color:var(--brand-magenta);">${v.tipo_venta==='Encargo'?'📦 Encargo Int.':'🛒 Stock Local'}</strong></p>
+                    <p style="margin:20px 0 0; opacity:0.7; font-size:0.9rem;">Canal de Origen: <strong style="color:var(--brand-magenta);">${tipoVentaBadge(v).icon} ${tipoVentaBadge(v).label}</strong></p>
+                    ${v.viaje_id ? `<p style="margin:8px 0 0; opacity:0.7; font-size:0.82rem;">✈️ Vinculada al viaje: <strong style="color:#D97706;">${(!viajesData.error && viajesData.find(vi=>vi.id?.toString()===v.viaje_id.toString()))?.nombre || v.viaje_id}</strong></p>` : ''}
                 </div>
             </div>
         </div>

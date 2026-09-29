@@ -116,15 +116,13 @@ export const renderVendedores = async (renderLayout, navigateTo) => {
     };
 
     const html = `
-    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.5rem; flex-wrap:wrap; gap:15px;">
+    <div class="module-header">
         <div>
             <span class="page-eyebrow">Comercial · Comisiones</span>
             <h2 class="page-title">Vendedores</h2>
             <p style="opacity:0.5; font-size:0.82rem; margin-top:4px;">Ganancia de analista por vendedor.</p>
         </div>
-        <div class="module-filters-bar">
-            <button class="btn-excel" onclick="window.exportVenExcel()">📥 Excel</button>
-        </div>
+        <button class="btn-excel" onclick="window.exportVenExcel()">📥 Excel</button>
     </div>
     <div id="ven-panel">${_renderVenPanelInner()}</div>`;
 

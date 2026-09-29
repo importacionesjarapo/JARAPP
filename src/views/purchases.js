@@ -88,19 +88,19 @@ const renderKPIStrip = (compras) => {
     const promedio = compras.length > 0 ? total / compras.length : 0;
 
     const kpis = [
-        { icon: '💰', value: formatUSD(total), label: 'Total Invertido' },
-        { icon: '📦', value: compras.length, label: 'Total Compras' },
-        { icon: '🛍️', value: encargos.length, label: 'Para Encargos' },
-        { icon: '🏪', value: stock.length, label: 'Para Stock' },
-        { icon: '🏬', value: proveedores.size, label: 'Proveedores' },
+        { icon: '💰', value: formatUSD(total), label: 'Total Invertido', color: 'var(--info-blue)' },
+        { icon: '📦', value: compras.length, label: 'Total Compras', color: 'var(--warning-orange)' },
+        { icon: '🛍️', value: encargos.length, label: 'Para Encargos', color: 'var(--brand-magenta)' },
+        { icon: '🏪', value: stock.length, label: 'Para Stock', color: 'var(--success-green)' },
+        { icon: '🏬', value: proveedores.size, label: 'Proveedores', color: 'var(--brand-green)' },
     ];
 
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
-        <div class="kpi-strip-card" onclick="window.openPurchasesKPI('${k.label}')">
+        <div class="kpi-strip-card" style="--kpi-color:${k.color};" onclick="window.openPurchasesKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
-            <div class="kpi-strip-value">${k.value}</div>
+            <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
         </div>`).join('')}
     </div>`;
@@ -242,7 +242,6 @@ function _renderPurchasePanel(tab) {
     } else {
         panel.innerHTML = getPanelHTML(tab, { ..._cache, compras: _purFiltered });
     }
-    attachSearchListener();
     attachGroupToggles();
 }
 
@@ -661,24 +660,25 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     ];
 
     const html = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.5rem; flex-wrap:wrap; gap:15px;">
+      <div class="module-header">
         <div>
           <span class="page-eyebrow">Operaciones · USA</span>
           <h2 class="page-title">Compras Operativas</h2>
           <p style="opacity:0.5; font-size:0.82rem; margin-top:4px;">Adquisiciones para inventario o fulfilling de encargos.</p>
         </div>
-        <div class="module-filters-bar">
-            <div class="date-filter-wrap">
-                <label>Desde</label>
-                <input type="date" id="pur-date-start" class="date-filter-input" value="${_purStartDate}">
-                <label style="margin-left:5px;">Hasta</label>
-                <input type="date" id="pur-date-end" class="date-filter-input" value="${_purEndDate}">
-                <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyPurDateFilter()">Filtrar</button>
-            </div>
-            <button class="btn-excel" onclick="window.exportPurExcel()">📥 Excel</button>
-            <input type="text" id="find-it" placeholder="Buscar compra o producto..." style="background:var(--input-bg);border:1px solid var(--glass-border);padding:10px 15px;border-radius:12px;color:var(--text-main);width:230px;outline:none;">
-            ${auth.canEdit('purchases') ? `<button class="btn-primary" onclick="window.modalCompra()">+ Registrar Compra</button>` : ''}
-        </div>
+        ${auth.canEdit('purchases') ? `<button class="btn-primary" style="padding:12px 28px;font-size:0.9rem;" onclick="window.modalCompra()">+ Registrar Compra</button>` : ''}
+      </div>
+
+      <div class="module-filters-bar" style="margin-bottom:1.5rem;">
+          <div class="date-filter-wrap">
+              <label>Desde</label>
+              <input type="date" id="pur-date-start" class="date-filter-input" value="${_purStartDate}">
+              <label style="margin-left:5px;">Hasta</label>
+              <input type="date" id="pur-date-end" class="date-filter-input" value="${_purEndDate}">
+              <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyPurDateFilter()">Filtrar</button>
+          </div>
+          <div style="flex:1 1 auto;"></div>
+          <button class="btn-excel" onclick="window.exportPurExcel()">📥 Excel</button>
       </div>
 
       ${renderPendingAlert(pendientes, _cache.productos)}
@@ -708,7 +708,6 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     if (_currentView === 'tabla') _montarTablaCompras();
 
     setTimeout(() => {
-        attachSearchListener();
         attachGroupToggles();
     }, 150);
 };
@@ -723,24 +722,6 @@ function getPanelHTML(tab, cache) {
         case 'timeline': return renderViewTimeline(compras, productos, logisticaList);
         default:         return renderViewTienda(compras, productos, logisticaList);
     }
-}
-
-// ─── Search listener (only for tabla view) ─────────────────────────────────────
-function attachSearchListener() {
-    const fp = document.getElementById('find-purchase');
-    if (!fp) return;
-    fp.oninput = (e) => {
-        const k = e.target.value.toLowerCase().trim();
-        const rows = document.querySelectorAll('.purchase-row');
-        let visible = 0;
-        rows.forEach(r => {
-            const match = (r.getAttribute('data-text') || '').includes(k);
-            r.style.display = match ? '' : 'none';
-            if (match) visible++;
-        });
-        const empty = document.getElementById('purchase-empty-search');
-        if (empty) empty.style.display = (visible === 0 && k.length > 0) ? '' : 'none';
-    };
 }
 
 // ─── Group toggle setup ────────────────────────────────────────────────────────

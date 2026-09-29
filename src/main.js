@@ -542,7 +542,7 @@ const renderErrorInternal = (m) => {
 window.closeModal = () => document.getElementById('modal-container').style.display = 'none';
 window.modalCliente = (id) => createClientModal(id, navigateTo);
 window.modalProducto = (id) => createProductModal(id, navigateTo);
-window.modalVenta = () => createSaleModal(navigateTo);
+window.modalVenta = (tipoUI, modoCompra) => createSaleModal(navigateTo, tipoUI, modoCompra);
 window.modalDetalleVentaGlobal = (id, backAction) => openSaleDetailModal(id, backAction);
 // Registrado una sola vez al arrancar la app (no dentro de renderSales/renderFinance)
 // para que funcione sin importar qué módulo se haya visitado antes en la sesión.
