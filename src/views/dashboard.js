@@ -811,37 +811,36 @@ const _renderHeader = () => {
       <h2 class="dash360-title">Centro de Analítica y Decisiones</h2>
       <div style="font-size:0.62rem;opacity:0.4;margin-top:2px;">Intelligence Hub · ${new Date().toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' })}</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
-      <!-- Toggle Resumen / Explorador -->
-      <div style="display:flex;background:var(--surface-2);border:1px solid var(--border-base);border-radius:12px;padding:4px;gap:4px;">
-        <button onclick="window.setDashView('resumen')" style="padding:6px 18px;border-radius:9px;border:none;cursor:pointer;font-size:0.82rem;font-weight:700;background:${_view==='resumen'?'var(--primary-red)':'transparent'};color:${_view==='resumen'?'#fff':'var(--text-main)'};opacity:${_view==='resumen'?'1':'0.6'};">🏠 Resumen</button>
-        <button onclick="window.setDashView('explorador')" style="padding:6px 18px;border-radius:9px;border:none;cursor:pointer;font-size:0.82rem;font-weight:700;background:${_view==='explorador'?'var(--primary-red)':'transparent'};color:${_view==='explorador'?'#fff':'var(--text-main)'};opacity:${_view==='explorador'?'1':'0.6'};">📊 Explorador</button>
-      </div>
-      <!-- Selector de período + chips -->
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-        <div style="display:flex;gap:4px;">
-          ${[
-            { label:'Hoy', d: chips.today, h: chips.today },
-            { label:'Esta semana', d: chips.sowStr, h: chips.today },
-            { label:'Este mes', d: chips.startOfMonth, h: chips.today },
-            { label:'3 meses', d: chips.start3mStr, h: chips.today },
-            { label:'Este año', d: chips.startOfYear, h: chips.today },
-            { label:'Todo', d: '', h: '' },
-          ].map(c => `
-          <button onclick="window.setDashChip('${c.d}','${c.h}')"
-            style="padding:4px 10px;border-radius:8px;border:1px solid var(--border-base);background:${(_desde===c.d&&_hasta===c.h&&(c.d||c.h))?'var(--primary-red)':'var(--surface-2)'};color:${(_desde===c.d&&_hasta===c.h&&(c.d||c.h))?'#fff':'var(--text-muted)'};font-size:0.65rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;transition:all 0.15s;">
-            ${c.label}
-          </button>`).join('')}
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <input type="date" id="dash-desde" value="${_desde}" style="padding:5px 8px;border-radius:8px;border:1px solid var(--border-base);background:var(--surface-2);color:var(--text-main);font-size:0.78rem;font-family:inherit;">
-          <span style="font-size:0.65rem;opacity:0.4;">→</span>
-          <input type="date" id="dash-hasta" value="${_hasta}" style="padding:5px 8px;border-radius:8px;border:1px solid var(--border-base);background:var(--surface-2);color:var(--text-main);font-size:0.78rem;font-family:inherit;">
-          <button onclick="window.applyDashFilter()" style="padding:5px 12px;border-radius:8px;border:none;background:var(--primary-red);color:#fff;font-size:0.78rem;font-weight:700;cursor:pointer;font-family:inherit;">Filtrar</button>
-        </div>
-        <button onclick="window.abrirBalanceMaestro()" style="padding:5px 12px;border-radius:8px;border:1px solid var(--border-base);background:var(--surface-2);color:var(--text-main);font-size:0.78rem;font-weight:600;cursor:pointer;font-family:inherit;">⚖️ Balance Maestro</button>
-      </div>
+    <!-- Toggle Resumen / Explorador -->
+    <div style="display:flex;background:var(--surface-2);border:1px solid var(--border-base);border-radius:12px;padding:4px;gap:4px;">
+      <button onclick="window.setDashView('resumen')" style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:0.85rem;font-weight:700;background:${_view==='resumen'?'var(--primary-red)':'transparent'};color:${_view==='resumen'?'#fff':'var(--text-main)'};opacity:${_view==='resumen'?'1':'0.6'};">🏠 Resumen</button>
+      <button onclick="window.setDashView('explorador')" style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:0.85rem;font-weight:700;background:${_view==='explorador'?'var(--primary-red)':'transparent'};color:${_view==='explorador'?'#fff':'var(--text-main)'};opacity:${_view==='explorador'?'1':'0.6'};">📊 Explorador</button>
     </div>
+  </div>
+
+  <div class="module-filters-bar" style="margin-top:1.2rem;margin-bottom:0.5rem;">
+    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${[
+        { label:'Hoy', d: chips.today, h: chips.today },
+        { label:'Esta semana', d: chips.sowStr, h: chips.today },
+        { label:'Este mes', d: chips.startOfMonth, h: chips.today },
+        { label:'3 meses', d: chips.start3mStr, h: chips.today },
+        { label:'Este año', d: chips.startOfYear, h: chips.today },
+        { label:'Todo', d: '', h: '' },
+      ].map(c => `
+      <button onclick="window.setDashChip('${c.d}','${c.h}')"
+        style="padding:4px 10px;border-radius:8px;border:1px solid var(--border-base);background:${(_desde===c.d&&_hasta===c.h&&(c.d||c.h))?'var(--primary-red)':'var(--surface-2)'};color:${(_desde===c.d&&_hasta===c.h&&(c.d||c.h))?'#fff':'var(--text-muted)'};font-size:0.65rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;transition:all 0.15s;">
+        ${c.label}
+      </button>`).join('')}
+    </div>
+    <div class="date-filter-wrap">
+      <input type="date" id="dash-desde" class="date-filter-input" value="${_desde}">
+      <span style="font-size:0.65rem;opacity:0.4;">→</span>
+      <input type="date" id="dash-hasta" class="date-filter-input" value="${_hasta}">
+      <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyDashFilter()">Filtrar</button>
+    </div>
+    <div style="flex:1 1 auto;"></div>
+    <button onclick="window.abrirBalanceMaestro()" style="padding:8px 16px;border-radius:10px;border:1px solid var(--border-base);background:var(--surface-2);color:var(--text-main);font-size:0.82rem;font-weight:600;cursor:pointer;font-family:inherit;">⚖️ Balance Maestro</button>
   </div>`;
 };
 
