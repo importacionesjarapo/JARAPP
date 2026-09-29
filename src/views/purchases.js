@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
+import { ViajeService } from '../services/viajes.js';
 
 // Tiendas frecuentes en compras USA para personal shopping (#27, dato
 // semilla de referencia) — solo sugerencias del <datalist>, el campo sigue
@@ -471,12 +472,13 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Compras...</div>`);
 
-    const [compras, ventas, productos, clientes, logistica] = await Promise.all([
+    const [compras, ventas, productos, clientes, logistica, viajes] = await Promise.all([
         db.fetchData('Compras'),
         db.fetchData('Ventas'),
         db.fetchData('Productos'),
         db.fetchData('Clientes'),
         db.fetchData('Logistica'),
+        db.fetchData('viajes'),
     ]);
 
     if (compras.error) return renderError(renderLayout, compras.error, navigateTo);
@@ -485,7 +487,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     const comprasDesc = [...(compras || [])].reverse();
 
     // Store cache
-    _cache = { compras: comprasDesc, ventas: ventas || [], productos: productos || [], clientes: clientes || [], logisticaList };
+    _cache = { compras: comprasDesc, ventas: ventas || [], productos: productos || [], clientes: clientes || [], logisticaList, viajes: viajes.error ? [] : (viajes || []) };
 
     const applyPurFilter = () => {
         const _s = _purStartDate ? new Date(_purStartDate + 'T00:00:00') : null;
@@ -573,9 +575,10 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     };
 
     window.modalDetalleCompra = (id) => {
-        const { compras, productos, ventas, clientes } = _cache;
+        const { compras, productos, ventas, clientes, viajes } = _cache;
         const c = compras.find(x => x.id.toString() === id.toString());
         if (!c) return;
+        const viajeVinculado = c.viaje_id ? (viajes || []).find(v => v.id?.toString() === c.viaje_id.toString()) : null;
 
         const pData = productos.find(p => p.id?.toString() === c.producto_id?.toString()) || {};
         const vData = c.venta_id ? ventas.find(v => v.id?.toString() === c.venta_id?.toString()) : null;
@@ -632,6 +635,12 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
                             <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">💸 Costo USD Asumido</p>
                             <strong style="font-size:1.3rem; color:var(--primary-red);">${formatUSD(c.costo_usd || 0)}</strong>
                         </div>
+                        ${viajeVinculado ? `
+                        <div>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">✈️ Viaje Vinculado</p>
+                            <strong style="font-size:1rem; color:#D97706;">${viajeVinculado.nombre}</strong>
+                        </div>
+                        ` : ''}
                         ${(vData && (auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas')) ? `
                         <div>
                             <p style="margin:0 0 5px 0; font-size:0.75rem; color:var(--violet); opacity:0.8;">✈️ Envío Int. (Calculado)</p>
@@ -742,6 +751,22 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
 
     const encargos = (ventas || []).filter(v => v.tipo_venta === 'Encargo');
 
+    // Si hay un viaje activo en el módulo Viaje USA, esta compra se vincula
+    // automáticamente a él (igual que ya hace Ventas para "En Viaje USA") —
+    // antes solo se podía vincular una compra a un viaje después de creada,
+    // desde dentro del módulo Viaje, una por una.
+    let viajeActivo = null;
+    try { viajeActivo = await ViajeService.getActivo(); } catch (_) { /* sin viaje activo */ }
+    const viajeBannerHTML = !viajeActivo
+        ? `<div id="pc-viaje-banner" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(239,68,68,0.08);border-radius:12px;border:1px solid rgba(239,68,68,0.25);margin-bottom:1.2rem;">
+             <span>⚠️</span>
+             <span style="font-size:0.82rem;color:var(--primary-red);font-weight:700;">No hay un viaje activo en este momento — esta compra se registrará normal, sin vincular a un viaje.</span>
+           </div>`
+        : `<div id="pc-viaje-banner" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(217,119,6,0.08);border-radius:12px;border:1px solid rgba(217,119,6,0.3);margin-bottom:1.2rem;">
+             <span>✈️</span>
+             <span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio})</span>
+           </div>`;
+
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
 
@@ -822,6 +847,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             
             <form id="purchase-form" onsubmit="return false;">
                 <div class="modal-body">
+                    ${viajeBannerHTML}
                     ${buildEncargoBanner(ventaIdPrefill)}
                     <div class="form-grid-2" style="margin-bottom: 2rem; background: var(--surface-1); padding: 2rem; border-radius: 16px; border: 1px solid var(--border-base);">
                         <div class="form-group">
@@ -1022,9 +1048,14 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             }
             const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile, 'comprobantes') : "";
 
-            const payload = { 
+            // Re-verificar el viaje activo al momento de guardar (pudo cerrarse
+            // mientras se llenaba el formulario) antes de vincular la compra.
+            let viajeIdCompra = null;
+            try { const activoAlGuardar = await ViajeService.getActivo(); viajeIdCompra = activoAlGuardar?.id || null; } catch (_) { /* sin viaje activo */ }
+
+            const payload = {
                 id: Date.now().toString(),
-                proveedor, 
+                proveedor,
                 costo_usd: costo,
                 costo_cop: costoCop,
                 comprobante_url: comprobanteUrl,
@@ -1033,6 +1064,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                 numero_factura: numFact,
                 codigo_producto_factura: codFact,
                 estado_compra: estado,
+                viaje_id: viajeIdCompra,
                 empresa_id: auth.getEmpresaId()
             };
             if (ventaId) payload.venta_id = ventaId;
@@ -1045,6 +1077,14 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             }
 
             await db.postData('Compras', payload, 'INSERT');
+
+            if (viajeIdCompra) {
+                // Best-effort: recalcula de inmediato cómo se reparten los gastos
+                // del viaje entre las compras vinculadas. Si falla, la compra ya
+                // quedó guardada — no bloquea el flujo.
+                try { await db.client.rpc('distribuir_gastos_viaje', { p_viaje_id: viajeIdCompra }); }
+                catch (e) { console.warn('[Compras] No se pudo redistribuir gastos del viaje:', e.message); }
+            }
 
             if (tipo === 'encargo' && ventaId) {
                 await db.postData('Ventas', { id: ventaId, estado_orden: 'Comprado en tienda EEUU' }, 'UPDATE');
