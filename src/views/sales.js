@@ -983,13 +983,12 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         });
     }
 
-    // Registro ágil (En Tienda durante viaje): estos campos arrancan
-    // ocultos y el usuario elige cuáles agregar al registro — no se
-    // insertan todos automáticamente al abrir el detalle.
+    // Registro ágil (En Tienda durante viaje): Nombre, Cantidad, Tienda a
+    // Cotizar, Valor de Venta y Foto son obligatorios/fijos siempre (ver
+    // más abajo); estos otros quedan bajo "Campos Adicionales", colapsados
+    // hasta que el usuario los active uno por uno.
     const CAMPOS_VIAJE_AGIL = [
-        { key:'cantidad',    label:'Cantidad' },
         { key:'categoria',   label:'Categoría' },
-        { key:'tienda',      label:'Tienda a Cotizar' },
         { key:'marca',       label:'Marca' },
         { key:'genero',      label:'Género' },
         { key:'talla',       label:'Talla' },
@@ -997,23 +996,14 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         { key:'precio_usd',  label:'Valor Cotizado (USD)' },
         { key:'peso',        label:'Peso Estimado (Libras)' },
         { key:'trm',         label:'TRM Cotizada' },
-        { key:'valor_venta', label:'Valor de Venta (COP)' },
     ];
     // El toggle de cada fila del checklist (arriba) es el único control de
     // visibilidad — se activa/desactiva ahí, no con un botón dentro del campo.
     const campoViajeHTML = (key) => {
         switch (key) {
-            case 'cantidad': return `<div class="form-group" data-campo-viaje="cantidad">
-                <label class="form-label">Cantidad</label>
-                <input type="number" id="enc_cantidad" value="1" min="1" required>
-            </div>`;
             case 'categoria': return `<div class="form-group" data-campo-viaje="categoria">
                 <label class="form-label">Categoría</label>
                 <select id="enc_tipo" required><option value="">-- Selecciona --</option>${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
-            </div>`;
-            case 'tienda': return `<div class="form-group" data-campo-viaje="tienda">
-                <label class="form-label">Tienda a Cotizar</label>
-                <select id="enc_tienda" required><option value="">-- Selecciona --</option>${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
             </div>`;
             case 'marca': return `<div class="form-group" data-campo-viaje="marca">
                 <label class="form-label">Marca</label>
@@ -1042,11 +1032,6 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
             case 'trm': return `<div class="form-group" data-campo-viaje="trm">
                 <label class="form-label">TRM Cotizada</label>
                 <input type="text" id="sale-trm" name="trm_cotizada" placeholder="Ej. 3700" inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}" required>
-            </div>`;
-            case 'valor_venta': return `<div class="form-group" data-campo-viaje="valor_venta">
-                <label class="form-label">Valor de Venta (COP)</label>
-                <input type="number" id="sale-total" name="valor_total_cop" min="1" placeholder="0" required>
-                <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
             </div>`;
             default: return '';
         }
@@ -1183,12 +1168,18 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                             <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
                             <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue" required>
                         </div>
-                        ${esRegistroAgil ? '' : `
                         <div class="form-group">
                             <label class="form-label">Cantidad <span style="color:var(--primary-red);">*</span></label>
                             <input type="number" id="enc_cantidad" value="1" min="1" required>
-                        </div>`}
-                        <div class="form-group full-width" style="grid-column: span ${esRegistroAgil?3:2};">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tienda a Cotizar <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_tienda" required>
+                                <option value="">-- Selecciona --</option>
+                                ${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label class="form-label">Foto de Referencia <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
                             <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
                                 <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
@@ -1203,22 +1194,24 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
 
                         ${esRegistroAgil ? `
                         <div class="form-group full-width" style="grid-column:1/-1;">
-                            <label class="form-label" style="display:block;margin-bottom:0.6rem;">Campos opcionales — actívalos si los necesitas en este registro</label>
-                            <div class="admin-perms-grid">
-                                ${CAMPOS_VIAJE_AGIL.map(c => `
-                                <div class="admin-perm-row" id="fila-campo-viaje-${c.key}">
-                                    <div class="admin-perm-label">
-                                        <span class="admin-perm-dot"></span>
-                                        <span>${c.label}</span>
-                                    </div>
-                                    <div class="admin-perm-controls">
-                                        <label class="admin-toggle-wrap">
-                                            <input type="checkbox" class="chk-campo-viaje" value="${c.key}" onchange="window.toggleCampoViaje('${c.key}', this.checked)" />
-                                            <span class="admin-toggle-slider"></span>
-                                            <span class="admin-toggle-label">Incluido</span>
-                                        </label>
-                                    </div>
-                                </div>`).join('')}
+                            <button type="button" id="btn-campos-adicionales" class="btn-action" style="font-size:0.8rem;padding:8px 16px;" onclick="window.toggleSeccionCamposAdicionales()">▸ Campos Adicionales</button>
+                            <div id="seccion-campos-adicionales" style="display:none;margin-top:12px;">
+                                <div class="admin-perms-grid">
+                                    ${CAMPOS_VIAJE_AGIL.map(c => `
+                                    <div class="admin-perm-row" id="fila-campo-viaje-${c.key}">
+                                        <div class="admin-perm-label">
+                                            <span class="admin-perm-dot"></span>
+                                            <span>${c.label}</span>
+                                        </div>
+                                        <div class="admin-perm-controls">
+                                            <label class="admin-toggle-wrap">
+                                                <input type="checkbox" class="chk-campo-viaje" value="${c.key}" onchange="window.toggleCampoViaje('${c.key}', this.checked)" />
+                                                <span class="admin-toggle-slider"></span>
+                                                <span class="admin-toggle-label">Incluido</span>
+                                            </label>
+                                        </div>
+                                    </div>`).join('')}
+                                </div>
                             </div>
                         </div>
                         <div id="viaje-campos-agregados" class="form-grid-3 full-width" style="grid-column:1/-1;"></div>
@@ -1228,13 +1221,6 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                             <select id="enc_tipo" required>
                                 <option value="">-- Selecciona --</option>
                                 ${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Tienda a Cotizar <span style="color:var(--primary-red);">*</span></label>
-                            <select id="enc_tienda" required>
-                                <option value="">-- Selecciona --</option>
-                                ${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
@@ -1282,15 +1268,15 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                     <div class="form-group">
                         <label class="form-label">TRM Cotizada <span style="color:var(--primary-red);">*</span></label>
                         <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" required inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}">
-                    </div>
+                    </div>`}
                     <div class="form-group">
                         <label class="form-label">Valor Venta (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="valor_total_cop" id="sale-total" required min="1" placeholder="0">
                         <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
-                    </div>`}
+                    </div>
                     <div class="form-group">
-                        <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
-                        <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
+                        <label class="form-label">Ganancia Calculada (COP) ${esRegistroAgil ? '<span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>' : '<span style="color:var(--primary-red);">*</span>'}</label>
+                        <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" ${esRegistroAgil ? '' : 'required'} min="0" placeholder="0">
                         <p id="sale-ganancia-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
                     </div>
                     <div class="form-group">
@@ -1369,6 +1355,17 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
             cont.querySelector(`[data-campo-viaje="${key}"]`)?.remove();
             dot?.classList.remove('active');
         }
+    };
+
+    // Colapsa/expande el bloque de "Campos Adicionales" — arranca cerrado
+    // para no sobrecargar el formulario ágil apenas se abre.
+    window.toggleSeccionCamposAdicionales = () => {
+        const el = document.getElementById('seccion-campos-adicionales');
+        const btn = document.getElementById('btn-campos-adicionales');
+        if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'block';
+        if (btn) btn.textContent = showing ? '▸ Campos Adicionales' : '▾ Campos Adicionales';
     };
 
     setTimeout(() => {
@@ -1632,7 +1629,8 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         const gananciaCalc=parseInt(fd.get('ganancia_calculada')||0) * cantidadEnc;
         
         if (valorTotal <= 0) return window.showToast('El Valor Total debe ser mayor a 0.', 'error');
-        if (gananciaCalc <= 0) return window.showToast('La Ganancia Calculada debe ser mayor a 0.', 'error');
+        // En el registro ágil de Viaje USA la Ganancia Calculada es opcional.
+        if (gananciaCalc <= 0 && !esRegistroAgil) return window.showToast('La Ganancia Calculada debe ser mayor a 0.', 'error');
 
         const abonoIni=parseInt(fd.get('abono_inicial')||0);
         const saldoP=valorTotal-abonoIni;
