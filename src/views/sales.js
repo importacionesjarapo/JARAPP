@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { formatCOP, formatUSD, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, buildComprobanteUploadHTML, attachComprobanteInput, downloadExcel, readExcelFile, buscarColumna } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
+import { ViajeService } from '../services/viajes.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
 let localVentasCache = [];
@@ -31,6 +32,18 @@ const labelDate = (s) => {
         if (isNaN(d)) return s;
         return d.toLocaleDateString('es-CO', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
     } catch { return s; }
+};
+
+// ─── Sub-tipo de una venta "Encargo" ────────────────────────────────────────
+// tipo_venta sigue siendo 'Stock'/'Encargo' en BD (no se tocó el esquema
+// existente ni el track colombia/encargo_usa/encargo_web del portal); acá
+// solo distinguimos visualmente Compras Online vs. En Viaje USA usando el
+// flag comprado_en_viaje que ya se guarda con cada venta.
+const tipoVentaBadge = (v) => {
+    if (v.tipo_venta !== 'Encargo') return { icon:'🛒', label:'Stock Local', color:'var(--success-green)' };
+    return v.comprado_en_viaje
+        ? { icon:'✈️', label:'En Viaje USA', color:'#D97706' }
+        : { icon:'🛍️', label:'Compras Online', color:'var(--violet)' };
 };
 
 // ─── KPI Strip ─────────────────────────────────────────────────────────────────
@@ -238,9 +251,8 @@ function _montarTablaVentas() {
               render: (_v, row) => {
                   const fase = getLogisticaFase(row.id, localLogisticaCache, row.estado_orden||'Procesando');
                   const col  = getLogisticaColor(fase);
-                  const tipo = row.tipo_venta === 'Encargo'
-                      ? '<span style="color:var(--violet);font-size:0.68rem;font-weight:700">📦 Encargo</span>'
-                      : '<span style="color:var(--success-green);font-size:0.68rem;font-weight:700">🛍️ Stock Local</span>';
+                  const b = tipoVentaBadge(row);
+                  const tipo = `<span style="color:${b.color};font-size:0.68rem;font-weight:700">${b.icon} ${b.label}</span>`;
                   return `<div style="margin-bottom:5px;">${tipo}</div><span class="status-badge" style="background:${col};">${fase}</span>`;
               } },
             { key: 'valor_total_cop', label: 'Total COP', width: '120px',
@@ -843,12 +855,59 @@ export const renderSales = async (renderLayout, navigateTo) => {
     setTimeout(() => { attachGroupToggles(); }, 150);
 };
 
-// ─── Create Sale Modal (unchanged) ────────────────────────────────────────────
-export const createSaleModal = async (navigateTo) => {
+// ─── Selector de Tipo de Transacción (pantalla previa al formulario) ──────────
+// El 90% de la operación real ocurre durante viajes de encargos a EEUU, con
+// un ritmo de registro mucho más ágil que el de un encargo cotizado por
+// internet. Por eso "Nueva Venta" ahora abre primero esta pantalla de
+// selección, y cada tipo lleva a un formulario distinto (ver createSaleModal).
+const SALE_TYPE_CARDS = [
+    { tipo:'Stock',   icon:'🛒', color:'var(--success-green)', titulo:'Stock Local',    desc:'Producto físico disponible en Medellín. Entrega inmediata al cliente.' },
+    { tipo:'Encargo', icon:'🛍️', color:'var(--brand-magenta)', titulo:'Compras Online', desc:'Encargo cotizado y comprado por internet desde Colombia, sin viaje.' },
+    { tipo:'Viaje',   icon:'✈️', color:'#D97706',             titulo:'En Viaje USA',    desc:'Encargo tomado durante un viaje a EEUU. Registro ágil, pocos campos obligatorios.' },
+];
+
+const renderSaleTypeSelector = () => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Nueva Venta</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="opacity:0.6;font-size:0.85rem;margin:0 0 1.5rem;">¿Qué tipo de transacción vas a registrar?</p>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;">
+                    ${SALE_TYPE_CARDS.map(c => `
+                    <button type="button" onclick="window.modalVenta('${c.tipo}')"
+                        style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:2rem 1.2rem;background:var(--surface-1);border:2px solid var(--border-base);border-radius:18px;cursor:pointer;font-family:inherit;transition:all .15s ease;"
+                        onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateY(-3px)';"
+                        onmouseout="this.style.borderColor='var(--border-base)';this.style.transform='translateY(0)';">
+                        <div style="font-size:2.6rem;line-height:1;">${c.icon}</div>
+                        <h3 style="margin:0;font-size:1rem;font-weight:800;color:${c.color};">${c.titulo}</h3>
+                        <p style="margin:0;font-size:0.78rem;opacity:0.65;line-height:1.5;">${c.desc}</p>
+                    </button>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    container.style.display = 'flex';
+};
+
+// ─── Create Sale Modal ──────────────────────────────────────────────────────
+export const createSaleModal = async (navigateTo, tipoUI) => {
+    if (!tipoUI) { renderSaleTypeSelector(); return; }
+    const esViajeUSA = tipoUI === 'Viaje';
+    const tipoVentaDB = tipoUI === 'Stock' ? 'Stock' : 'Encargo';
+
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
     content.innerHTML = `<div style="text-align:center;padding:2rem;"><div class="loader"></div> Preparando módulo de facturación...</div>`;
     container.style.display = 'flex';
+
+    let viajeActivo = null;
+    if (esViajeUSA) {
+        try { viajeActivo = await ViajeService.getActivo(); } catch (_) { /* sin viaje activo */ }
+    }
 
     const [clientsList, productsList, configList] = await Promise.all([
         db.fetchData('Clientes'),
@@ -881,13 +940,26 @@ export const createSaleModal = async (navigateTo) => {
         });
     }
 
+    const req = esViajeUSA ? '' : 'required';
+    const reqLbl = () => esViajeUSA ? '<span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>' : '<span style="color:var(--primary-red);">*</span>';
+    const tipoCard = SALE_TYPE_CARDS.find(c => c.tipo === tipoUI) || SALE_TYPE_CARDS[0];
+    const viajeBannerHTML = !esViajeUSA ? '' : (viajeActivo
+        ? `<div class="form-group full-width" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(217,119,6,0.08);border-radius:12px;border:1px solid rgba(217,119,6,0.3);margin-bottom:1.2rem;">
+             <span>✈️</span>
+             <span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio})</span>
+           </div>`
+        : `<div class="form-group full-width" style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;background:rgba(239,68,68,0.08);border-radius:12px;border:1px solid rgba(239,68,68,0.25);margin-bottom:1.2rem;">
+             <span>⚠️</span>
+             <span style="font-size:0.82rem;color:var(--primary-red);font-weight:700;">No hay un viaje activo en este momento — esta venta se registrará normal, sin vincular a un viaje.</span>
+           </div>`);
+
     content.innerHTML = `
         <div class="modal-content modal-wide">
             <div class="modal-header">
-                <h2>Registrar Nueva Venta</h2>
+                <h2>Registrar Nueva Venta — ${tipoCard.icon} ${tipoCard.titulo}</h2>
                 <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
             </div>
-            
+
             <form id="form-sale" onsubmit="return false;">
                 <div class="modal-body">
                     <!-- Sección de Transacción y Cliente -->
@@ -898,14 +970,15 @@ export const createSaleModal = async (navigateTo) => {
                         </div>
                         <div class="form-group">
                             <label class="form-label">Tipo de Transacción</label>
-                            <div style="display:flex; gap:2.5rem; padding:10px 0;">
-                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color: var(--text-main);">
-                                    <input type="radio" name="tipo_venta" value="Stock" checked onchange="window.toggleSaleType(this.value)" style="width:20px; height:20px; margin:0;"> 🛒 Stock Local
-                                </label>
-                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color: var(--brand-magenta);">
-                                    <input type="radio" name="tipo_venta" value="Encargo" onchange="window.toggleSaleType(this.value)" style="width:20px; height:20px; margin:0;"> 📦 Por Encargo (USA)
-                                </label>
+                            <div style="display:flex; align-items:center; gap:12px; padding:10px 0;">
+                                <span style="display:inline-flex; align-items:center; gap:8px; font-weight:800; padding:8px 16px; border-radius:12px; background:var(--surface-2); color:${tipoCard.color};">
+                                    ${tipoCard.icon} ${tipoCard.titulo}
+                                </span>
+                                <button type="button" class="btn-action" style="font-size:0.72rem; padding:6px 12px;" onclick="window.modalVenta()">Cambiar</button>
                             </div>
+                            <input type="hidden" name="tipo_venta" id="hid-tipo-venta" value="${tipoVentaDB}">
+                            <input type="hidden" id="sale-ui-tipo" value="${tipoUI}">
+                            <input type="hidden" id="sale-viaje-activo-id" value="${viajeActivo?.id || ''}">
                         </div>
 
                         <div class="form-group">
@@ -977,55 +1050,67 @@ export const createSaleModal = async (navigateTo) => {
                             </div>
                         </div>
 
-                    <div id="section-stock" class="form-group full-width">
+                    <div id="section-stock" class="form-group full-width" style="display:${tipoUI==='Stock'?'block':'none'};">
                         <label class="form-label">Seleccionar Producto Físico</label>
-                        <input type="text" list="dl-productos" id="sel-producto-text" placeholder="Escribe nombre o SKU..." required autocomplete="off">
+                        <input type="text" list="dl-productos" id="sel-producto-text" placeholder="Escribe nombre o SKU..." ${tipoUI==='Stock'?'required':''} autocomplete="off">
                         <datalist id="dl-productos">
                             ${productsList.filter(p=>p.estado_producto==='Disponible entrega inmediata'&&parseInt(p.stock_medellin)>0).map(p=>`<option data-id="${p.id}" data-price="${p.precio_cop}" value="${p.nombre_producto} | SKU: ${p.sku} | COP ${formatCOP(p.precio_cop)} [Disp: ${p.stock_medellin}]"></option>`).join('')}
                         </datalist>
-                        <input type="hidden" name="producto_id" id="sel-producto-id" required>
+                        <input type="hidden" name="producto_id" id="sel-producto-id" ${tipoUI==='Stock'?'required':''}>
                     </div>
 
-                <div id="section-encargo" style="display:none;">
+                <div id="section-encargo" style="display:${esViajeUSA || tipoUI==='Encargo' ? 'block':'none'};">
                     <div style="height:1px; background:var(--border-base); margin:2rem 0;"></div>
                     <div style="display:flex; align-items:center; gap:10px; margin-bottom:1.5rem; padding:0.8rem 1.2rem; background:var(--surface-1); border-radius:12px; border-left:4px solid var(--brand-magenta);">
                         <span>📋</span>
-                        <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto por Encargo</h3>
+                        <h3 style="margin:0; font-size:0.85rem; color:var(--brand-magenta); text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalles del Producto ${esViajeUSA?'(Registro Ágil en Viaje)':'por Encargo'}</h3>
                     </div>
-                    <div class="form-group full-width" style="display:flex; align-items:center; gap:12px; padding:0.7rem 1rem; background:rgba(217,119,6,0.08); border-radius:12px; border:1px solid rgba(217,119,6,0.3); margin-bottom:1.2rem;">
-                        <input type="checkbox" id="enc_viaje_encargos" style="width:20px; height:20px; cursor:pointer;" onchange="window.updateEncargoRequirements()">
-                        <label for="enc_viaje_encargos" style="font-weight:700; color:#D97706; cursor:pointer; margin:0; text-transform:none; font-size:0.85rem;">Comprado en viaje de encargos (EEUU) — URL, foto, valor USD y peso quedan opcionales</label>
-                    </div>
+                    ${viajeBannerHTML}
                     <div class="form-grid-3">
+                        <div class="form-group full-width">
+                            <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
+                            <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue" required>
+                        </div>
                         <div class="form-group">
-                            <label class="form-label">Categoría <span style="color:var(--primary-red);">*</span></label>
-                            <select id="enc_tipo">
+                            <label class="form-label">Cantidad <span style="color:var(--primary-red);">*</span></label>
+                            <input type="number" id="enc_cantidad" value="1" min="1" required>
+                        </div>
+                        <div class="form-group full-width" style="grid-column: span 2;">
+                            <label class="form-label">Foto de Referencia <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
+                            <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
+                                <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                                    <span style="font-size:0.6rem; opacity:0.4;">FOTO</span>
+                                </div>
+                                <div style="flex:1;">
+                                    <input type="file" id="enc-file-img" accept="image/*" style="font-size:0.8rem; border:none; background:transparent; padding:0;">
+                                    <input type="hidden" id="enc_url" value="">
+                                </div>
+                            </div>
+                        </div>
+
+                        ${esViajeUSA ? `
+                        <div class="form-group full-width">
+                            <button type="button" class="btn-action" style="font-size:0.78rem;padding:8px 16px;" onclick="window.toggleDetallesOpcionalesViaje()" id="btn-toggle-viaje-opcionales">➕ Agregar detalles opcionales (categoría, marca, talla, enlace...)</button>
+                        </div>
+                        <div id="viaje-detalles-opcionales" class="form-grid-3 full-width" style="display:none;grid-column:1/-1;">
+                        ` : ''}
+                        <div class="form-group">
+                            <label class="form-label">Categoría ${reqLbl()}</label>
+                            <select id="enc_tipo" ${req}>
                                 <option value="">-- Selecciona --</option>
                                 ${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Tienda a Cotizar <span style="color:var(--primary-red);">*</span></label>
-                            <select id="enc_tienda">
+                            <label class="form-label">Tienda a Cotizar ${reqLbl()}</label>
+                            <select id="enc_tienda" ${req}>
                                 <option value="">-- Selecciona --</option>
                                 ${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
                         </div>
-                        <div class="form-group full-width">
-                            <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
-                            <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue">
-                        </div>
-                        <div class="form-group" style="grid-column: span 3;">
-                            <label class="form-label" id="lbl-enc-link">Enlace del Producto (URL) <span style="color:var(--primary-red);">*</span></label>
-                            <input type="url" id="enc_link" placeholder="https://...">
-                        </div>
                         <div class="form-group">
-                            <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) <span style="color:var(--primary-red);">*</span></label>
-                            <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00">
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Marca <span style="color:var(--primary-red);">*</span></label>
-                            <select id="enc_marca">
+                            <label class="form-label">Marca ${reqLbl()}</label>
+                            <select id="enc_marca" ${req}>
                                 <option value="">-- Selecciona --</option>
                                 ${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
@@ -1041,22 +1126,15 @@ export const createSaleModal = async (navigateTo) => {
                             <label class="form-label" id="lbl-enc-talla">Talla</label>
                             <input type="text" id="enc_talla" placeholder="Ej. 9US">
                         </div>
+                        <div class="form-group" style="grid-column: span 3;">
+                            <label class="form-label" id="lbl-enc-link">Enlace del Producto (URL) ${reqLbl()}</label>
+                            <input type="url" id="enc_link" placeholder="https://..." ${req}>
+                        </div>
                         <div class="form-group">
-                            <label class="form-label">Cantidad <span style="color:var(--primary-red);">*</span></label>
-                            <input type="number" id="enc_cantidad" value="1" min="1">
+                            <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) ${reqLbl()}</label>
+                            <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" ${req}>
                         </div>
-                        <div class="form-group full-width">
-                            <label class="form-label">Foto de Referencia <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
-                            <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
-                                <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
-                                    <span style="font-size:0.6rem; opacity:0.4;">FOTO</span>
-                                </div>
-                                <div style="flex:1;">
-                                    <input type="file" id="enc-file-img" accept="image/*" style="font-size:0.8rem; border:none; background:transparent; padding:0;">
-                                    <input type="hidden" id="enc_url" value="">
-                                </div>
-                            </div>
-                        </div>
+                        ${esViajeUSA ? `</div>` : ''}
                     </div>
                 </div>
 
@@ -1068,12 +1146,12 @@ export const createSaleModal = async (navigateTo) => {
                 
                 <div class="form-grid-3">
                     <div class="form-group">
-                        <label class="form-label" id="lbl-sale-peso">Peso Estimado (Libras) <span style="color:var(--primary-red);">*</span></label>
-                        <input type="text" name="peso_producto" id="sale-peso" placeholder="0.0" required inputmode="decimal">
+                        <label class="form-label" id="lbl-sale-peso">Peso Estimado (Libras) ${reqLbl()}</label>
+                        <input type="text" name="peso_producto" id="sale-peso" placeholder="0.0" ${req} inputmode="decimal">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">TRM Cotizada <span style="color:var(--primary-red);">*</span></label>
-                        <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" required inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}">
+                        <label class="form-label">TRM Cotizada ${reqLbl()}</label>
+                        <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" ${req} inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Valor Venta (COP) <span style="color:var(--primary-red);">*</span></label>
@@ -1117,7 +1195,11 @@ export const createSaleModal = async (navigateTo) => {
         </form>
     </div>`;
 
+    // Género/Talla solo se vuelven obligatorios cuando la categoría elegida
+    // es de tipo calzado/ropa — no aplica en modo Viaje USA (esos campos
+    // quedan siempre opcionales ahí, forman parte del registro ágil).
     window.updateEncargoRequirements = () => {
+        if (esViajeUSA) return;
         const cat = document.getElementById('enc_tipo')?.value || '';
         const condCats = ['Tenis', 'Calzado', 'Ropa', 'Accesorios'];
         const isCond = condCats.includes(cat);
@@ -1137,48 +1219,17 @@ export const createSaleModal = async (navigateTo) => {
             if (lblGen) lblGen.innerHTML = `Género`;
             if (lblTalla) lblTalla.innerHTML = `Talla`;
         }
-
-        // #26 — comprado en viaje: no hay link/valor USD de tienda online ni
-        // peso de flete que calcular (el viajero lo trae en la maleta).
-        const esViaje = document.getElementById('enc_viaje_encargos')?.checked;
-        const campos = [
-            { input: 'enc_link',       label: 'lbl-enc-link',       texto: 'Enlace del Producto (URL)' },
-            { input: 'enc_precio_usd', label: 'lbl-enc-precio-usd', texto: 'Valor Cotizado (USD)' },
-            { input: 'sale-peso',      label: 'lbl-sale-peso',      texto: 'Peso Estimado (Libras)' },
-        ];
-        campos.forEach(({ input, label, texto }) => {
-            const el = document.getElementById(input);
-            const lbl = document.getElementById(label);
-            if (!el) return;
-            if (esViaje) {
-                el.removeAttribute('required');
-                if (lbl) lbl.innerHTML = `${texto} <span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>`;
-            } else {
-                el.setAttribute('required', 'true');
-                if (lbl) lbl.innerHTML = `${texto} <span style="color:var(--primary-red);">*</span>`;
-            }
-        });
     };
 
-    window.toggleSaleType = (val) => {
-        const secStock   = document.getElementById('section-stock');
-        const secEncargo = document.getElementById('section-encargo');
-        const selStockTx = document.getElementById('sel-producto-text');
-        const reqEncAlways = ['enc_tipo','enc_tienda','enc_nombre','enc_link','enc_precio_usd','enc_marca','enc_cantidad'];
-        const reqEncCond = ['enc_genero', 'enc_talla'];
-
-        if (val==='Stock') { 
-            secStock.style.display='block'; 
-            secEncargo.style.display='none'; 
-            selStockTx.setAttribute('required','true'); 
-            [...reqEncAlways, ...reqEncCond].forEach(id=>document.getElementById(id)?.removeAttribute('required')); 
-        } else { 
-            secStock.style.display='none'; 
-            secEncargo.style.display='block'; 
-            selStockTx.removeAttribute('required'); 
-            reqEncAlways.forEach(id=>document.getElementById(id)?.setAttribute('required','true'));
-            window.updateEncargoRequirements();
-        }
+    // Modo Viaje USA: los campos de categoría/marca/talla/enlace/valor USD
+    // quedan colapsados detrás de este toggle para un registro más ágil.
+    window.toggleDetallesOpcionalesViaje = () => {
+        const el = document.getElementById('viaje-detalles-opcionales');
+        const btn = document.getElementById('btn-toggle-viaje-opcionales');
+        if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'grid';
+        if (btn) btn.textContent = showing ? '➕ Agregar detalles opcionales (categoría, marca, talla, enlace...)' : '➖ Ocultar detalles opcionales';
     };
 
     setTimeout(() => {
@@ -1222,7 +1273,7 @@ export const createSaleModal = async (navigateTo) => {
         // unitarios; el saldo/total/ganancia mostrados ya reflejan
         // unitario × cantidad, no solo lo que se tecleó.
         const updS=()=>{
-            const tipoActual = document.querySelector('input[name="tipo_venta"]:checked')?.value;
+            const tipoActual = document.getElementById('hid-tipo-venta')?.value;
             const cant = tipoActual === 'Encargo' ? (parseInt(encCant?.value) || 1) : 1;
             const unit = parseInt(vTot.value||0);
             const t = unit * cant;
@@ -1466,6 +1517,13 @@ export const createSaleModal = async (navigateTo) => {
             const valorLibraUSD = libParam ? parseFloat(libParam.valor || 0) : 0;
             const valorEnvioInt = Math.round(peso * valorLibraUSD * trm);
 
+            // Re-verificar el viaje activo al momento de guardar (pudo cerrarse
+            // mientras se llenaba el formulario) antes de vincular la venta.
+            let viajeIdVenta = null;
+            if (esViajeUSA) {
+                try { const activoAlGuardar = await ViajeService.getActivo(); viajeIdVenta = activoAlGuardar?.id || null; } catch (_) { /* sin viaje activo */ }
+            }
+
             const pvId = Date.now().toString();
             const pv={ 
                 id:pvId, 
@@ -1484,7 +1542,8 @@ export const createSaleModal = async (navigateTo) => {
                 trm_cotizada: trm,
                 valor_envio_internacional: valorEnvioInt,
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
-                comprado_en_viaje: tipoVenta === 'Encargo' ? !!document.getElementById('enc_viaje_encargos')?.checked : false,
+                comprado_en_viaje: esViajeUSA,
+                viaje_id: viajeIdVenta,
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
                 analista_id: auth.getProfile()?.id || null,
                 empresa_id: auth.getEmpresaId()
@@ -1509,13 +1568,14 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
     const content=document.getElementById('modal-content');
     content.innerHTML=`<div style="text-align:center;padding:3rem;"><div class="loader" style="margin:0 auto 15px auto;"></div> Cargando Ficha del Pedido...</div>`;
     container.style.display='flex';
-    const [ventasData,clientesData,productosData,logisticaData,abonosData,comprasData]=await Promise.all([
+    const [ventasData,clientesData,productosData,logisticaData,abonosData,comprasData,viajesData]=await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Clientes'),
         db.fetchData('Productos'),
         db.fetchData('Logistica'),
         db.fetchWhere('Abonos','venta_id', ventaId.toString()),
-        db.fetchData('Compras')
+        db.fetchData('Compras'),
+        db.fetchData('viajes'),
     ]);
     if(ventasData.error){content.innerHTML=`<div style="color:var(--primary-red);padding:2rem;text-align:center;">Error: ${ventasData.error.message||'Desconocido'}</div>`;return;}
     const v=ventasData.find(it=>it.id.toString()===ventaId.toString());
@@ -1593,8 +1653,8 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                 <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
                     📅 ${fechaCorta}
                 </span>
-                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:${v.tipo_venta==='Encargo'?'var(--violet-dim)':'rgba(6,214,160,0.1)'}; border-radius:22px; border:1px solid ${v.tipo_venta==='Encargo'?'rgba(139,124,246,0.3)':'rgba(6,214,160,0.3)'}; font-weight:700; color:${v.tipo_venta==='Encargo'?'var(--violet)':'var(--success-green)'}; white-space:nowrap;">
-                    ${v.tipo_venta==='Encargo'?'📦 Encargo':'🛒 Stock'}
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:${v.tipo_venta==='Encargo'?'var(--violet-dim)':'rgba(6,214,160,0.1)'}; border-radius:22px; border:1px solid ${v.tipo_venta==='Encargo'?'rgba(139,124,246,0.3)':'rgba(6,214,160,0.3)'}; font-weight:700; color:${tipoVentaBadge(v).color}; white-space:nowrap;">
+                    ${tipoVentaBadge(v).icon} ${tipoVentaBadge(v).label}
                 </span>
                 <span style="display:inline-flex; align-items:center; gap:5px; font-size:0.83rem; padding:6px 14px; background:var(--bg-main); border-radius:22px; border:1px solid var(--border-base); font-weight:600; white-space:nowrap;">
                     ⚖️ ${v.peso_producto||0} Lbs
@@ -1710,7 +1770,8 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                 <div style="text-align:right; border-left:1px solid var(--border-base); padding-left:2rem;">
                     <h4 style="margin:0 0 1.2rem 0; opacity:0.5; text-transform:uppercase; font-size:0.65rem; letter-spacing:1.5px; color:var(--text-main);">Seguimiento Logístico</h4>
                     <span style="font-size:0.8rem; padding:8px 18px; border-radius:30px; font-weight:800; color:#fff; background:${_faseColor}; box-shadow:0 4px 12px ${_faseColor}40;">${estadoLogistica}</span>
-                    <p style="margin:20px 0 0; opacity:0.7; font-size:0.9rem;">Canal de Origen: <strong style="color:var(--brand-magenta);">${v.tipo_venta==='Encargo'?'📦 Encargo Int.':'🛒 Stock Local'}</strong></p>
+                    <p style="margin:20px 0 0; opacity:0.7; font-size:0.9rem;">Canal de Origen: <strong style="color:var(--brand-magenta);">${tipoVentaBadge(v).icon} ${tipoVentaBadge(v).label}</strong></p>
+                    ${v.viaje_id ? `<p style="margin:8px 0 0; opacity:0.7; font-size:0.82rem;">✈️ Vinculada al viaje: <strong style="color:#D97706;">${(!viajesData.error && viajesData.find(vi=>vi.id?.toString()===v.viaje_id.toString()))?.nombre || v.viaje_id}</strong></p>` : ''}
                 </div>
             </div>
         </div>
