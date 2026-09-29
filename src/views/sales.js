@@ -499,6 +499,9 @@ function injectSalesView(view) {
     else if (view === 'tipo')   html = renderViewTipo(ventas);
     else if (view === 'fase')   html = renderViewFase(ventas);
     else if (view === 'timeline') html = renderViewTimeline(ventas);
+    // La búsqueda vive dentro de cada vista (no en la barra superior del
+    // módulo) — la vista "Tabla" ya trae la suya propia (TablaPro).
+    html = `<div style="margin-bottom:1.2rem;"><input type="text" id="find-sale" placeholder="🔍 Buscar cliente, producto..." style="max-width:320px;"></div>` + html;
     area.style.opacity = '0';
     setTimeout(() => { area.innerHTML = html; area.style.opacity = '1'; area.style.transition = 'opacity 0.25s'; attachSalesSearch(); attachGroupToggles(); }, 100);
 }
@@ -805,29 +808,29 @@ export const renderSales = async (renderLayout, navigateTo) => {
     ];
 
     const html = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:15px;">
+    <div class="module-header">
         <div>
             <span class="page-eyebrow">Stock Local · Encargos · Abonos</span>
             <h2 class="page-title">Módulo de Ventas</h2>
             <p style="opacity:0.5;font-size:0.82rem;margin-top:4px;">Facturación, cartera pendiente y seguimiento por fase logística.</p>
         </div>
-        <div class="module-filters-bar">
-            <div class="date-filter-wrap">
-                <label>Desde</label>
-                <input type="date" id="sales-date-start" class="date-filter-input" value="${_salesStartDate}">
-                <label style="margin-left:5px;">Hasta</label>
-                <input type="date" id="sales-date-end" class="date-filter-input" value="${_salesEndDate}">
-                <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applySalesDateFilter()">Filtrar</button>
-            </div>
-            <button class="btn-excel" onclick="window.exportSalesExcel()">📥 Excel</button>
-            <input type="text" id="find-sale" placeholder="Buscar cliente, producto..." style="background:var(--glass-hover);padding:10px 15px;border-radius:12px;color:var(--text-main);border:1px solid var(--glass-border);width:230px;outline:none;">
-            <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="window._navigateTo('cotizador')">📋 Nueva cotización</button>
-            ${auth.canEdit('sales') ? `
-                <input type="file" id="sale-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarVentasExcel(this.files[0])">
-                <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="document.getElementById('sale-import-input').click()">📤 Importar Excel</button>
-                <button class="btn-primary" onclick="window.modalVenta()">+ Nueva Venta</button>
-            ` : ''}
+        ${auth.canEdit('sales') ? `<button class="btn-primary" style="padding:12px 28px;font-size:0.9rem;" onclick="window.modalVenta()">+ Nueva Venta</button>` : ''}
+    </div>
+
+    <div class="module-filters-bar" style="margin-bottom:1.5rem;">
+        <div class="date-filter-wrap">
+            <label>Desde</label>
+            <input type="date" id="sales-date-start" class="date-filter-input" value="${_salesStartDate}">
+            <label style="margin-left:5px;">Hasta</label>
+            <input type="date" id="sales-date-end" class="date-filter-input" value="${_salesEndDate}">
+            <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applySalesDateFilter()">Filtrar</button>
         </div>
+        <div style="flex:1 1 auto;"></div>
+        <button class="btn-excel" onclick="window.exportSalesExcel()">📥 Excel</button>
+        ${auth.canEdit('sales') ? `
+            <input type="file" id="sale-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarVentasExcel(this.files[0])">
+            <button class="btn-action" style="padding:8px 14px;font-size:0.82rem;" onclick="document.getElementById('sale-import-input').click()">📤 Importar Excel</button>
+        ` : ''}
     </div>
 
     <div id="sales-kpi-container">
