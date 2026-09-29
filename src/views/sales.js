@@ -983,8 +983,74 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         });
     }
 
-    const req = esRegistroAgil ? '' : 'required';
-    const reqLbl = () => esRegistroAgil ? '<span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>' : '<span style="color:var(--primary-red);">*</span>';
+    // Registro ágil (En Tienda durante viaje): estos campos arrancan
+    // ocultos y el usuario elige cuáles agregar al registro — no se
+    // insertan todos automáticamente al abrir el detalle.
+    const CAMPOS_VIAJE_AGIL = [
+        { key:'cantidad',    label:'Cantidad' },
+        { key:'categoria',   label:'Categoría' },
+        { key:'tienda',      label:'Tienda a Cotizar' },
+        { key:'marca',       label:'Marca' },
+        { key:'genero',      label:'Género' },
+        { key:'talla',       label:'Talla' },
+        { key:'link',        label:'Enlace del Producto (URL)' },
+        { key:'precio_usd',  label:'Valor Cotizado (USD)' },
+        { key:'peso',        label:'Peso Estimado (Libras)' },
+        { key:'trm',         label:'TRM Cotizada' },
+        { key:'valor_venta', label:'Valor de Venta (COP)' },
+    ];
+    const btnQuitar = (key) => `<button type="button" onclick="window.quitarCampoViaje('${key}')" title="Quitar campo" style="float:right;background:none;border:none;cursor:pointer;color:var(--primary-red);font-weight:800;font-size:0.85rem;line-height:1;">✕</button>`;
+    const campoViajeHTML = (key) => {
+        switch (key) {
+            case 'cantidad': return `<div class="form-group" data-campo-viaje="cantidad">
+                <label class="form-label">Cantidad ${btnQuitar('cantidad')}</label>
+                <input type="number" id="enc_cantidad" value="1" min="1" required>
+            </div>`;
+            case 'categoria': return `<div class="form-group" data-campo-viaje="categoria">
+                <label class="form-label">Categoría ${btnQuitar('categoria')}</label>
+                <select id="enc_tipo" required><option value="">-- Selecciona --</option>${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+            </div>`;
+            case 'tienda': return `<div class="form-group" data-campo-viaje="tienda">
+                <label class="form-label">Tienda a Cotizar ${btnQuitar('tienda')}</label>
+                <select id="enc_tienda" required><option value="">-- Selecciona --</option>${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+            </div>`;
+            case 'marca': return `<div class="form-group" data-campo-viaje="marca">
+                <label class="form-label">Marca ${btnQuitar('marca')}</label>
+                <select id="enc_marca" required><option value="">-- Selecciona --</option>${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+            </div>`;
+            case 'genero': return `<div class="form-group" data-campo-viaje="genero">
+                <label class="form-label" id="lbl-enc-genero">Género ${btnQuitar('genero')}</label>
+                <select id="enc_genero"><option value="">-- Selecciona --</option>${generos.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
+            </div>`;
+            case 'talla': return `<div class="form-group" data-campo-viaje="talla">
+                <label class="form-label" id="lbl-enc-talla">Talla ${btnQuitar('talla')}</label>
+                <input type="text" id="enc_talla" placeholder="Ej. 9US">
+            </div>`;
+            case 'link': return `<div class="form-group full-width" style="grid-column: span 3;" data-campo-viaje="link">
+                <label class="form-label">Enlace del Producto (URL) ${btnQuitar('link')}</label>
+                <input type="url" id="enc_link" placeholder="https://..." required>
+            </div>`;
+            case 'precio_usd': return `<div class="form-group" data-campo-viaje="precio_usd">
+                <label class="form-label">Valor Cotizado (USD) ${btnQuitar('precio_usd')}</label>
+                <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" required>
+            </div>`;
+            case 'peso': return `<div class="form-group" data-campo-viaje="peso">
+                <label class="form-label">Peso Estimado (Libras) ${btnQuitar('peso')}</label>
+                <input type="text" id="sale-peso" name="peso_producto" placeholder="0.0" inputmode="decimal" required>
+            </div>`;
+            case 'trm': return `<div class="form-group" data-campo-viaje="trm">
+                <label class="form-label">TRM Cotizada ${btnQuitar('trm')}</label>
+                <input type="text" id="sale-trm" name="trm_cotizada" placeholder="Ej. 3700" inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}" required>
+            </div>`;
+            case 'valor_venta': return `<div class="form-group" data-campo-viaje="valor_venta">
+                <label class="form-label">Valor de Venta (COP) ${btnQuitar('valor_venta')}</label>
+                <input type="number" id="sale-total" name="valor_total_cop" min="1" placeholder="0" required>
+                <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
+            </div>`;
+            default: return '';
+        }
+    };
+
     const tipoCardBase = SALE_TYPE_CARDS.find(c => c.tipo === tipoUI) || SALE_TYPE_CARDS[0];
     const modoCompraCard = esViaje ? MODO_COMPRA_VIAJE_CARDS.find(c => c.modo === modoCompra) : null;
     const tipoCard = modoCompraCard ? { ...tipoCardBase, titulo: `${tipoCardBase.titulo} · ${modoCompraCard.titulo}` } : tipoCardBase;
@@ -1116,11 +1182,12 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                             <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
                             <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue" required>
                         </div>
+                        ${esRegistroAgil ? '' : `
                         <div class="form-group">
                             <label class="form-label">Cantidad <span style="color:var(--primary-red);">*</span></label>
                             <input type="number" id="enc_cantidad" value="1" min="1" required>
-                        </div>
-                        <div class="form-group full-width" style="grid-column: span 2;">
+                        </div>`}
+                        <div class="form-group full-width" style="grid-column: span ${esRegistroAgil?3:2};">
                             <label class="form-label">Foto de Referencia <span style="opacity:0.5; font-size:0.75rem;">(opcional)</span></label>
                             <div style="display:flex; gap:15px; align-items:center; background:var(--surface-2); padding:1rem; border-radius:12px; border:1px solid var(--border-base);">
                                 <div id="enc-img-preview" style="width:70px; height:70px; border-radius:10px; overflow:hidden; background:var(--bg-main); border:1px solid var(--border-base); display:flex; justify-content:center; align-items:center; flex-shrink:0;">
@@ -1134,28 +1201,38 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                         </div>
 
                         ${esRegistroAgil ? `
-                        <div class="form-group full-width">
-                            <button type="button" class="btn-action" style="font-size:0.78rem;padding:8px 16px;" onclick="window.toggleDetallesOpcionalesViaje()" id="btn-toggle-viaje-opcionales">➕ Agregar detalles opcionales (categoría, marca, talla, enlace...)</button>
+                        <div class="form-group full-width" style="grid-column:1/-1;">
+                            <div style="background:var(--surface-2);border:1px dashed var(--border-base);border-radius:12px;padding:1rem 1.2rem;">
+                                <p style="margin:0 0 10px;font-size:0.78rem;font-weight:700;opacity:0.7;">➕ Selecciona los campos que deseas agregar a este registro:</p>
+                                <div id="viaje-campo-checklist" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+                                    ${CAMPOS_VIAJE_AGIL.map(c => `
+                                    <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;font-weight:600;background:var(--surface-1);padding:6px 12px;border-radius:20px;border:1px solid var(--border-base);cursor:pointer;">
+                                        <input type="checkbox" class="chk-campo-viaje" value="${c.key}" style="margin:0;">
+                                        ${c.label}
+                                    </label>`).join('')}
+                                </div>
+                                <button type="button" class="btn-action" style="font-size:0.78rem;padding:6px 14px;" onclick="window.agregarCamposViajeSeleccionados()">➕ Adicionar seleccionados</button>
+                            </div>
                         </div>
-                        <div id="viaje-detalles-opcionales" class="form-grid-3 full-width" style="display:none;grid-column:1/-1;">
-                        ` : ''}
+                        <div id="viaje-campos-agregados" class="form-grid-3 full-width" style="grid-column:1/-1;"></div>
+                        ` : `
                         <div class="form-group">
-                            <label class="form-label">Categoría ${reqLbl()}</label>
-                            <select id="enc_tipo" ${req}>
+                            <label class="form-label">Categoría <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_tipo" required>
                                 <option value="">-- Selecciona --</option>
                                 ${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Tienda a Cotizar ${reqLbl()}</label>
-                            <select id="enc_tienda" ${req}>
+                            <label class="form-label">Tienda a Cotizar <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_tienda" required>
                                 <option value="">-- Selecciona --</option>
                                 ${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Marca ${reqLbl()}</label>
-                            <select id="enc_marca" ${req}>
+                            <label class="form-label">Marca <span style="color:var(--primary-red);">*</span></label>
+                            <select id="enc_marca" required>
                                 <option value="">-- Selecciona --</option>
                                 ${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}
                             </select>
@@ -1172,14 +1249,14 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                             <input type="text" id="enc_talla" placeholder="Ej. 9US">
                         </div>
                         <div class="form-group" style="grid-column: span 3;">
-                            <label class="form-label" id="lbl-enc-link">Enlace del Producto (URL) ${reqLbl()}</label>
-                            <input type="url" id="enc_link" placeholder="https://..." ${req}>
+                            <label class="form-label" id="lbl-enc-link">Enlace del Producto (URL) <span style="color:var(--primary-red);">*</span></label>
+                            <input type="url" id="enc_link" placeholder="https://..." required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) ${reqLbl()}</label>
-                            <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" ${req}>
+                            <label class="form-label" id="lbl-enc-precio-usd">Valor Cotizado (USD) <span style="color:var(--primary-red);">*</span></label>
+                            <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" required>
                         </div>
-                        ${esRegistroAgil ? `</div>` : ''}
+                        `}
                     </div>
                 </div>
 
@@ -1190,19 +1267,20 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                 </div>
                 
                 <div class="form-grid-3">
+                    ${esRegistroAgil ? '' : `
                     <div class="form-group">
-                        <label class="form-label" id="lbl-sale-peso">Peso Estimado (Libras) ${reqLbl()}</label>
-                        <input type="text" name="peso_producto" id="sale-peso" placeholder="0.0" ${req} inputmode="decimal">
+                        <label class="form-label" id="lbl-sale-peso">Peso Estimado (Libras) <span style="color:var(--primary-red);">*</span></label>
+                        <input type="text" name="peso_producto" id="sale-peso" placeholder="0.0" required inputmode="decimal">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">TRM Cotizada ${reqLbl()}</label>
-                        <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" ${req} inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}">
+                        <label class="form-label">TRM Cotizada <span style="color:var(--primary-red);">*</span></label>
+                        <input type="text" name="trm_cotizada" id="sale-trm" placeholder="Ej. 3700" required inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Valor Venta (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="valor_total_cop" id="sale-total" required min="1" placeholder="0">
                         <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
-                    </div>
+                    </div>`}
                     <div class="form-group">
                         <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
                         <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
@@ -1266,15 +1344,35 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         }
     };
 
-    // Modo Viaje USA: los campos de categoría/marca/talla/enlace/valor USD
-    // quedan colapsados detrás de este toggle para un registro más ágil.
-    window.toggleDetallesOpcionalesViaje = () => {
-        const el = document.getElementById('viaje-detalles-opcionales');
-        const btn = document.getElementById('btn-toggle-viaje-opcionales');
-        if (!el) return;
-        const showing = el.style.display !== 'none';
-        el.style.display = showing ? 'none' : 'grid';
-        if (btn) btn.textContent = showing ? '➕ Agregar detalles opcionales (categoría, marca, talla, enlace...)' : '➖ Ocultar detalles opcionales';
+    // Modo Viaje USA · En Tienda: los campos avanzados no se muestran todos
+    // de una — el usuario marca cuáles quiere en el checklist y los agrega
+    // explícitamente con este botón, uno por uno o varios a la vez.
+    window.agregarCamposViajeSeleccionados = () => {
+        const cont = document.getElementById('viaje-campos-agregados');
+        if (!cont) return;
+        const checks = document.querySelectorAll('.chk-campo-viaje:checked');
+        if (!checks.length) return showToast('Selecciona al menos un campo para agregar.', 'error');
+        checks.forEach(chk => {
+            const key = chk.value;
+            if (!cont.querySelector(`[data-campo-viaje="${key}"]`)) {
+                cont.insertAdjacentHTML('beforeend', campoViajeHTML(key));
+            }
+            const lbl = chk.closest('label');
+            if (lbl) lbl.style.display = 'none';
+            chk.checked = false;
+        });
+    };
+
+    window.quitarCampoViaje = (key) => {
+        const cont = document.getElementById('viaje-campos-agregados');
+        const el = cont?.querySelector(`[data-campo-viaje="${key}"]`);
+        if (el) el.remove();
+        const chk = document.querySelector(`.chk-campo-viaje[value="${key}"]`);
+        if (chk) {
+            chk.checked = false;
+            const lbl = chk.closest('label');
+            if (lbl) lbl.style.display = 'flex';
+        }
     };
 
     setTimeout(() => {
@@ -1311,36 +1409,49 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
             }
         });
         const pSel=document.getElementById('sel-producto-text'),pHide=document.getElementById('sel-producto-id');
-        const vTot=document.getElementById('sale-total'),vAb=document.getElementById('sale-abono'),lblS=document.getElementById('lbl-saldo');
-        const vGan=document.getElementById('sale-ganancia-calc'),hintGan=document.getElementById('sale-ganancia-hint');
-        const encCant=document.getElementById('enc_cantidad'),hintTot=document.getElementById('sale-total-hint');
         // #26 — en Encargo, "Valor Venta" y "Ganancia Calculada" son
         // unitarios; el saldo/total/ganancia mostrados ya reflejan
-        // unitario × cantidad, no solo lo que se tecleó.
+        // unitario × cantidad, no solo lo que se tecleó. Los elementos se
+        // vuelven a buscar en cada llamada (en vez de cachear la referencia)
+        // porque en el registro ágil de Viaje USA, "Cantidad"/"Valor de
+        // Venta" pueden no existir todavía al momento de montar el modal —
+        // se agregan después, dinámicamente, desde el checklist de campos.
         const updS=()=>{
             const tipoActual = document.getElementById('hid-tipo-venta')?.value;
+            const encCant = document.getElementById('enc_cantidad');
+            const vTot = document.getElementById('sale-total');
+            const vAb = document.getElementById('sale-abono');
+            const lblS = document.getElementById('lbl-saldo');
+            if (!vTot || !vAb || !lblS) return;
             const cant = tipoActual === 'Encargo' ? (parseInt(encCant?.value) || 1) : 1;
             const unit = parseInt(vTot.value||0);
             const t = unit * cant;
             const a = parseInt(vAb.value||0);
             lblS.innerText=formatCOP(Math.max(0,t-a));
+            const hintTot = document.getElementById('sale-total-hint');
             if (hintTot) {
                 if (cant > 1) { hintTot.style.display='block'; hintTot.textContent = `Total a cobrar (${cant} × ${formatCOP(unit)}) = ${formatCOP(t)}`; }
                 else hintTot.style.display='none';
             }
+            const hintGan = document.getElementById('sale-ganancia-hint');
             if (hintGan) {
-                const unitGan = parseInt(vGan?.value||0);
+                const unitGan = parseInt(document.getElementById('sale-ganancia-calc')?.value||0);
                 if (cant > 1) { hintGan.style.display='block'; hintGan.textContent = `Ganancia total (${cant} × ${formatCOP(unitGan)}) = ${formatCOP(unitGan * cant)}`; }
                 else hintGan.style.display='none';
             }
         };
-        if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); if(pr){vTot.value=pr;vAb.value=pr;updS();}} }); });
-        if(vTot&&vAb){vTot.addEventListener('input',updS);vAb.addEventListener('input',updS);}
-        if(vGan) vGan.addEventListener('input',updS);
-        if(encCant) encCant.addEventListener('input',updS);
-        const encTipo = document.getElementById('enc_tipo');
-        if (encTipo) encTipo.onchange = () => window.updateEncargoRequirements();
-        
+        if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); const vT=document.getElementById('sale-total'),vA=document.getElementById('sale-abono'); if(pr && vT && vA){vT.value=pr;vA.value=pr;updS();}} }); });
+        // Delegación en el <form>: cubre también los campos que "Cantidad"/
+        // "Valor de Venta"/"Ganancia Calculada" que se agreguen después de
+        // montado el modal (registro ágil de Viaje USA).
+        const formSale = document.getElementById('form-sale');
+        formSale.addEventListener('input', (e) => {
+            if (['enc_cantidad','sale-total','sale-abono','sale-ganancia-calc'].includes(e.target.id)) updS();
+        });
+        formSale.addEventListener('change', (e) => {
+            if (e.target.id === 'enc_tipo') window.updateEncargoRequirements();
+        });
+
         attachComprobanteInput('comp-sale-file');
 
         window.toggleInlineClient = (mode) => {
@@ -1538,7 +1649,10 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
             if(tipoVenta==='Encargo'&&uploadFile){ btn.innerText='Subiendo Foto...'; finalImageUrl=await uploadImageToSupabase(uploadFile); }
             if(tipoVenta==='Encargo'){
                 const newProdId=Date.now().toString(); finalProductId=newProdId;
-                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre').value||'Producto sin nombre', marca:document.getElementById('enc_marca').value, categoria:document.getElementById('enc_tipo').value, genero:document.getElementById('enc_genero').value, talla:document.getElementById('enc_talla').value, tienda_cotizacion:document.getElementById('enc_tienda').value, url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?document.getElementById('enc_link').value:'', cantidad_encargada:document.getElementById('enc_cantidad').value, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?document.getElementById('enc_precio_usd').value:'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU', ganancia_calculada: gananciaCalc, empresa_id: auth.getEmpresaId() };
+                // Registro ágil de Viaje USA: varios de estos campos pueden no
+                // existir en el DOM si el usuario no los agregó desde el
+                // checklist — se leen con optional chaining y quedan vacíos.
+                const pp={ id:newProdId, sku:'ENC-'+Math.floor(Math.random()*10000), nombre_producto:document.getElementById('enc_nombre')?.value||'Producto sin nombre', marca:document.getElementById('enc_marca')?.value||'', categoria:document.getElementById('enc_tipo')?.value||'', genero:document.getElementById('enc_genero')?.value||'', talla:document.getElementById('enc_talla')?.value||'', tienda_cotizacion:document.getElementById('enc_tienda')?.value||'', url_imagen:finalImageUrl, link_producto:document.getElementById('enc_link')?.value||'', cantidad_encargada:document.getElementById('enc_cantidad')?.value||1, precio_cop:valorTotal, precio_usd:document.getElementById('enc_precio_usd')?.value||'', stock_medellin:0, estado_producto:'Pendiente de compra en EEUU', ganancia_calculada: gananciaCalc, empresa_id: auth.getEmpresaId() };
                 showToast('Creando ficha del producto...','info');
                 await db.postData('Productos',pp,'INSERT');
             } else {
