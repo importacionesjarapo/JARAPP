@@ -999,51 +999,52 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         { key:'trm',         label:'TRM Cotizada' },
         { key:'valor_venta', label:'Valor de Venta (COP)' },
     ];
-    const btnQuitar = (key) => `<button type="button" onclick="window.quitarCampoViaje('${key}')" title="Quitar campo" style="float:right;background:none;border:none;cursor:pointer;color:var(--primary-red);font-weight:800;font-size:0.85rem;line-height:1;">✕</button>`;
+    // El toggle de cada fila del checklist (arriba) es el único control de
+    // visibilidad — se activa/desactiva ahí, no con un botón dentro del campo.
     const campoViajeHTML = (key) => {
         switch (key) {
             case 'cantidad': return `<div class="form-group" data-campo-viaje="cantidad">
-                <label class="form-label">Cantidad ${btnQuitar('cantidad')}</label>
+                <label class="form-label">Cantidad</label>
                 <input type="number" id="enc_cantidad" value="1" min="1" required>
             </div>`;
             case 'categoria': return `<div class="form-group" data-campo-viaje="categoria">
-                <label class="form-label">Categoría ${btnQuitar('categoria')}</label>
+                <label class="form-label">Categoría</label>
                 <select id="enc_tipo" required><option value="">-- Selecciona --</option>${categorias.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
             </div>`;
             case 'tienda': return `<div class="form-group" data-campo-viaje="tienda">
-                <label class="form-label">Tienda a Cotizar ${btnQuitar('tienda')}</label>
+                <label class="form-label">Tienda a Cotizar</label>
                 <select id="enc_tienda" required><option value="">-- Selecciona --</option>${tiendas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
             </div>`;
             case 'marca': return `<div class="form-group" data-campo-viaje="marca">
-                <label class="form-label">Marca ${btnQuitar('marca')}</label>
+                <label class="form-label">Marca</label>
                 <select id="enc_marca" required><option value="">-- Selecciona --</option>${marcas.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
             </div>`;
             case 'genero': return `<div class="form-group" data-campo-viaje="genero">
-                <label class="form-label" id="lbl-enc-genero">Género ${btnQuitar('genero')}</label>
+                <label class="form-label" id="lbl-enc-genero">Género</label>
                 <select id="enc_genero"><option value="">-- Selecciona --</option>${generos.map(x=>`<option value="${x}">${x}</option>`).join('')}</select>
             </div>`;
             case 'talla': return `<div class="form-group" data-campo-viaje="talla">
-                <label class="form-label" id="lbl-enc-talla">Talla ${btnQuitar('talla')}</label>
+                <label class="form-label" id="lbl-enc-talla">Talla</label>
                 <input type="text" id="enc_talla" placeholder="Ej. 9US">
             </div>`;
             case 'link': return `<div class="form-group full-width" style="grid-column: span 3;" data-campo-viaje="link">
-                <label class="form-label">Enlace del Producto (URL) ${btnQuitar('link')}</label>
+                <label class="form-label">Enlace del Producto (URL)</label>
                 <input type="url" id="enc_link" placeholder="https://..." required>
             </div>`;
             case 'precio_usd': return `<div class="form-group" data-campo-viaje="precio_usd">
-                <label class="form-label">Valor Cotizado (USD) ${btnQuitar('precio_usd')}</label>
+                <label class="form-label">Valor Cotizado (USD)</label>
                 <input type="number" step="0.01" id="enc_precio_usd" placeholder="0.00" required>
             </div>`;
             case 'peso': return `<div class="form-group" data-campo-viaje="peso">
-                <label class="form-label">Peso Estimado (Libras) ${btnQuitar('peso')}</label>
+                <label class="form-label">Peso Estimado (Libras)</label>
                 <input type="text" id="sale-peso" name="peso_producto" placeholder="0.0" inputmode="decimal" required>
             </div>`;
             case 'trm': return `<div class="form-group" data-campo-viaje="trm">
-                <label class="form-label">TRM Cotizada ${btnQuitar('trm')}</label>
+                <label class="form-label">TRM Cotizada</label>
                 <input type="text" id="sale-trm" name="trm_cotizada" placeholder="Ej. 3700" inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}" required>
             </div>`;
             case 'valor_venta': return `<div class="form-group" data-campo-viaje="valor_venta">
-                <label class="form-label">Valor de Venta (COP) ${btnQuitar('valor_venta')}</label>
+                <label class="form-label">Valor de Venta (COP)</label>
                 <input type="number" id="sale-total" name="valor_total_cop" min="1" placeholder="0" required>
                 <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
             </div>`;
@@ -1202,16 +1203,22 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
 
                         ${esRegistroAgil ? `
                         <div class="form-group full-width" style="grid-column:1/-1;">
-                            <div style="background:var(--surface-2);border:1px dashed var(--border-base);border-radius:12px;padding:1rem 1.2rem;">
-                                <p style="margin:0 0 10px;font-size:0.78rem;font-weight:700;opacity:0.7;">➕ Selecciona los campos que deseas agregar a este registro:</p>
-                                <div id="viaje-campo-checklist" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-                                    ${CAMPOS_VIAJE_AGIL.map(c => `
-                                    <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;font-weight:600;background:var(--surface-1);padding:6px 12px;border-radius:20px;border:1px solid var(--border-base);cursor:pointer;">
-                                        <input type="checkbox" class="chk-campo-viaje" value="${c.key}" style="margin:0;">
-                                        ${c.label}
-                                    </label>`).join('')}
-                                </div>
-                                <button type="button" class="btn-action" style="font-size:0.78rem;padding:6px 14px;" onclick="window.agregarCamposViajeSeleccionados()">➕ Adicionar seleccionados</button>
+                            <label class="form-label" style="display:block;margin-bottom:0.6rem;">Campos opcionales — actívalos si los necesitas en este registro</label>
+                            <div class="admin-perms-grid">
+                                ${CAMPOS_VIAJE_AGIL.map(c => `
+                                <div class="admin-perm-row" id="fila-campo-viaje-${c.key}">
+                                    <div class="admin-perm-label">
+                                        <span class="admin-perm-dot"></span>
+                                        <span>${c.label}</span>
+                                    </div>
+                                    <div class="admin-perm-controls">
+                                        <label class="admin-toggle-wrap">
+                                            <input type="checkbox" class="chk-campo-viaje" value="${c.key}" onchange="window.toggleCampoViaje('${c.key}', this.checked)" />
+                                            <span class="admin-toggle-slider"></span>
+                                            <span class="admin-toggle-label">Incluido</span>
+                                        </label>
+                                    </div>
+                                </div>`).join('')}
                             </div>
                         </div>
                         <div id="viaje-campos-agregados" class="form-grid-3 full-width" style="grid-column:1/-1;"></div>
@@ -1344,34 +1351,23 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         }
     };
 
-    // Modo Viaje USA · En Tienda: los campos avanzados no se muestran todos
-    // de una — el usuario marca cuáles quiere en el checklist y los agrega
-    // explícitamente con este botón, uno por uno o varios a la vez.
-    window.agregarCamposViajeSeleccionados = () => {
+    // Modo Viaje USA · En Tienda: cada fila del checklist tiene su propio
+    // interruptor — al activarlo se agrega el campo al formulario, al
+    // desactivarlo se quita. Mismo patrón visual que "Módulos incluidos"
+    // en Superadmin (admin-perm-row / admin-toggle-wrap).
+    window.toggleCampoViaje = (key, activo) => {
         const cont = document.getElementById('viaje-campos-agregados');
         if (!cont) return;
-        const checks = document.querySelectorAll('.chk-campo-viaje:checked');
-        if (!checks.length) return showToast('Selecciona al menos un campo para agregar.', 'error');
-        checks.forEach(chk => {
-            const key = chk.value;
+        const fila = document.getElementById(`fila-campo-viaje-${key}`);
+        const dot = fila?.querySelector('.admin-perm-dot');
+        if (activo) {
             if (!cont.querySelector(`[data-campo-viaje="${key}"]`)) {
                 cont.insertAdjacentHTML('beforeend', campoViajeHTML(key));
             }
-            const lbl = chk.closest('label');
-            if (lbl) lbl.style.display = 'none';
-            chk.checked = false;
-        });
-    };
-
-    window.quitarCampoViaje = (key) => {
-        const cont = document.getElementById('viaje-campos-agregados');
-        const el = cont?.querySelector(`[data-campo-viaje="${key}"]`);
-        if (el) el.remove();
-        const chk = document.querySelector(`.chk-campo-viaje[value="${key}"]`);
-        if (chk) {
-            chk.checked = false;
-            const lbl = chk.closest('label');
-            if (lbl) lbl.style.display = 'flex';
+            dot?.classList.add('active');
+        } else {
+            cont.querySelector(`[data-campo-viaje="${key}"]`)?.remove();
+            dot?.classList.remove('active');
         }
     };
 
