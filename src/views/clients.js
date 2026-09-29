@@ -645,7 +645,7 @@ export const renderClients = async (renderLayout, navigateTo) => {
     ];
 
     const html = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;">
+    <div class="module-header">
         <div>
             <span class="page-eyebrow">CRM</span>
             <h2 class="page-title">Mis Clientes</h2>

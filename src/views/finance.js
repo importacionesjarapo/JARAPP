@@ -611,23 +611,25 @@ export const renderFinance = async (renderLayout, navigateTo) => {
     ];
 
     const html = `
-    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1.5rem; flex-wrap:wrap; gap:15px;">
+    <div class="module-header">
         <div>
             <span class="page-eyebrow">Operativo · Corporativo</span>
             <h2 class="page-title">Flujo Financiero</h2>
             <p style="opacity:0.5; font-size:0.82rem; margin-top:4px;">Balance de caja, ingresos y egresos operativos.</p>
         </div>
-        <div class="module-filters-bar">
-            <div class="date-filter-wrap">
-                <label>Desde</label>
-                <input type="date" id="fin-date-start" class="date-filter-input" value="${_finStartDate}">
-                <label style="margin-left:5px;">Hasta</label>
-                <input type="date" id="fin-date-end" class="date-filter-input" value="${_finEndDate}">
-                <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyFinDateFilter()">Filtrar</button>
-            </div>
-            <button class="btn-excel" onclick="window.exportFinExcel()">📥 Excel</button>
-            <button class="btn-primary" onclick="window.modalGasto()">+ Registrar Egreso</button>
+        <button class="btn-primary" style="padding:12px 28px;font-size:0.9rem;" onclick="window.modalGasto()">+ Registrar Egreso</button>
+    </div>
+
+    <div class="module-filters-bar" style="margin-bottom:1.5rem;">
+        <div class="date-filter-wrap">
+            <label>Desde</label>
+            <input type="date" id="fin-date-start" class="date-filter-input" value="${_finStartDate}">
+            <label style="margin-left:5px;">Hasta</label>
+            <input type="date" id="fin-date-end" class="date-filter-input" value="${_finEndDate}">
+            <button class="btn-action" style="padding:4px 10px;font-size:0.75rem;" onclick="window.applyFinDateFilter()">Filtrar</button>
         </div>
+        <div style="flex:1 1 auto;"></div>
+        <button class="btn-excel" onclick="window.exportFinExcel()">📥 Excel</button>
     </div>
 
     <div id="fin-kpi-container">

@@ -511,15 +511,15 @@ export const renderInventory = async (renderLayout, navigateTo) => {
     const pagedList = _invActiveView === 'grid' ? paginate(filteredList, _page, _rpp) : filteredList;
 
     const html = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.8rem;">
+    <div class="module-header">
         <div>
             <span class="page-eyebrow">Control de Existencias</span>
             <h2 class="page-title">Inventario</h2>
             <p style="opacity:0.5;font-size:0.82rem;margin-top:4px;">Productos, marcas, categorías y rentabilidad.</p>
         </div>
         <div style="display:flex;gap:10px;align-items:center;">
+            <input type="text" id="find-prod" placeholder="🔍 Marca, modelo, SKU..." style="max-width:220px;">
             <button class="btn-excel" onclick="window.exportInvExcel()">📥 Excel</button>
-            <input type="text" id="find-prod" placeholder="Marca, modelo, SKU..." style="background:var(--glass-hover);padding:10px 15px;border-radius:12px;color:var(--text-main);border:1px solid var(--glass-border);width:220px;outline:none;">
             ${auth.canEdit('inventory') ? `<button class="btn-primary" onclick="window.modalProducto()" style="padding:10px 15px;">+ Producto</button>` : ''}
         </div>
     </div>
