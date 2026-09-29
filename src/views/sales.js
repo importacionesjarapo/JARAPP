@@ -47,29 +47,27 @@ const tipoVentaBadge = (v) => {
 };
 
 // ─── KPI Strip ─────────────────────────────────────────────────────────────────
+// #Facturación Total y Abonos Recibidos se sacaron del strip — esa misma
+// información ya vive en el Dashboard 360°, no hace falta duplicarla acá.
 const renderSalesKPI = (ventas) => {
-    const totalFacturado = ventas.reduce((a,v) => a + (parseFloat(v.valor_total_cop)||0), 0);
-    const totalAbonos    = ventas.reduce((a,v) => a + (parseFloat(v.abonos_acumulados)||0), 0);
     const totalSaldo     = ventas.reduce((a,v) => a + (parseFloat(v.saldo_pendiente)||0), 0);
     const encargos       = ventas.filter(v => v.tipo_venta === 'Encargo').length;
     const stockLocal     = ventas.filter(v => v.tipo_venta !== 'Encargo').length;
 
     let kpis = [
-        { icon:'💰', value: formatCOP(totalFacturado), label:'Facturación Total',      color:'var(--info-blue)' },
-        { icon:'✅', value: formatCOP(totalAbonos),    label:'Abonos Recibidos',        color:'var(--success-green)' },
         { icon:'⚠️', value: formatCOP(totalSaldo),     label:'Saldos Pendientes',       color: totalSaldo > 0 ? 'var(--primary-red)' : 'var(--success-green)' },
         { icon:'📦', value: encargos,                  label:'Encargos Internacionales', color:'var(--warning-orange)' },
         { icon:'🛒', value: stockLocal,                label:'Ventas Stock Local',       color:'var(--brand-green)' },
     ];
 
     if (!auth.canAccess('feat_money')) {
-        kpis = kpis.filter(k => !['Facturación Total', 'Abonos Recibidos'].includes(k.label));
+        kpis = kpis.filter(k => k.label !== 'Saldos Pendientes');
     }
 
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
-        <div class="kpi-strip-card" onclick="window.openSalesKPI('${k.label}')">
+        <div class="kpi-strip-card" style="--kpi-color:${k.color};" onclick="window.openSalesKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
@@ -117,7 +115,7 @@ const renderSalesFaseCards = (ventas) => {
     return `
     <div class="kpi-strip" style="margin-top:0.8rem;">
         ${entries.map(([fase, count]) => `
-        <div class="kpi-strip-card" onclick="window.openSalesFase('${fase.replace(/'/g,"\\'")}')">
+        <div class="kpi-strip-card" style="--kpi-color:${getLogisticaColor(fase)};" onclick="window.openSalesFase('${fase.replace(/'/g,"\\'")}')">
             <span class="kpi-strip-icon">${faseIconVenta(fase)}</span>
             <div class="kpi-strip-value" style="color:${getLogisticaColor(fase)};">${count}</div>
             <div class="kpi-strip-label">${fase}</div>
@@ -130,12 +128,7 @@ window.openSalesKPI = (kpiName) => {
     let subtitle = '';
     let ventasFiltradas = [...localVentasFiltered].reverse(); // Recientes primero
     
-    if (kpiName === 'Facturación Total') {
-        subtitle = 'Todas las ventas que suman a la facturación total.';
-    } else if (kpiName === 'Abonos Recibidos') {
-        ventasFiltradas = ventasFiltradas.filter(v => (parseFloat(v.abonos_acumulados)||0) > 0);
-        subtitle = 'Ventas que tienen abonos registrados.';
-    } else if (kpiName === 'Saldos Pendientes') {
+    if (kpiName === 'Saldos Pendientes') {
         ventasFiltradas = ventasFiltradas.filter(v => (parseFloat(v.saldo_pendiente)||0) > 0);
         subtitle = 'Ventas con saldo pendiente por pagar.';
     } else if (kpiName === 'Encargos Internacionales') {

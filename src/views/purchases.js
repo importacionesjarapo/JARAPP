@@ -88,19 +88,19 @@ const renderKPIStrip = (compras) => {
     const promedio = compras.length > 0 ? total / compras.length : 0;
 
     const kpis = [
-        { icon: '💰', value: formatUSD(total), label: 'Total Invertido' },
-        { icon: '📦', value: compras.length, label: 'Total Compras' },
-        { icon: '🛍️', value: encargos.length, label: 'Para Encargos' },
-        { icon: '🏪', value: stock.length, label: 'Para Stock' },
-        { icon: '🏬', value: proveedores.size, label: 'Proveedores' },
+        { icon: '💰', value: formatUSD(total), label: 'Total Invertido', color: 'var(--info-blue)' },
+        { icon: '📦', value: compras.length, label: 'Total Compras', color: 'var(--warning-orange)' },
+        { icon: '🛍️', value: encargos.length, label: 'Para Encargos', color: 'var(--brand-magenta)' },
+        { icon: '🏪', value: stock.length, label: 'Para Stock', color: 'var(--success-green)' },
+        { icon: '🏬', value: proveedores.size, label: 'Proveedores', color: 'var(--brand-green)' },
     ];
 
     return `
     <div class="kpi-strip">
         ${kpis.map(k => `
-        <div class="kpi-strip-card" onclick="window.openPurchasesKPI('${k.label}')">
+        <div class="kpi-strip-card" style="--kpi-color:${k.color};" onclick="window.openPurchasesKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
-            <div class="kpi-strip-value">${k.value}</div>
+            <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>
         </div>`).join('')}
     </div>`;

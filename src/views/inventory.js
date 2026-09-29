@@ -52,7 +52,7 @@ const renderInvKPI = (list) => {
     return `
     <div class="kpi-strip">
         ${kpis.map(k=>`
-        <div class="kpi-strip-card" onclick="window.openInventoryKPI('${k.label}')">
+        <div class="kpi-strip-card" style="--kpi-color:${k.color};" onclick="window.openInventoryKPI('${k.label}')">
             <span class="kpi-strip-icon">${k.icon}</span>
             <div class="kpi-strip-value" style="color:${k.color};">${k.value}</div>
             <div class="kpi-strip-label">${k.label}</div>

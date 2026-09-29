@@ -451,19 +451,19 @@ function renderResumenBody(data) {
       <div class="cal-resumen-section">
         <div class="cal-resumen-section-title">% de cumplimiento del mes</div>
         <div class="kpi-strip" style="grid-template-columns:repeat(4,1fr);margin-bottom:0;">
-          <div class="kpi-strip-card" style="cursor:default;">
+          <div class="kpi-strip-card" style="cursor:default;--kpi-color:#1B8A5A;">
             <div class="kpi-strip-value" style="color:#1B8A5A;">${pctDe(aTiempo)}%</div>
             <div class="kpi-strip-label">Publicado a tiempo</div>
           </div>
-          <div class="kpi-strip-card" style="cursor:default;">
+          <div class="kpi-strip-card" style="cursor:default;--kpi-color:#B7791F;">
             <div class="kpi-strip-value" style="color:#B7791F;">${pctDe(tarde)}%</div>
             <div class="kpi-strip-label">Publicado tarde</div>
           </div>
-          <div class="kpi-strip-card" style="cursor:default;">
+          <div class="kpi-strip-card" style="cursor:default;--kpi-color:#1F6FEB;">
             <div class="kpi-strip-value" style="color:#1F6FEB;">${pctDe(reprogramado)}%</div>
             <div class="kpi-strip-label">Reprogramado</div>
           </div>
-          <div class="kpi-strip-card" style="cursor:default;">
+          <div class="kpi-strip-card" style="cursor:default;--kpi-color:#D91010;">
             <div class="kpi-strip-value" style="color:#D91010;">${pctDe(vencido)}%</div>
             <div class="kpi-strip-label">Vencido sin publicar</div>
           </div>

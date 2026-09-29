@@ -156,22 +156,22 @@ function _kpis() {
   const altos  = _posts.filter(p => p.nivel_amenaza === 'alto');
   return `
     <div class="kpi-strip" style="margin-bottom:24px;">
-      <div class="kpi-strip-card">
+      <div class="kpi-strip-card" style="--kpi-color:#D91010;">
         <span class="kpi-strip-icon">🏆</span>
         <div class="kpi-strip-value" style="color:#D91010;">${comp.length}</div>
         <div class="kpi-strip-label">Competidores</div>
       </div>
-      <div class="kpi-strip-card">
+      <div class="kpi-strip-card" style="--kpi-color:#F97316;">
         <span class="kpi-strip-icon">🎯</span>
         <div class="kpi-strip-value" style="color:#F97316;">${t1.length}</div>
         <div class="kpi-strip-label">Tier 1 críticos</div>
       </div>
-      <div class="kpi-strip-card">
+      <div class="kpi-strip-card" style="--kpi-color:#D91010;">
         <span class="kpi-strip-icon">🔥</span>
         <div class="kpi-strip-value" style="color:#D91010;">${viral.length}</div>
         <div class="kpi-strip-label">Posts virales</div>
       </div>
-      <div class="kpi-strip-card">
+      <div class="kpi-strip-card" style="--kpi-color:${altos.length ? '#D91010' : '#10B981'};">
         <span class="kpi-strip-icon">⚠️</span>
         <div class="kpi-strip-value" style="color:${altos.length ? '#D91010' : '#10B981'};">${altos.length}</div>
         <div class="kpi-strip-label">Amenaza alta</div>
