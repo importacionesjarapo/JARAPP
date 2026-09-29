@@ -1056,6 +1056,66 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
              <span style="font-size:0.82rem;color:var(--primary-red);font-weight:700;">No hay un viaje activo en este momento — esta venta se registrará normal, sin vincular a un viaje.</span>
            </div>`);
 
+    // ── Buscador de clientes (autocomplete propio, reemplaza el datalist
+    // nativo — poco elegante y con tipografía pobre en todos los navegadores).
+    const clienteInitials = (nombre) => {
+        const partes = (nombre || '').trim().split(/\s+/).filter(Boolean);
+        if (!partes.length) return '?';
+        return (partes[0][0] + (partes[1]?.[0] || '')).toUpperCase();
+    };
+    const CLIENTE_AVATAR_COLORS = ['#EA168F','#7C3AED','#0EA5E9','#16A34A','#D97706','#DC2626','#0D9488','#4F46E5'];
+    const clienteAvatarColor = (seed) => {
+        const s = String(seed || '');
+        let hash = 0;
+        for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+        return CLIENTE_AVATAR_COLORS[hash % CLIENTE_AVATAR_COLORS.length];
+    };
+    let _clienteSearchResults = [];
+    const renderClienteDropdown = (query) => {
+        const dropdown = document.getElementById('cliente-search-dropdown');
+        if (!dropdown) return;
+        const q = (query || '').trim().toLowerCase();
+        _clienteSearchResults = (q
+            ? clientsList.filter(c => (c.nombre || '').toLowerCase().includes(q) || (c.numero_identificacion || '').toLowerCase().includes(q))
+            : clientsList
+        ).slice(0, 8);
+        dropdown.dataset.activeIdx = '-1';
+        if (!_clienteSearchResults.length) {
+            dropdown.innerHTML = `<div class="cliente-search-empty">Sin resultados${q ? ` para "${q}"` : ''}.<br>Usa "+ Cliente Nuevo" para crearlo.</div>`;
+        } else {
+            dropdown.innerHTML = _clienteSearchResults.map((c, i) => `
+                <div class="cliente-search-item" data-idx="${i}" onmousedown="window.seleccionarClienteBusqueda(${i})">
+                    <div class="cliente-search-avatar" style="background:${clienteAvatarColor(c.id)};">${clienteInitials(c.nombre)}</div>
+                    <div class="cliente-search-info">
+                        <div class="cliente-search-nombre">${c.nombre || 'Sin nombre'}</div>
+                        <div class="cliente-search-meta">CC: ${c.numero_identificacion || '—'}${c.whatsapp ? ` · 📱 ${c.whatsapp.split(' | ').pop()}` : ''}</div>
+                    </div>
+                </div>`).join('');
+        }
+        dropdown.style.display = 'block';
+    };
+    window._seleccionarClienteEnFormulario = (client) => {
+        if (!client) return;
+        document.getElementById('sel-cliente-text').value = `${client.nombre} (CC: ${client.numero_identificacion || '-'})`;
+        document.getElementById('sel-cliente-id').value = client.id;
+        const btnEdit = document.getElementById('btn-edit-inline-client');
+        if (btnEdit) btnEdit.style.display = 'block';
+        const addrBox = document.getElementById('address-selection-box');
+        const selAddr = document.getElementById('sel-direccion-envio');
+        if (addrBox) addrBox.style.display = 'block';
+        if (selAddr) {
+            if (client.direccion) {
+                const history = client.direccion.split(' | ').reverse();
+                selAddr.innerHTML = history.map(d => `<option value="${d}">${d}</option>`).join('');
+            } else {
+                selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
+            }
+        }
+        const dropdown = document.getElementById('cliente-search-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+    };
+    window.seleccionarClienteBusqueda = (idx) => window._seleccionarClienteEnFormulario(_clienteSearchResults[idx]);
+
     content.innerHTML = `
         <div class="modal-content modal-wide">
             <div class="modal-header">
@@ -1092,8 +1152,10 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                                     <button type="button" class="btn-action" style="font-size:0.75rem; padding:6px 12px; font-weight:700; display:none;" id="btn-edit-inline-client" onclick="window.toggleInlineClient('EDIT')">✏️ Editar</button>
                                 </div>
                             </div>
-                            <input type="text" list="dl-clientes" id="sel-cliente-text" placeholder="Buscar por nombre o identificación..." required autocomplete="off">
-                            <datalist id="dl-clientes">${clientsList.map(c=>`<option data-id="${c.id}" value="${c.nombre} (CC: ${c.numero_identificacion||'-'})"></option>`).join('')}</datalist>
+                            <div class="cliente-search-wrap">
+                                <input type="text" id="sel-cliente-text" class="cliente-search-input" placeholder="Buscar por nombre o identificación..." required autocomplete="off">
+                                <div id="cliente-search-dropdown" class="cliente-search-dropdown" style="display:none;"></div>
+                            </div>
                             <input type="hidden" name="cliente_id" id="sel-cliente-id" required>
                         </div>
                     </div>
@@ -1382,35 +1444,35 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         const fi=document.getElementById('enc-file-img'),pv=document.getElementById('enc-img-preview');
         if(fi&&pv) fi.onchange=(e)=>{ const f=e.target.files[0]; if(f){ const r=new FileReader(); r.onload=(re)=>{ pv.innerHTML=`<img src="${re.target.result}" style="height:100%;object-fit:cover;border-radius:6px;">`; }; r.readAsDataURL(f); } };
         const inpCli=document.getElementById('sel-cliente-text'),hidCli=document.getElementById('sel-cliente-id');
-        if(inpCli) inpCli.addEventListener('input',(e)=>{ 
-            hidCli.value=''; 
-            let found = false;
-            document.querySelectorAll('#dl-clientes option').forEach(o=>{ 
-                if(o.value===e.target.value){
-                    hidCli.value=o.getAttribute('data-id');
-                    found = true;
-                } 
-            }); 
-            const btnEdit = document.getElementById('btn-edit-inline-client');
-            const addrBox = document.getElementById('address-selection-box');
-            const selAddr = document.getElementById('sel-direccion-envio');
-            
-            if(btnEdit) btnEdit.style.display = found ? 'block' : 'none';
-            
-            if (found) {
-                const cId = hidCli.value;
-                const client = clientsList.find(c => c.id.toString() === cId.toString());
-                addrBox.style.display = 'block';
-                if (client && client.direccion) {
-                    const history = client.direccion.split(' | ').reverse();
-                    selAddr.innerHTML = history.map(d => `<option value="${d}">${d}</option>`).join('');
-                } else {
-                    selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
-                }
-            } else {
-                addrBox.style.display = 'none';
-            }
-        });
+        if (inpCli) {
+            inpCli.addEventListener('input', (e) => {
+                hidCli.value = '';
+                const btnEdit = document.getElementById('btn-edit-inline-client');
+                const addrBox = document.getElementById('address-selection-box');
+                if (btnEdit) btnEdit.style.display = 'none';
+                if (addrBox) addrBox.style.display = 'none';
+                renderClienteDropdown(e.target.value);
+            });
+            inpCli.addEventListener('focus', () => renderClienteDropdown(hidCli.value ? '' : inpCli.value));
+            inpCli.addEventListener('blur', () => {
+                setTimeout(() => { const dd = document.getElementById('cliente-search-dropdown'); if (dd) dd.style.display = 'none'; }, 150);
+            });
+            inpCli.addEventListener('keydown', (e) => {
+                const dropdown = document.getElementById('cliente-search-dropdown');
+                if (!dropdown || dropdown.style.display === 'none') return;
+                const items = dropdown.querySelectorAll('.cliente-search-item');
+                if (!items.length) return;
+                let idx = parseInt(dropdown.dataset.activeIdx || '-1');
+                if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+                else if (e.key === 'Enter') { if (idx >= 0) { e.preventDefault(); window.seleccionarClienteBusqueda(idx); } return; }
+                else if (e.key === 'Escape') { dropdown.style.display = 'none'; return; }
+                else return;
+                dropdown.dataset.activeIdx = String(idx);
+                items.forEach((el, i) => el.classList.toggle('active', i === idx));
+                items[idx]?.scrollIntoView({ block: 'nearest' });
+            });
+        }
         const pSel=document.getElementById('sel-producto-text'),pHide=document.getElementById('sel-producto-id');
         // #26 — en Encargo, "Valor Venta" y "Ganancia Calculada" son
         // unitarios; el saldo/total/ganancia mostrados ya reflejan
@@ -1515,22 +1577,9 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                             // Actualizar en la lista en memoria
                             const dupIdx = clientsList.findIndex(c => c.id.toString() === existing.id.toString());
                             if (dupIdx !== -1) clientsList[dupIdx] = existing; else clientsList.push(existing);
-                            
-                            document.getElementById('sel-cliente-text').value = `${existing.nombre} (CC: ${existing.numero_identificacion||'-'})`;
-                            document.getElementById('sel-cliente-id').value = existing.id;
-                            document.getElementById('btn-edit-inline-client').style.display = 'block';
+
+                            window._seleccionarClienteEnFormulario(existing);
                             document.getElementById('inline-client-form').style.display = 'none';
-                            
-                            // Mostrar dirección directamente sin depender del listener
-                            const addrBox2 = document.getElementById('address-selection-box');
-                            const selAddr2 = document.getElementById('sel-direccion-envio');
-                            addrBox2.style.display = 'block';
-                            if (existing.direccion) {
-                                const history2 = existing.direccion.split(' | ').reverse();
-                                selAddr2.innerHTML = history2.map(d => `<option value="${d}">${d}</option>`).join('');
-                            } else {
-                                selAddr2.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
-                            }
                         }
                         return;
                     } else {
@@ -1539,31 +1588,12 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                         const payload = { id: newId, nombre, numero_identificacion:nid, numero_lead_kommo:kommo, direccion:fullDir, ciudad:ciu, whatsapp:wa, fecha_registro:new Date().toLocaleDateString(), empresa_id: auth.getEmpresaId() };
                         await db.postData('Clientes', payload, 'INSERT');
                         showToast('Cliente creado', 'success');
-                        
-                        // Agregar a la lista en memoria para que el listener lo encuentre
+
+                        // Agregar a la lista en memoria para que el buscador lo encuentre
                         clientsList.push(payload);
-                        
-                        const dl = document.getElementById('dl-clientes');
-                        const optValue = `${nombre} (CC: ${nid||'-'})`;
-                        const newOpt = document.createElement('option');
-                        newOpt.setAttribute('data-id', newId);
-                        newOpt.value = optValue;
-                        dl.appendChild(newOpt);
-                        
-                        document.getElementById('sel-cliente-text').value = optValue;
-                        document.getElementById('sel-cliente-id').value = newId;
-                        document.getElementById('btn-edit-inline-client').style.display = 'block';
+
+                        window._seleccionarClienteEnFormulario(payload);
                         document.getElementById('inline-client-form').style.display = 'none';
-                        
-                        // Mostrar dirección directamente sin depender del listener
-                        const addrBox = document.getElementById('address-selection-box');
-                        const selAddr = document.getElementById('sel-direccion-envio');
-                        addrBox.style.display = 'block';
-                        if (fullDir) {
-                            selAddr.innerHTML = `<option value="${fullDir}">${fullDir}</option>`;
-                        } else {
-                            selAddr.innerHTML = `<option value="">⚠️ Sin dirección - Por favor agrégala</option>`;
-                        }
                     }
                 } else if (mode === 'EDIT') {
                     const selId = document.getElementById('sel-cliente-id').value;
