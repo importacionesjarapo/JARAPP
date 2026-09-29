@@ -996,6 +996,7 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         { key:'precio_usd',  label:'Valor Cotizado (USD)' },
         { key:'peso',        label:'Peso Estimado (Libras)' },
         { key:'trm',         label:'TRM Cotizada' },
+        { key:'ganancia',    label:'Ganancia Calculada (COP)' },
     ];
     // El toggle de cada fila del checklist (arriba) es el único control de
     // visibilidad — se activa/desactiva ahí, no con un botón dentro del campo.
@@ -1032,6 +1033,11 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
             case 'trm': return `<div class="form-group" data-campo-viaje="trm">
                 <label class="form-label">TRM Cotizada</label>
                 <input type="text" id="sale-trm" name="trm_cotizada" placeholder="Ej. 3700" inputmode="numeric" value="${Math.round(window.JARAPP_TRM || 4200)}" required>
+            </div>`;
+            case 'ganancia': return `<div class="form-group" data-campo-viaje="ganancia">
+                <label class="form-label">Ganancia Calculada (COP)</label>
+                <input type="number" id="sale-ganancia-calc" name="ganancia_calculada" min="0" placeholder="0">
+                <p id="sale-ganancia-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
             </div>`;
             default: return '';
         }
@@ -1274,9 +1280,12 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                         <input type="number" name="valor_total_cop" id="sale-total" required min="1" placeholder="0">
                         <p id="sale-total-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
                     </div>
+                    ${esRegistroAgil ? `
+                    <input type="hidden" name="gastos_administrativos_cop" value="${gastosAdminTotal}">
+                    ` : `
                     <div class="form-group">
-                        <label class="form-label">Ganancia Calculada (COP) ${esRegistroAgil ? '<span style="opacity:0.5;font-size:0.75rem;">(opcional)</span>' : '<span style="color:var(--primary-red);">*</span>'}</label>
-                        <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" ${esRegistroAgil ? '' : 'required'} min="0" placeholder="0">
+                        <label class="form-label">Ganancia Calculada (COP) <span style="color:var(--primary-red);">*</span></label>
+                        <input type="number" name="ganancia_calculada" id="sale-ganancia-calc" required min="1" placeholder="0">
                         <p id="sale-ganancia-hint" style="font-size:0.7rem;color:var(--success-green);font-weight:700;margin-top:4px;display:none;"></p>
                     </div>
                     <div class="form-group">
@@ -1285,6 +1294,7 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                         <input type="hidden" name="gastos_administrativos_cop" value="${gastosAdminTotal}">
                         <p style="font-size:0.68rem;opacity:0.5;margin-top:4px;">Suma de conceptos activos en Admin → Calculadora. Se guarda con la venta para poder discriminarlo después.</p>
                     </div>
+                    `}
 
                     <div class="form-group full-width" style="background:var(--brand-magenta-dim); padding:1.5rem; border-radius:16px; border:1px solid var(--brand-magenta-glow); display:grid; grid-template-columns:1fr 1fr; gap:2rem; align-items:center;">
                         <div class="form-group" style="margin:0;">
