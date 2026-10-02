@@ -21,14 +21,17 @@ export const CALC_DEFAULT_CONFIG = {
   // empaque, papelería, suscripciones, etc. Cada uno suma su "valor" al
   // total si está activo=true; ver sumarGastosAdministrativos() abajo.
   conceptosAdmin: [],
+  // gananciaTipo: 'fijo' (usa "ganancia" en COP) o 'porcentaje' (usa
+  // "gananciaPct", calculado sobre el costo ya totalizado). Por defecto
+  // todas arrancan en 'fijo' para no cambiar el comportamiento existente.
   categorias: {
-    calzado:  { label: 'Calzado',   icon: 'footprints', ganancia: 100000, peso: 4 },
-    botas:    { label: 'Botas',     icon: 'mountain',   ganancia: 100000, peso: 6 },
-    infantil: { label: 'Infantil',  icon: 'baby',       ganancia: 70000,  peso: 2 },
-    salud:    { label: 'Salud',     icon: 'pill',       ganancia: 50000,  peso: 2 },
-    ropa:     { label: 'Ropa',      icon: 'shirt',      ganancia: 50000,  peso: 1 },
-    abrigos:  { label: 'Abrigos',   icon: 'layers',     ganancia: 65000,  peso: 4 },
-    general:  { label: 'General',   icon: 'sliders',    ganancia: 50000,  peso: 1 }
+    calzado:  { label: 'Calzado',   icon: 'footprints', ganancia: 100000, gananciaPct: 15, gananciaTipo: 'fijo', peso: 4 },
+    botas:    { label: 'Botas',     icon: 'mountain',   ganancia: 100000, gananciaPct: 15, gananciaTipo: 'fijo', peso: 6 },
+    infantil: { label: 'Infantil',  icon: 'baby',       ganancia: 70000,  gananciaPct: 15, gananciaTipo: 'fijo', peso: 2 },
+    salud:    { label: 'Salud',     icon: 'pill',       ganancia: 50000,  gananciaPct: 15, gananciaTipo: 'fijo', peso: 2 },
+    ropa:     { label: 'Ropa',      icon: 'shirt',      ganancia: 50000,  gananciaPct: 15, gananciaTipo: 'fijo', peso: 1 },
+    abrigos:  { label: 'Abrigos',   icon: 'layers',     ganancia: 65000,  gananciaPct: 15, gananciaTipo: 'fijo', peso: 4 },
+    general:  { label: 'General',   icon: 'sliders',    ganancia: 50000,  gananciaPct: 15, gananciaTipo: 'fijo', peso: 1 }
   }
 };
 
@@ -81,12 +84,17 @@ export function sumarGastosAdministrativos(config) {
 }
 
 // ── Fórmula de cálculo ─────────────────────────────────────────────────────────
+// La ganancia por categoría puede configurarse como valor fijo (COP) o como
+// porcentaje — en ese caso se calcula sobre el costo ya totalizado (tax,
+// comisión, logística, domicilio y gastos administrativos), antes de sumar
+// la ganancia misma. Siempre se devuelven ambas lecturas (ganancia en COP y
+// en %) sin importar cuál de las dos esté configurada, para poder mostrar
+// las dos en la vista de la calculadora.
 function calcular(config, mode, valorUsd, trm, conDomicilio) {
   const conf = config.categorias[mode] || config.categorias.general;
   const nUsd = parseFloat(valorUsd) || 0;
   const nTrm = parseFloat(trm) || 0;
   const peso = parseFloat(conf.peso) || 0;
-  const ganancia = parseFloat(conf.ganancia) || 0;
   const gastosAdmin = sumarGastosAdministrativos(config);
 
   // Costo libra: si hay valorLibraUsd, se multiplica por TRM actual (dinámico)
@@ -99,7 +107,17 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
   const pesosConComis  = pesosBase * (1 + config.comisionTC / 100);
   const costoLogistica = peso * valorLibraCOP;
   const costoEnvio     = conDomicilio ? config.costoDomicilio : 0;
-  const total          = pesosConComis + ganancia + costoLogistica + costoEnvio + gastosAdmin;
+
+  const baseSinGanancia = pesosConComis + costoLogistica + costoEnvio + gastosAdmin;
+  const esPorcentaje = conf.gananciaTipo === 'porcentaje';
+  const gananciaPct = esPorcentaje
+    ? (parseFloat(conf.gananciaPct) || 0)
+    : (baseSinGanancia > 0 ? ((parseFloat(conf.ganancia) || 0) / baseSinGanancia) * 100 : 0);
+  const ganancia = esPorcentaje
+    ? baseSinGanancia * (gananciaPct / 100)
+    : (parseFloat(conf.ganancia) || 0);
+
+  const total = baseSinGanancia + ganancia;
 
   return {
     total,
@@ -107,6 +125,8 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
     comisionVal: pesosConComis - pesosBase,
     logisticaTotal: costoLogistica + costoEnvio,
     ganancia,
+    gananciaPct,
+    esPorcentaje,
     gastosAdmin
   };
 }
@@ -206,7 +226,7 @@ function renderCalcView() {
               </h3>
               <div style="text-align:right;">
                 <span style="font-size:0.65rem;font-weight:800;color:var(--success-green);text-transform:uppercase;letter-spacing:1px;display:block;">Ganancia config.</span>
-                <span style="font-size:0.95rem;font-weight:800;color:var(--text-main);">${formatCOP(res.ganancia)}</span>
+                <span id="calc-ganancia-badge" style="font-size:0.95rem;font-weight:800;color:var(--text-main);">${formatCOP(res.ganancia)} <span style="opacity:0.6;font-weight:700;">(${res.gananciaPct.toFixed(1)}%)</span></span>
               </div>
             </div>
 
@@ -242,13 +262,15 @@ function renderCalcView() {
                     <i data-lucide="banknote"></i>
                   </div>
                   <div>
-                    <span style="font-size:0.8rem;font-weight:700;color:var(--text-main);display:block;">Ganancia ($)</span>
-                    <span style="font-size:0.68rem;color:var(--text-faint);">${isGeneral ? 'Edición rápida' : 'Predefinida'}</span>
+                    <span style="font-size:0.8rem;font-weight:700;color:var(--text-main);display:block;">Ganancia</span>
+                    <span style="font-size:0.68rem;color:var(--text-faint);">${isGeneral ? 'Edición rápida' : 'Predefinida'} · ${res.esPorcentaje ? 'por %' : 'fija'}</span>
                   </div>
                 </div>
                 ${isGeneral
-                  ? `<input type="number" id="calc-gan-gen" value="${cat.ganancia || ''}" class="calc-mini-input" style="width:90px;">`
-                  : `<span class="calc-info-badge">${formatCOP(cat.ganancia)}</span>`
+                  ? (res.esPorcentaje
+                      ? `<input type="number" id="calc-gan-gen-pct" value="${cat.gananciaPct || ''}" step="0.1" class="calc-mini-input" style="width:90px;" placeholder="%">`
+                      : `<input type="number" id="calc-gan-gen" value="${cat.ganancia || ''}" class="calc-mini-input" style="width:90px;">`)
+                  : `<span id="calc-ganancia-info" class="calc-info-badge">${formatCOP(res.ganancia)} (${res.gananciaPct.toFixed(1)}%)</span>`
                 }
               </div>
             </div>
@@ -312,7 +334,7 @@ function buildBreakdown(res, isAdminUser) {
     { label: 'Comisión Pasarela de Pago',  value: res.comisionVal,    color: 'var(--text-muted)' },
     { label: 'Gastos administrativos',     value: res.gastosAdmin,    color: 'var(--warning-orange)' },
     { label: 'Logística (flete + envío)',  value: res.logisticaTotal, color: 'var(--info-blue)' },
-    { label: 'Ganancia configurada',       value: res.ganancia,       color: 'var(--success-green)', bold: true },
+    { label: `Ganancia configurada (${res.gananciaPct.toFixed(1)}%)`, value: res.ganancia, color: 'var(--success-green)', bold: true },
   ];
   const rows = isAdminUser ? allRows : [allRows[3], allRows[4]];
 
@@ -346,9 +368,11 @@ function _bindEvents() {
     const domicilio = document.getElementById('calc-domicilio')?.checked ?? true;
     const pesoGen   = document.getElementById('calc-peso-gen');
     const ganGen    = document.getElementById('calc-gan-gen');
+    const ganGenPct = document.getElementById('calc-gan-gen-pct');
 
-    if (pesoGen) _config.categorias.general.peso     = parseFloat(pesoGen.value) || 0;
-    if (ganGen)  _config.categorias.general.ganancia = parseFloat(ganGen.value)  || 0;
+    if (pesoGen)   _config.categorias.general.peso        = parseFloat(pesoGen.value) || 0;
+    if (ganGen)    _config.categorias.general.ganancia     = parseFloat(ganGen.value)  || 0;
+    if (ganGenPct) _config.categorias.general.gananciaPct  = parseFloat(ganGenPct.value) || 0;
 
     localStorage.setItem('CALC_TRM',       trm);
     localStorage.setItem('CALC_USD',       usd);
@@ -356,10 +380,14 @@ function _bindEvents() {
 
     const res = calcular(_config, _activeMode, usd, trm, domicilio);
 
-    const totalEl     = document.getElementById('calc-total');
-    const breakdownEl = document.getElementById('calc-breakdown');
+    const totalEl      = document.getElementById('calc-total');
+    const breakdownEl  = document.getElementById('calc-breakdown');
+    const ganBadgeEl   = document.getElementById('calc-ganancia-badge');
+    const ganInfoEl    = document.getElementById('calc-ganancia-info');
     if (totalEl)     totalEl.textContent = formatCOP(res.total);
     if (breakdownEl) breakdownEl.innerHTML = buildBreakdown(res, auth.isAdmin());
+    if (ganBadgeEl)  ganBadgeEl.innerHTML = `${formatCOP(res.ganancia)} <span style="opacity:0.6;font-weight:700;">(${res.gananciaPct.toFixed(1)}%)</span>`;
+    if (ganInfoEl)   ganInfoEl.textContent = `${formatCOP(res.ganancia)} (${res.gananciaPct.toFixed(1)}%)`;
 
   };
 
@@ -368,6 +396,7 @@ function _bindEvents() {
   document.getElementById('calc-domicilio')?.addEventListener('change', recalc);
   document.getElementById('calc-peso-gen')?.addEventListener('input', recalc);
   document.getElementById('calc-gan-gen')?.addEventListener('input', recalc);
+  document.getElementById('calc-gan-gen-pct')?.addEventListener('input', recalc);
 
   // Cambio de categoría
   document.querySelectorAll('.calc-cat-btn').forEach(btn => {

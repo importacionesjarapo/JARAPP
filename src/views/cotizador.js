@@ -35,12 +35,6 @@ async function cargarConfig() {
 function calcular(inputs, cfg) {
   const { precioUSD, descuentoUSD, pesoLbs, trm, categoria, conDomicilio, gananciaManual } = inputs;
   const { taxUsa, comisionTC, valorLibraUsd, valorLibra, costoDomicilio, categorias, pctEncargo } = cfg;
-
-  // #24 — en "General" la ganancia no viene de una categoría fija, la
-  // escribe quien cotiza (cada encargo "general" es distinto).
-  const gananciaFija   = categoria === 'general'
-    ? (parseFloat(gananciaManual) || 0)
-    : (parseFloat(categorias?.[categoria]?.ganancia) || 50000);
   const precioFinalUSD = (precioUSD || 0) - (descuentoUSD || 0);
 
   const valorConTax    = precioFinalUSD * (1 + (taxUsa || 7) / 100);
@@ -52,8 +46,27 @@ function calcular(inputs, cfg) {
     : (parseFloat(valorLibra) || 0);
   const costoLogistica = (pesoLbs || 0) * valorLibraCOP;
   const gastosAdmin    = sumarGastosAdministrativos(cfg);
+  const baseSinGanancia = pesosConComis + costoLogistica + gastosAdmin;
 
-  const subtotal       = pesosConComis + gananciaFija + costoLogistica + gastosAdmin;
+  // #24 — en "General" la ganancia no viene de una categoría fija, la
+  // escribe quien cotiza (cada encargo "general" es distinto). Para el
+  // resto, la categoría puede estar configurada en valor fijo o en
+  // porcentaje sobre el costo ya totalizado (ver Admin → Calculadora).
+  const cat = categorias?.[categoria];
+  const esPorcentaje = categoria !== 'general' && cat?.gananciaTipo === 'porcentaje';
+  let gananciaFija, gananciaPct;
+  if (categoria === 'general') {
+    gananciaFija = parseFloat(gananciaManual) || 0;
+    gananciaPct  = baseSinGanancia > 0 ? (gananciaFija / baseSinGanancia) * 100 : 0;
+  } else if (esPorcentaje) {
+    gananciaPct  = parseFloat(cat?.gananciaPct) || 0;
+    gananciaFija = baseSinGanancia * (gananciaPct / 100);
+  } else {
+    gananciaFija = parseFloat(cat?.ganancia) || 50000;
+    gananciaPct  = baseSinGanancia > 0 ? (gananciaFija / baseSinGanancia) * 100 : 0;
+  }
+
+  const subtotal       = baseSinGanancia + gananciaFija;
   const valorProducto  = Math.ceil(subtotal / 1000) * 1000;
   const domicilioCOP   = conDomicilio ? (costoDomicilio || 20000) : 0;
   const totalFinal     = valorProducto + domicilioCOP;
@@ -68,6 +81,8 @@ function calcular(inputs, cfg) {
     costoLogistica: Math.round(costoLogistica),
     gastosAdmin,
     gananciaFija,
+    gananciaPct,
+    esPorcentaje,
     subtotal:       Math.round(subtotal),
     valorProducto,
     domicilioCOP,
@@ -304,7 +319,7 @@ async function generarPDFInterno(f, r, cfg, params) {
             fRow(`+ Comisión TC (${cfg.comisionTC||3}%)`, fmt(r.comisionCOP)),
             fRow(`+ Flete aéreo (${f.pesoLbs} lbs × $${(cfg.valorLibraUsd||3).toFixed(2)} USD)`, fmt(r.costoLogistica)),
             ...(r.gastosAdmin > 0 ? [fRow('+ Gastos administrativos', fmt(r.gastosAdmin))] : []),
-            fRow(`+ Ganancia fija (${catLabel})`, fmt(r.gananciaFija)),
+            fRow(`+ Ganancia ${catLabel} (${r.gananciaPct.toFixed(1)}%)`, fmt(r.gananciaFija)),
             fRow('= Subtotal (pre-redondeo)', fmt(r.subtotal)),
             fRow('VALOR PRODUCTO', fmt(r.valorProducto), { big:true, color:'#0F172A' }),
             ...(r.domicilioCOP > 0 ? [fRow('+ Domicilio Colombia', fmt(r.domicilioCOP), { color:'#E67E22' })] : []),
@@ -532,7 +547,9 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
     const info = document.getElementById('c-cat-info');
     if (info) info.textContent = esGeneral
       ? `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia: la defines abajo para este encargo`
-      : `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia fija: ${fmt(cat.ganancia || 0)}`;
+      : (cat.gananciaTipo === 'porcentaje'
+          ? `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia: ${cat.gananciaPct || 0}% sobre el costo total`
+          : `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia fija: ${fmt(cat.ganancia || 0)}`);
     const ganWrap = document.getElementById('c-ganancia-gen-wrap');
     if (ganWrap) ganWrap.style.display = esGeneral ? 'flex' : 'none';
     recalcular();
@@ -626,7 +643,7 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
           <span style="color:var(--text-main);">+${fmt(r.gastosAdmin)}</span>
         </div>` : ''}
         <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-base);padding:4px 0;">
-          <span style="color:var(--text-muted);">+ Ganancia (${cats[f.categoria]?.label || f.categoria})</span>
+          <span style="color:var(--text-muted);">+ Ganancia (${cats[f.categoria]?.label || f.categoria}, ${r.gananciaPct.toFixed(1)}%)</span>
           <span style="color:var(--text-main);">+${fmt(r.gananciaFija)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;border-bottom:2px solid var(--border-base);padding:4px 0;">

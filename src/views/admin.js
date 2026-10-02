@@ -408,17 +408,22 @@ function buildCalcAdminPanel(config) {
         <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border-base);">
           <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">3. Matriz de Pesos y Ganancias</h3>
         </div>
+        <p style="font-size:0.72rem;color:var(--text-faint);padding:0 1.5rem;margin:-0.6rem 0 1rem;">Para cada categoría, elige si la ganancia se calcula como un valor fijo en pesos o como un porcentaje sobre el costo total ya cargado (tax, comisión, logística, domicilio y gastos administrativos).</p>
         <div class="table-wrapper" style="border-radius:0;border:none;box-shadow:none;">
           <table class="data-table">
             <thead>
               <tr>
                 <th>Categoría</th>
                 <th class="text-center">Peso (Lbs)</th>
+                <th class="text-center">Tipo de Ganancia</th>
                 <th class="text-center">Ganancia (COP)</th>
+                <th class="text-center">Ganancia (%)</th>
               </tr>
             </thead>
             <tbody>
-              ${Object.entries(config.categorias).map(([key, cat]) => `
+              ${Object.entries(config.categorias).map(([key, cat]) => {
+                const esPct = cat.gananciaTipo === 'porcentaje';
+                return `
                 <tr>
                   <td><span style="font-weight:700;">${cat.label}</span></td>
                   <td class="text-center">
@@ -426,11 +431,22 @@ function buildCalcAdminPanel(config) {
                       style="width:80px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
                   </td>
                   <td class="text-center">
-                    <input type="number" id="calc-cat-gan-${key}" value="${cat.ganancia || 0}"
-                      style="width:120px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
+                    <label class="admin-toggle-wrap" style="justify-content:center;">
+                      <input type="checkbox" id="calc-cat-tipo-${key}" ${esPct ? 'checked' : ''} onchange="window.toggleGananciaTipo('${key}', this.checked)" />
+                      <span class="admin-toggle-slider"></span>
+                      <span class="admin-toggle-label" id="calc-cat-tipo-label-${key}">${esPct ? 'Porcentaje' : 'Fijo'}</span>
+                    </label>
+                  </td>
+                  <td class="text-center">
+                    <input type="number" id="calc-cat-gan-${key}" value="${cat.ganancia || 0}" ${esPct ? 'disabled' : ''}
+                      style="width:120px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? 'opacity:0.4;' : ''}">
+                  </td>
+                  <td class="text-center">
+                    <input type="number" id="calc-cat-pct-${key}" value="${cat.gananciaPct || 0}" step="0.1" ${esPct ? '' : 'disabled'}
+                      style="width:90px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? '' : 'opacity:0.4;'}">
                   </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -511,6 +527,18 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
     }
   };
 
+  // Matriz de Pesos y Ganancias: alterna entre ganancia fija (COP) y por
+  // porcentaje para una categoría, habilitando/deshabilitando la columna
+  // que no aplica en vez de perder lo que ya estaba escrito ahí.
+  window.toggleGananciaTipo = (key, esPct) => {
+    const inputGan = document.getElementById(`calc-cat-gan-${key}`);
+    const inputPct = document.getElementById(`calc-cat-pct-${key}`);
+    const label    = document.getElementById(`calc-cat-tipo-label-${key}`);
+    if (inputGan) { inputGan.disabled = esPct; inputGan.style.opacity = esPct ? '0.4' : '1'; }
+    if (inputPct) { inputPct.disabled = !esPct; inputPct.style.opacity = esPct ? '1' : '0.4'; }
+    if (label) label.textContent = esPct ? 'Porcentaje' : 'Fijo';
+  };
+
   window.adminResetPassword = (userId, userName) => {
     openResetPasswordModal(userId, userName);
   };
@@ -570,10 +598,13 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
         categorias: {}
       };
       Object.keys(calcConfig.categorias).forEach(key => {
+        const esPct = document.getElementById(`calc-cat-tipo-${key}`)?.checked || false;
         newConfig.categorias[key] = {
           ...calcConfig.categorias[key],
-          peso:     parseFloat(document.getElementById(`calc-cat-peso-${key}`)?.value) || 0,
-          ganancia: parseFloat(document.getElementById(`calc-cat-gan-${key}`)?.value) || 0,
+          peso:         parseFloat(document.getElementById(`calc-cat-peso-${key}`)?.value) || 0,
+          ganancia:     parseFloat(document.getElementById(`calc-cat-gan-${key}`)?.value) || 0,
+          gananciaPct:  parseFloat(document.getElementById(`calc-cat-pct-${key}`)?.value) || 0,
+          gananciaTipo: esPct ? 'porcentaje' : 'fijo',
         };
       });
       await saveCalcConfig(newConfig);
