@@ -24,6 +24,10 @@ export const CALC_DEFAULT_CONFIG = {
   // gananciaTipo: 'fijo' (usa "ganancia" en COP) o 'porcentaje' (usa
   // "gananciaPct", calculado sobre el costo ya totalizado). Por defecto
   // todas arrancan en 'fijo' para no cambiar el comportamiento existente.
+  // mostrarGanancia: qué ve el usuario en la pantalla principal —
+  // 'pesos' | 'porcentaje' | 'ambas'. El panel de desglose para admins
+  // siempre muestra ambos valores, sin importar este parámetro.
+  mostrarGanancia: 'pesos',
   categorias: {
     calzado:  { label: 'Calzado',   icon: 'footprints', ganancia: 100000, gananciaPct: 15, gananciaTipo: 'fijo', peso: 4 },
     botas:    { label: 'Botas',     icon: 'mountain',   ganancia: 100000, gananciaPct: 15, gananciaTipo: 'fijo', peso: 6 },
@@ -131,6 +135,50 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
   };
 }
 
+// ── Helpers de visualización de ganancia (parámetro mostrarGanancia) ────────────
+function gananciaBadgeHTML(res, modo) {
+  const pesos = formatCOP(res.ganancia);
+  const pct   = `${res.gananciaPct.toFixed(1)}%`;
+  if (modo === 'porcentaje') return pct;
+  if (modo === 'ambas') return `${pesos} <span style="opacity:0.6;font-weight:700;">(${pct})</span>`;
+  return pesos;
+}
+
+function gananciaBoxesHTML(res, cat, isGeneral, modo) {
+  const boxPesos = `
+    <div class="calc-info-box">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;">
+        <div class="calc-info-icon green"><i data-lucide="banknote"></i></div>
+        <div>
+          <span style="font-size:0.8rem;font-weight:700;color:var(--text-main);display:block;">Ganancia ${modo === 'ambas' ? '$' : ''}</span>
+          <span style="font-size:0.68rem;color:var(--text-faint);">${isGeneral ? 'Edición rápida' : 'Predefinida'}</span>
+        </div>
+      </div>
+      ${isGeneral && !res.esPorcentaje
+        ? `<input type="number" id="calc-gan-gen" value="${cat.ganancia || ''}" class="calc-mini-input" style="width:90px;">`
+        : `<span id="calc-ganancia-info" class="calc-info-badge">${formatCOP(res.ganancia)}</span>`
+      }
+    </div>
+  `;
+  const boxPct = `
+    <div class="calc-info-box">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;">
+        <div class="calc-info-icon green"><i data-lucide="percent"></i></div>
+        <div>
+          <span style="font-size:0.8rem;font-weight:700;color:var(--text-main);display:block;">Ganancia %</span>
+          <span style="font-size:0.68rem;color:var(--text-faint);">${isGeneral ? 'Edición rápida' : 'Predefinida'}</span>
+        </div>
+      </div>
+      ${isGeneral && res.esPorcentaje
+        ? `<input type="number" id="calc-gan-gen-pct" value="${cat.gananciaPct || ''}" step="0.1" class="calc-mini-input" style="width:90px;" placeholder="%">`
+        : `<span id="calc-ganancia-info-pct" class="calc-info-badge">${res.gananciaPct.toFixed(1)}%</span>`
+      }
+    </div>
+  `;
+  if (modo === 'ambas') return boxPesos + boxPct;
+  return modo === 'porcentaje' ? boxPct : boxPesos;
+}
+
 // ── Render principal ───────────────────────────────────────────────────────────
 export const renderCalculadora = async (renderLayout, navigateTo) => {
   _renderLayout = renderLayout;
@@ -160,6 +208,7 @@ function renderCalcView() {
   const res     = calcular(_config, _activeMode, usd, trm, domicilio);
   const cat     = _config.categorias[_activeMode];
   const isGeneral = _activeMode === 'general';
+  const modoGanancia = _config.mostrarGanancia || 'pesos';
 
   const catButtons = Object.entries(_config.categorias).map(([key, c]) => `
     <button class="calc-cat-btn ${_activeMode === key ? 'active' : ''}" data-mode="${key}">
@@ -226,7 +275,7 @@ function renderCalcView() {
               </h3>
               <div style="text-align:right;">
                 <span style="font-size:0.65rem;font-weight:800;color:var(--success-green);text-transform:uppercase;letter-spacing:1px;display:block;">Ganancia config.</span>
-                <span id="calc-ganancia-badge" style="font-size:0.95rem;font-weight:800;color:var(--text-main);">${formatCOP(res.ganancia)} <span style="opacity:0.6;font-weight:700;">(${res.gananciaPct.toFixed(1)}%)</span></span>
+                <span id="calc-ganancia-badge" style="font-size:0.95rem;font-weight:800;color:var(--text-main);">${gananciaBadgeHTML(res, modoGanancia)}</span>
               </div>
             </div>
 
@@ -240,7 +289,7 @@ function renderCalcView() {
             </div>
 
             <!-- Peso y Ganancia -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+            <div id="calc-peso-ganancia-grid" style="display:grid;grid-template-columns:${modoGanancia === 'ambas' ? '1fr 1fr 1fr' : '1fr 1fr'};gap:1rem;margin-bottom:1rem;">
               <div class="calc-info-box">
                 <div style="display:flex;align-items:center;gap:10px;flex:1;">
                   <div class="calc-info-icon blue">
@@ -256,23 +305,7 @@ function renderCalcView() {
                   : `<span class="calc-info-badge">${cat.peso} Lbs</span>`
                 }
               </div>
-              <div class="calc-info-box">
-                <div style="display:flex;align-items:center;gap:10px;flex:1;">
-                  <div class="calc-info-icon green">
-                    <i data-lucide="banknote"></i>
-                  </div>
-                  <div>
-                    <span style="font-size:0.8rem;font-weight:700;color:var(--text-main);display:block;">Ganancia</span>
-                    <span style="font-size:0.68rem;color:var(--text-faint);">${isGeneral ? 'Edición rápida' : 'Predefinida'} · ${res.esPorcentaje ? 'por %' : 'fija'}</span>
-                  </div>
-                </div>
-                ${isGeneral
-                  ? (res.esPorcentaje
-                      ? `<input type="number" id="calc-gan-gen-pct" value="${cat.gananciaPct || ''}" step="0.1" class="calc-mini-input" style="width:90px;" placeholder="%">`
-                      : `<input type="number" id="calc-gan-gen" value="${cat.ganancia || ''}" class="calc-mini-input" style="width:90px;">`)
-                  : `<span id="calc-ganancia-info" class="calc-info-badge">${formatCOP(res.ganancia)} (${res.gananciaPct.toFixed(1)}%)</span>`
-                }
-              </div>
+              ${gananciaBoxesHTML(res, cat, isGeneral, modoGanancia)}
             </div>
 
             <!-- Toggle domicilio -->
@@ -329,12 +362,17 @@ function renderCalcView() {
 
 // ── Desglose de costos ─────────────────────────────────────────────────────────
 function buildBreakdown(res, isAdminUser) {
+  // El porcentaje de ganancia solo se revela a administradores — a un
+  // usuario sin ese permiso se le muestra el mismo rótulo pero sin el %.
+  const gananciaLabel = isAdminUser
+    ? `Ganancia configurada (${res.gananciaPct.toFixed(1)}%)`
+    : 'Ganancia configurada';
   const allRows = [
     { label: 'Costo Base + Tax USA',       value: res.pesosConTax,    color: 'var(--text-muted)' },
     { label: 'Comisión Pasarela de Pago',  value: res.comisionVal,    color: 'var(--text-muted)' },
     { label: 'Gastos administrativos',     value: res.gastosAdmin,    color: 'var(--warning-orange)' },
     { label: 'Logística (flete + envío)',  value: res.logisticaTotal, color: 'var(--info-blue)' },
-    { label: `Ganancia configurada (${res.gananciaPct.toFixed(1)}%)`, value: res.ganancia, color: 'var(--success-green)', bold: true },
+    { label: gananciaLabel, value: res.ganancia, color: 'var(--success-green)', bold: true },
   ];
   const rows = isAdminUser ? allRows : [allRows[3], allRows[4]];
 
@@ -379,15 +417,18 @@ function _bindEvents() {
     localStorage.setItem('CALC_DOMICILIO', domicilio);
 
     const res = calcular(_config, _activeMode, usd, trm, domicilio);
+    const modoGanancia = _config.mostrarGanancia || 'pesos';
 
     const totalEl      = document.getElementById('calc-total');
     const breakdownEl  = document.getElementById('calc-breakdown');
     const ganBadgeEl   = document.getElementById('calc-ganancia-badge');
     const ganInfoEl    = document.getElementById('calc-ganancia-info');
+    const ganInfoPctEl = document.getElementById('calc-ganancia-info-pct');
     if (totalEl)     totalEl.textContent = formatCOP(res.total);
     if (breakdownEl) breakdownEl.innerHTML = buildBreakdown(res, auth.isAdmin());
-    if (ganBadgeEl)  ganBadgeEl.innerHTML = `${formatCOP(res.ganancia)} <span style="opacity:0.6;font-weight:700;">(${res.gananciaPct.toFixed(1)}%)</span>`;
-    if (ganInfoEl)   ganInfoEl.textContent = `${formatCOP(res.ganancia)} (${res.gananciaPct.toFixed(1)}%)`;
+    if (ganBadgeEl)  ganBadgeEl.innerHTML = gananciaBadgeHTML(res, modoGanancia);
+    if (ganInfoEl)   ganInfoEl.textContent = formatCOP(res.ganancia);
+    if (ganInfoPctEl) ganInfoPctEl.textContent = `${res.gananciaPct.toFixed(1)}%`;
 
   };
 

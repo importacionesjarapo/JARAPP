@@ -545,10 +545,14 @@ export const renderCotizador = async (renderLayout, navigateTo) => {
     const esGeneral = key === 'general';
     if (inPeso) inPeso.value = cat.peso || '';
     const info = document.getElementById('c-cat-info');
+    // El % de ganancia solo se revela a administradores — para el resto
+    // de usuarios se omite el número y se deja un texto genérico.
     if (info) info.textContent = esGeneral
       ? `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia: la defines abajo para este encargo`
       : (cat.gananciaTipo === 'porcentaje'
-          ? `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia: ${cat.gananciaPct || 0}% sobre el costo total`
+          ? (auth.isAdmin()
+              ? `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia: ${cat.gananciaPct || 0}% sobre el costo total`
+              : `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia incluida en el cálculo del total`)
           : `Peso sugerido: ${cat.peso || '—'} lbs · Ganancia fija: ${fmt(cat.ganancia || 0)}`);
     const ganWrap = document.getElementById('c-ganancia-gen-wrap');
     if (ganWrap) ganWrap.style.display = esGeneral ? 'flex' : 'none';

@@ -390,6 +390,25 @@ function buildCalcAdminPanel(config) {
         </div>
       </div>
 
+      <!-- Visualización de Ganancia en la Calculadora -->
+      <div class="glass-card" style="padding:1.5rem;">
+        <h3 style="font-size:0.85rem;font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">Visualización de Ganancia en la Calculadora</h3>
+        <p style="font-size:0.72rem;color:var(--text-faint);margin-bottom:1rem;">Elige qué ve el usuario en la pantalla principal de la Calculadora y el Cotizador. Los administradores siempre ven el detalle completo (pesos y %) en el panel de desglose, sin importar esta opción.</p>
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-main);">
+            <input type="radio" name="calc-mostrar-ganancia" id="calc-mostrar-ganancia-pesos" value="pesos" ${(config.mostrarGanancia || 'pesos') === 'pesos' ? 'checked' : ''}>
+            Ganancia en pesos
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-main);">
+            <input type="radio" name="calc-mostrar-ganancia" id="calc-mostrar-ganancia-porcentaje" value="porcentaje" ${config.mostrarGanancia === 'porcentaje' ? 'checked' : ''}>
+            Ganancia en porcentaje
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-main);">
+            <input type="radio" name="calc-mostrar-ganancia" id="calc-mostrar-ganancia-ambas" value="ambas" ${config.mostrarGanancia === 'ambas' ? 'checked' : ''}>
+            Ambas (dos cuadros)
+          </label>
+        </div>
+      </div>
 
       <!-- Gastos administrativos (#15/#16) -->
       <div class="glass-card" style="padding:1.5rem;">
@@ -594,6 +613,7 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
         valorLibraUsd,
         valorLibra:     valorLibraUsd * refTrm,   // COP calculado = USD × TRM referencia
         costoDomicilio: parseFloat(document.getElementById('calc-cfg-costoDomicilio')?.value) || 0,
+        mostrarGanancia: document.querySelector('input[name="calc-mostrar-ganancia"]:checked')?.value || 'pesos',
         conceptosAdmin: _conceptosDraft.filter(c => c.nombre.trim()),
         categorias: {}
       };
