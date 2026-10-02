@@ -186,6 +186,12 @@ function gananciaBoxesHTML(res, cat, isGeneral, modo, editable) {
     </div>
   `;
   if (modo === 'ambas') return boxPesos + boxPct;
+  // Si es editable, se muestra siempre el cuadro que coincide con el tipo
+  // de ganancia real de la categoría (fijo → pesos, porcentaje → %), sin
+  // importar el modo de visualización elegido — de lo contrario alguien
+  // con permiso de editar podía quedarse sin ningún campo para hacerlo
+  // (p. ej. modo "Pesos" + categoría configurada en "Porcentaje").
+  if (editable) return res.esPorcentaje ? boxPct : boxPesos;
   return modo === 'porcentaje' ? boxPct : boxPesos;
 }
 
