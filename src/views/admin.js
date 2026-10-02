@@ -269,8 +269,10 @@ function buildConceptosAdminRows() {
             <input type="number" id="concepto-valor-${i}" value="${c.valor || 0}" min="0"
               style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px 9px 24px;border-radius:10px;font-weight:700;outline:none;">
           </div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-faint);white-space:nowrap;cursor:pointer;">
-            <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}><span>Activo</span>
+          <label class="admin-toggle-wrap">
+            <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}>
+            <span class="admin-toggle-slider"></span>
+            <span class="admin-toggle-label">Activo</span>
           </label>
           <button type="button" class="concepto-admin-del-btn" data-idx="${i}" title="Eliminar concepto"
             style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;
