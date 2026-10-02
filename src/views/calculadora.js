@@ -90,10 +90,12 @@ export function sumarGastosAdministrativos(config) {
 // ── Fórmula de cálculo ─────────────────────────────────────────────────────────
 // La ganancia por categoría puede configurarse como valor fijo (COP) o como
 // porcentaje — en ese caso se calcula sobre el costo ya totalizado (tax,
-// comisión, logística, domicilio y gastos administrativos), antes de sumar
-// la ganancia misma. Siempre se devuelven ambas lecturas (ganancia en COP y
-// en %) sin importar cuál de las dos esté configurada, para poder mostrar
-// las dos en la vista de la calculadora.
+// comisión, logística y gastos administrativos), antes de sumar la ganancia
+// misma. El domicilio NO cuenta para esta base: es un costo de paso que se
+// cobra tal cual, sin margen, y se suma al total después de la ganancia.
+// Siempre se devuelven ambas lecturas (ganancia en COP y en %) sin importar
+// cuál de las dos esté configurada, para poder mostrar las dos en la vista
+// de la calculadora.
 function calcular(config, mode, valorUsd, trm, conDomicilio) {
   const conf = config.categorias[mode] || config.categorias.general;
   const nUsd = parseFloat(valorUsd) || 0;
@@ -112,7 +114,10 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
   const costoLogistica = peso * valorLibraCOP;
   const costoEnvio     = conDomicilio ? config.costoDomicilio : 0;
 
-  const baseSinGanancia = pesosConComis + costoLogistica + costoEnvio + gastosAdmin;
+  // El domicilio es un costo de paso (se cobra tal cual, sin margen) — se
+  // excluye de la base sobre la que se calcula la ganancia por % y se suma
+  // al final, después de la ganancia.
+  const baseSinGanancia = pesosConComis + costoLogistica + gastosAdmin;
   const esPorcentaje = conf.gananciaTipo === 'porcentaje';
   const gananciaPct = esPorcentaje
     ? (parseFloat(conf.gananciaPct) || 0)
@@ -121,7 +126,7 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
     ? baseSinGanancia * (gananciaPct / 100)
     : (parseFloat(conf.ganancia) || 0);
 
-  const total = baseSinGanancia + ganancia;
+  const total = baseSinGanancia + ganancia + costoEnvio;
 
   return {
     total,
@@ -144,17 +149,22 @@ function gananciaBadgeHTML(res, modo) {
   return pesos;
 }
 
-function gananciaBoxesHTML(res, cat, isGeneral, modo) {
+// editable: además de la categoría "general" (siempre editable, la define
+// quien cotiza), un administrador puede ajustar la ganancia de cualquier
+// categoría predefinida en el momento, para ganar más o menos en una
+// cotización puntual — sin tocar la configuración guardada en Admin.
+function gananciaBoxesHTML(res, cat, isGeneral, modo, editable) {
+  const etiqueta = isGeneral ? 'Edición rápida' : (editable ? 'Editable' : 'Predefinida');
   const boxPesos = `
     <div class="calc-info-box">
       <div style="display:flex;align-items:center;gap:10px;flex:1;">
         <div class="calc-info-icon green"><i data-lucide="banknote"></i></div>
         <div>
           <span style="font-size:0.8rem;font-weight:700;color:var(--text-main);display:block;">Ganancia ${modo === 'ambas' ? '$' : ''}</span>
-          <span style="font-size:0.68rem;color:var(--text-faint);">${isGeneral ? 'Edición rápida' : 'Predefinida'}</span>
+          <span style="font-size:0.68rem;color:var(--text-faint);">${etiqueta}</span>
         </div>
       </div>
-      ${isGeneral && !res.esPorcentaje
+      ${editable && !res.esPorcentaje
         ? `<input type="number" id="calc-gan-gen" value="${cat.ganancia || ''}" class="calc-mini-input" style="width:90px;">`
         : `<span id="calc-ganancia-info" class="calc-info-badge">${formatCOP(res.ganancia)}</span>`
       }
@@ -166,10 +176,10 @@ function gananciaBoxesHTML(res, cat, isGeneral, modo) {
         <div class="calc-info-icon green"><i data-lucide="percent"></i></div>
         <div>
           <span style="font-size:0.8rem;font-weight:700;color:var(--text-main);display:block;">Ganancia %</span>
-          <span style="font-size:0.68rem;color:var(--text-faint);">${isGeneral ? 'Edición rápida' : 'Predefinida'}</span>
+          <span style="font-size:0.68rem;color:var(--text-faint);">${etiqueta}</span>
         </div>
       </div>
-      ${isGeneral && res.esPorcentaje
+      ${editable && res.esPorcentaje
         ? `<input type="number" id="calc-gan-gen-pct" value="${cat.gananciaPct || ''}" step="0.1" class="calc-mini-input" style="width:90px;" placeholder="%">`
         : `<span id="calc-ganancia-info-pct" class="calc-info-badge">${res.gananciaPct.toFixed(1)}%</span>`
       }
@@ -305,7 +315,7 @@ function renderCalcView() {
                   : `<span class="calc-info-badge">${cat.peso} Lbs</span>`
                 }
               </div>
-              ${gananciaBoxesHTML(res, cat, isGeneral, modoGanancia)}
+              ${gananciaBoxesHTML(res, cat, isGeneral, modoGanancia, isGeneral || isAdmin)}
             </div>
 
             <!-- Toggle domicilio -->
@@ -407,10 +417,13 @@ function _bindEvents() {
     const pesoGen   = document.getElementById('calc-peso-gen');
     const ganGen    = document.getElementById('calc-gan-gen');
     const ganGenPct = document.getElementById('calc-gan-gen-pct');
+    // ganGen/ganGenPct pueden pertenecer a la categoría activa (no solo a
+    // "general") cuando el usuario es admin — ver gananciaBoxesHTML().
+    const catActiva = _config.categorias[_activeMode];
 
-    if (pesoGen)   _config.categorias.general.peso        = parseFloat(pesoGen.value) || 0;
-    if (ganGen)    _config.categorias.general.ganancia     = parseFloat(ganGen.value)  || 0;
-    if (ganGenPct) _config.categorias.general.gananciaPct  = parseFloat(ganGenPct.value) || 0;
+    if (pesoGen)   catActiva.peso        = parseFloat(pesoGen.value) || 0;
+    if (ganGen)    catActiva.ganancia    = parseFloat(ganGen.value)  || 0;
+    if (ganGenPct) catActiva.gananciaPct = parseFloat(ganGenPct.value) || 0;
 
     localStorage.setItem('CALC_TRM',       trm);
     localStorage.setItem('CALC_USD',       usd);
