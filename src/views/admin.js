@@ -263,14 +263,14 @@ function buildConceptosAdminRows() {
       ${_conceptosDraft.map((c, i) => `
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="text" id="concepto-nombre-${i}" value="${c.nombre || ''}" placeholder="Ej: Bolsa de empaque"
-            style="flex:1;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px;border-radius:10px;font-weight:600;outline:none;">
-          <div style="position:relative;width:150px;">
+            style="flex:1;min-width:0;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px;border-radius:10px;font-weight:600;outline:none;">
+          <div style="position:relative;width:150px;flex-shrink:0;">
             <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:0.85rem;">$</span>
             <input type="number" id="concepto-valor-${i}" value="${c.valor || 0}" min="0"
               style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px 9px 24px;border-radius:10px;font-weight:700;outline:none;">
           </div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-faint);white-space:nowrap;cursor:pointer;">
-            <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}> Activo
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-faint);white-space:nowrap;cursor:pointer;flex-shrink:0;">
+            <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}><span>Activo</span>
           </label>
           <button type="button" class="concepto-admin-del-btn" data-idx="${i}" title="Eliminar concepto"
             style="width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
