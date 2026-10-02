@@ -393,20 +393,29 @@ function buildCalcAdminPanel(config) {
       <!-- Visualización de Ganancia en la Calculadora -->
       <div class="glass-card" style="padding:1.5rem;">
         <h3 style="font-size:0.85rem;font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">Visualización de Ganancia en la Calculadora</h3>
-        <p style="font-size:0.72rem;color:var(--text-faint);margin-bottom:1rem;">Elige qué ve el usuario en la pantalla principal de la Calculadora y el Cotizador. Los administradores siempre ven el detalle completo (pesos y %) en el panel de desglose, sin importar esta opción.</p>
-        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-main);">
-            <input type="radio" name="calc-mostrar-ganancia" id="calc-mostrar-ganancia-pesos" value="pesos" ${(config.mostrarGanancia || 'pesos') === 'pesos' ? 'checked' : ''}>
-            Ganancia en pesos
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-main);">
-            <input type="radio" name="calc-mostrar-ganancia" id="calc-mostrar-ganancia-porcentaje" value="porcentaje" ${config.mostrarGanancia === 'porcentaje' ? 'checked' : ''}>
-            Ganancia en porcentaje
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-main);">
-            <input type="radio" name="calc-mostrar-ganancia" id="calc-mostrar-ganancia-ambas" value="ambas" ${config.mostrarGanancia === 'ambas' ? 'checked' : ''}>
-            Ambas (dos cuadros)
-          </label>
+        <p style="font-size:0.72rem;color:var(--text-faint);margin-bottom:1rem;">Elige qué ve el usuario en la pantalla principal de la Calculadora y el Cotizador. Los administradores siempre ven el detalle completo (pesos y %) en el panel de desglose, sin importar esta opción. Solo una opción puede estar activa.</p>
+        <div class="admin-perms-grid">
+          <div class="admin-perm-row">
+            <span class="admin-perm-label">Ganancia en pesos</span>
+            <label class="admin-toggle-wrap">
+              <input type="checkbox" id="calc-mostrar-ganancia-pesos" ${(config.mostrarGanancia || 'pesos') === 'pesos' ? 'checked' : ''} onchange="window.toggleMostrarGanancia('pesos', this.checked)" />
+              <span class="admin-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="admin-perm-row">
+            <span class="admin-perm-label">Ganancia en porcentaje</span>
+            <label class="admin-toggle-wrap">
+              <input type="checkbox" id="calc-mostrar-ganancia-porcentaje" ${config.mostrarGanancia === 'porcentaje' ? 'checked' : ''} onchange="window.toggleMostrarGanancia('porcentaje', this.checked)" />
+              <span class="admin-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="admin-perm-row">
+            <span class="admin-perm-label">Ambas (2 cuadros: $ y %)</span>
+            <label class="admin-toggle-wrap">
+              <input type="checkbox" id="calc-mostrar-ganancia-ambas" ${config.mostrarGanancia === 'ambas' ? 'checked' : ''} onchange="window.toggleMostrarGanancia('ambas', this.checked)" />
+              <span class="admin-toggle-slider"></span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -558,6 +567,21 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
     if (label) label.textContent = esPct ? 'Porcentaje' : 'Fijo';
   };
 
+  // Visualización de Ganancia: switches mutuamente excluyentes — activar
+  // uno apaga los otros dos; no se permite apagar el único activo.
+  window.toggleMostrarGanancia = (key, checked) => {
+    const keys = ['pesos', 'porcentaje', 'ambas'];
+    if (!checked) {
+      const input = document.getElementById(`calc-mostrar-ganancia-${key}`);
+      if (input) input.checked = true;
+      return;
+    }
+    keys.forEach(k => {
+      const input = document.getElementById(`calc-mostrar-ganancia-${k}`);
+      if (input) input.checked = (k === key);
+    });
+  };
+
   window.adminResetPassword = (userId, userName) => {
     openResetPasswordModal(userId, userName);
   };
@@ -613,7 +637,7 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
         valorLibraUsd,
         valorLibra:     valorLibraUsd * refTrm,   // COP calculado = USD × TRM referencia
         costoDomicilio: parseFloat(document.getElementById('calc-cfg-costoDomicilio')?.value) || 0,
-        mostrarGanancia: document.querySelector('input[name="calc-mostrar-ganancia"]:checked')?.value || 'pesos',
+        mostrarGanancia: ['pesos', 'porcentaje', 'ambas'].find(k => document.getElementById(`calc-mostrar-ganancia-${k}`)?.checked) || 'pesos',
         conceptosAdmin: _conceptosDraft.filter(c => c.nombre.trim()),
         categorias: {}
       };
