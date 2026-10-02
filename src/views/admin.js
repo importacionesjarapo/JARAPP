@@ -272,7 +272,11 @@ function buildConceptosAdminRows() {
           <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-faint);white-space:nowrap;cursor:pointer;">
             <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}> Activo
           </label>
-          <button type="button" class="concepto-admin-del-btn" data-idx="${i}" title="Eliminar" style="background:none;border:none;color:var(--primary-red);cursor:pointer;font-size:1.1rem;padding:4px;">🗑</button>
+          <button type="button" class="concepto-admin-del-btn" data-idx="${i}" title="Eliminar concepto"
+            style="width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+              background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--primary-red);
+              border-radius:10px;cursor:pointer;font-size:1rem;transition:background 0.15s,transform 0.15s;"
+            onmouseover="this.style.background='rgba(230,57,70,0.2)'" onmouseout="this.style.background='rgba(230,57,70,0.1)'">🗑️</button>
         </div>
       `).join('')}
     </div>
