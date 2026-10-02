@@ -133,6 +133,7 @@ function calcular(config, mode, valorUsd, trm, conDomicilio) {
     pesosConTax: pesosBase,
     comisionVal: pesosConComis - pesosBase,
     logisticaTotal: costoLogistica + costoEnvio,
+    baseSinGanancia,
     ganancia,
     gananciaPct,
     esPorcentaje,
@@ -150,11 +151,21 @@ function gananciaBadgeHTML(res, modo) {
 }
 
 // editable: además de la categoría "general" (siempre editable, la define
-// quien cotiza), un administrador puede ajustar la ganancia de cualquier
-// categoría predefinida en el momento, para ganar más o menos en una
-// cotización puntual — sin tocar la configuración guardada en Admin.
-function gananciaBoxesHTML(res, cat, isGeneral, modo, editable) {
+// quien cotiza), un administrador (o quien tenga el permiso) puede ajustar
+// la ganancia de cualquier categoría predefinida en el momento, para ganar
+// más o menos en una cotización puntual — sin tocar la configuración
+// guardada en Admin. Qué cuadro(s) se muestran lo decide "modo" (el
+// parámetro de visualización). Cuando solo hay un cuadro (pesos o %) ese
+// cuadro es editable en su propia unidad sin importar el tipo nativo de la
+// categoría, convirtiendo hacia la otra unidad al guardar (ver recalc() en
+// _bindEvents). Cuando se muestran los dos ("ambas") solo uno puede ser el
+// campo editable real — el que coincide con el tipo nativo de la
+// categoría— para no tener dos inputs editando el mismo número a la vez;
+// el otro queda como referencia de solo lectura.
+function gananciaBoxesHTML(res, isGeneral, modo, editable) {
   const etiqueta = isGeneral ? 'Edición rápida' : (editable ? 'Editable' : 'Predefinida');
+  const editablePesos = editable && (modo !== 'ambas' || !res.esPorcentaje);
+  const editablePct   = editable && (modo !== 'ambas' || res.esPorcentaje);
   const boxPesos = `
     <div class="calc-info-box">
       <div style="display:flex;align-items:center;gap:10px;flex:1;">
@@ -164,8 +175,8 @@ function gananciaBoxesHTML(res, cat, isGeneral, modo, editable) {
           <span style="font-size:0.68rem;color:var(--text-faint);">${etiqueta}</span>
         </div>
       </div>
-      ${editable && !res.esPorcentaje
-        ? `<input type="number" id="calc-gan-gen" value="${cat.ganancia || ''}" class="calc-mini-input" style="width:90px;">`
+      ${editablePesos
+        ? `<input type="number" id="calc-gan-gen" value="${Math.round(res.ganancia) || ''}" class="calc-mini-input" style="width:90px;">`
         : `<span id="calc-ganancia-info" class="calc-info-badge">${formatCOP(res.ganancia)}</span>`
       }
     </div>
@@ -179,19 +190,13 @@ function gananciaBoxesHTML(res, cat, isGeneral, modo, editable) {
           <span style="font-size:0.68rem;color:var(--text-faint);">${etiqueta}</span>
         </div>
       </div>
-      ${editable && res.esPorcentaje
-        ? `<input type="number" id="calc-gan-gen-pct" value="${cat.gananciaPct || ''}" step="0.1" class="calc-mini-input" style="width:90px;" placeholder="%">`
+      ${editablePct
+        ? `<input type="number" id="calc-gan-gen-pct" value="${res.gananciaPct ? res.gananciaPct.toFixed(1) : ''}" step="0.1" class="calc-mini-input" style="width:90px;" placeholder="%">`
         : `<span id="calc-ganancia-info-pct" class="calc-info-badge">${res.gananciaPct.toFixed(1)}%</span>`
       }
     </div>
   `;
   if (modo === 'ambas') return boxPesos + boxPct;
-  // Si es editable, se muestra siempre el cuadro que coincide con el tipo
-  // de ganancia real de la categoría (fijo → pesos, porcentaje → %), sin
-  // importar el modo de visualización elegido — de lo contrario alguien
-  // con permiso de editar podía quedarse sin ningún campo para hacerlo
-  // (p. ej. modo "Pesos" + categoría configurada en "Porcentaje").
-  if (editable) return res.esPorcentaje ? boxPct : boxPesos;
   return modo === 'porcentaje' ? boxPct : boxPesos;
 }
 
@@ -326,7 +331,7 @@ function renderCalcView() {
                   : `<span class="calc-info-badge">${cat.peso} Lbs</span>`
                 }
               </div>
-              ${gananciaBoxesHTML(res, cat, isGeneral, modoGanancia, isGeneral || puedeEditarGanancia)}
+              ${gananciaBoxesHTML(res, isGeneral, modoGanancia, isGeneral || puedeEditarGanancia)}
             </div>
 
             <!-- Toggle domicilio -->
@@ -429,12 +434,31 @@ function _bindEvents() {
     const ganGen    = document.getElementById('calc-gan-gen');
     const ganGenPct = document.getElementById('calc-gan-gen-pct');
     // ganGen/ganGenPct pueden pertenecer a la categoría activa (no solo a
-    // "general") cuando el usuario es admin — ver gananciaBoxesHTML().
+    // "general") cuando el usuario tiene permiso de editar — ver
+    // gananciaBoxesHTML(). Solo existe como <input> uno u otro a la vez
+    // salvo cuando el modo de visualización es "ambas", donde el que no
+    // coincide con el tipo nativo de la categoría es de solo lectura — así
+    // que nunca hay ambigüedad sobre cuál acaba de teclear el usuario.
     const catActiva = _config.categorias[_activeMode];
 
-    if (pesoGen)   catActiva.peso        = parseFloat(pesoGen.value) || 0;
-    if (ganGen)    catActiva.ganancia    = parseFloat(ganGen.value)  || 0;
-    if (ganGenPct) catActiva.gananciaPct = parseFloat(ganGenPct.value) || 0;
+    if (pesoGen) catActiva.peso = parseFloat(pesoGen.value) || 0;
+
+    if (ganGen || ganGenPct) {
+      // Base sin ganancia: no depende de ganancia/gananciaPct, así que se
+      // puede calcular antes de aplicar la edición y usarse para convertir
+      // entre pesos y % y mantener ambos campos sincronizados entre sí,
+      // sin importar en qué unidad haya tecleado el usuario.
+      const baseActual = calcular(_config, _activeMode, usd, trm, domicilio).baseSinGanancia;
+      if (ganGen) {
+        const nuevaGanancia = parseFloat(ganGen.value) || 0;
+        catActiva.ganancia    = nuevaGanancia;
+        catActiva.gananciaPct = baseActual > 0 ? (nuevaGanancia / baseActual) * 100 : 0;
+      } else {
+        const nuevoPct = parseFloat(ganGenPct.value) || 0;
+        catActiva.gananciaPct = nuevoPct;
+        catActiva.ganancia    = baseActual * (nuevoPct / 100);
+      }
+    }
 
     localStorage.setItem('CALC_TRM',       trm);
     localStorage.setItem('CALC_USD',       usd);
