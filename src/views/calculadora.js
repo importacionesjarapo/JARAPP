@@ -212,6 +212,11 @@ export const renderCalculadora = async (renderLayout, navigateTo) => {
 function renderCalcView() {
   const isAdmin  = auth.isAdmin();
   const canEdit  = auth.canEdit('calculadora');
+  // Admins siempre pueden editar la ganancia de cualquier categoría (atajo
+  // por rol, para que no dependa de que su perfil ya tenga el permiso
+  // guardado); cualquier otro usuario necesita el permiso asignado desde
+  // Admin → Usuarios.
+  const puedeEditarGanancia = isAdmin || auth.canAccess('feat_calc_editar_ganancia');
   const trm     = parseFloat(localStorage.getItem('CALC_TRM') || window.JARAPP_TRM || 4200);
   const usd     = parseFloat(localStorage.getItem('CALC_USD') || '0') || 0;
   const domicilio = localStorage.getItem('CALC_DOMICILIO') !== 'false';
@@ -315,7 +320,7 @@ function renderCalcView() {
                   : `<span class="calc-info-badge">${cat.peso} Lbs</span>`
                 }
               </div>
-              ${gananciaBoxesHTML(res, cat, isGeneral, modoGanancia, isGeneral || isAdmin)}
+              ${gananciaBoxesHTML(res, cat, isGeneral, modoGanancia, isGeneral || puedeEditarGanancia)}
             </div>
 
             <!-- Toggle domicilio -->
