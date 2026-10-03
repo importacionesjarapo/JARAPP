@@ -606,13 +606,19 @@ nav {
   align-items: center;
   justify-content: center;
   padding: 5px 14px;
-  border-radius: 20px;
+  border-radius: 14px;
   font-size: 0.64rem;
   font-weight: 700;
   color: #ffffff;
-  white-space: nowrap;
-  line-height: 1.5;
-  letter-spacing: 0.4px;
+  /* Los nombres de fase/estado son texto libre y varían mucho en largo
+     ("Comprado (Esperando Tracking Local USA)"). Antes el badge tenía
+     nowrap + max-width sin overflow:hidden, así que el texto largo se
+     salía visualmente de la píldora en vez de quedar contenido. Ahora
+     envuelve a 2 líneas dentro del propio badge — nunca se desborda. */
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+  letter-spacing: 0.3px;
   max-width: 220px;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
