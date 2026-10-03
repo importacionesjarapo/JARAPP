@@ -1119,6 +1119,20 @@ input:focus, select:focus, textarea:focus {
 }
 .pending-item:hover { background: var(--surface-3); }
 
+.purchase-pending-group { margin-bottom: 1.1rem; }
+.purchase-pending-group:last-child { margin-bottom: 0; }
+.purchase-pending-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+.purchase-pending-group-header strong {
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+
 /* ── KPI Strip Compact ── */
 .kpi-strip {
   display: grid;

@@ -24,6 +24,13 @@ let _purFiltered = [];
 // Compras USA se divide en 2 submódulos: "general" (Stock + encargos de
 // Compras Online) y "viaje" (solo lo que viene de ventas "En Viaje USA").
 let _purSubmodulo = 'general';
+// Agrupación de la alerta de pendientes: por tienda o por marca del
+// producto, para comprar de una sola vez todo lo pendiente de un mismo
+// lugar. _pendientesActivosActual se mantiene sincronizado con el
+// submódulo activo para poder re-renderizar el agrupamiento sin recalcular
+// todo el módulo.
+let _purPendingGroupBy = 'tienda';
+let _pendientesActivosActual = [];
 
 // ─── Helper: format date label ─────────────────────────────────────────────────
 const formatDateLabel = (dateStr) => {
@@ -54,32 +61,61 @@ const fasePriority = (fase) => {
     return 10;
 };
 
+// ─── Agrupa pendientes por tienda o marca del producto vinculado — así se
+// puede ir una sola vez a una tienda/marca y comprar todo lo pendiente ───
+const agruparPendientes = (pendientes, productos, criterio) => {
+    const groups = {};
+    pendientes.forEach(p => {
+        const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
+        const key = ((criterio === 'marca' ? prod.marca : prod.tienda_cotizacion) || '').trim() || 'Sin definir';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+    });
+    return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+};
+
 // ─── Render: Alerta de pendientes (siempre visible) ────────────────────────────
-const renderPendingAlert = (pendientes, productos) => {
+const renderPendingAlert = (pendientes, productos, criterio = 'tienda') => {
     if (!pendientes || pendientes.length === 0) return '';
+    const grupos = agruparPendientes(pendientes, productos, criterio);
+    const etiquetaCriterio = criterio === 'marca' ? '🏷️ Marca' : '🏪 Tienda';
+
     return `
     <div class="purchase-pending-alert">
         <h4>
             ⚠️ Encargos pendientes de compra
             <span class="pending-badge">${pendientes.length}</span>
         </h4>
-        <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
-            ${pendientes.map(p => {
-                const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
-                const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
-                return `
-                <div class="pending-item">
-                    <div>
-                        <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
-                        <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
-                    </div>
-                    ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
-                        class="btn-primary" style="font-size:0.75rem; padding:7px 12px;">
-                        Comprar Ahora
-                    </button>` : ''}
-                </div>`;
-            }).join('')}
+        <p style="font-size:0.78rem;opacity:0.75;margin:-0.4rem 0 0.9rem;">Agrupados por ${etiquetaCriterio.toLowerCase()} para ir una sola vez a comprar todo lo pendiente de un mismo lugar.</p>
+        <div style="display:flex;gap:6px;margin-bottom:1rem;">
+            <button class="btn-action" style="${criterio==='tienda' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('tienda')">🏪 Por Tienda</button>
+            <button class="btn-action" style="${criterio==='marca' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('marca')">🏷️ Por Marca</button>
         </div>
+        ${grupos.map(([nombre, items]) => `
+        <div class="purchase-pending-group">
+            <div class="purchase-pending-group-header">
+                <strong>${etiquetaCriterio.split(' ')[0]} ${nombre}</strong>
+                <span class="pending-badge">${items.length}</span>
+                ${auth.canEdit('purchases') && items.length > 1 ? `<button class="btn-primary" style="font-size:0.75rem;padding:7px 14px;" data-ids="${items.map(p => p.id).join(',')}" onclick="window.comprarGrupoPendiente(this)">🛒 Comprar todo (${items.length})</button>` : ''}
+            </div>
+            <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
+                ${items.map(p => {
+                    const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
+                    const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
+                    return `
+                    <div class="pending-item">
+                        <div>
+                            <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
+                            <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
+                        </div>
+                        ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
+                            class="btn-primary" style="font-size:0.75rem; padding:7px 12px;">
+                            Comprar Ahora
+                        </button>` : ''}
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`).join('')}
     </div>`;
 };
 
@@ -567,7 +603,19 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     if (_s || _e) { applyPurFilter(); }
 
     // Attach global functions
-    window.modalCompra = (ventaId = null) => createPurchaseModal(navigateTo, ventaId);
+    window.modalCompra = (ventaId = null, queueRestante = []) => createPurchaseModal(navigateTo, ventaId, queueRestante);
+
+    window.setPurPendingGroupBy = (criterio) => {
+        _purPendingGroupBy = criterio;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy);
+    };
+
+    window.comprarGrupoPendiente = (btn) => {
+        const ids = (btn.dataset.ids || '').split(',').filter(Boolean);
+        if (!ids.length) return;
+        window.modalCompra(ids[0], ids.slice(1));
+    };
 
     window.switchPurchaseView = (tab) => {
         _currentView = tab;
@@ -586,8 +634,9 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         if (btnGeneral) { btnGeneral.style.background = sub === 'general' ? 'var(--brand-magenta)' : 'transparent'; btnGeneral.style.color = sub === 'general' ? '#fff' : 'var(--text-main)'; btnGeneral.style.opacity = sub === 'general' ? '1' : '0.6'; }
         if (btnViaje) { btnViaje.style.background = sub === 'viaje' ? '#D97706' : 'transparent'; btnViaje.style.color = sub === 'viaje' ? '#fff' : 'var(--text-main)'; btnViaje.style.opacity = sub === 'viaje' ? '1' : '0.6'; }
 
+        _pendientesActivosActual = sub === 'viaje' ? pendientesViaje : pendientesGeneral;
         const pendCont = document.getElementById('pur-pending-container');
-        if (pendCont) pendCont.innerHTML = renderPendingAlert(sub === 'viaje' ? pendientesViaje : pendientesGeneral, _cache.productos);
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy);
 
         const kpiCont = document.getElementById('pur-kpi-container');
         if (kpiCont) kpiCont.innerHTML = renderKPIStrip(comprasSubmodulo(_purFiltered, sub));
@@ -694,7 +743,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         { id: 'timeline', icon: '📅', label: 'Línea de Tiempo' },
     ];
 
-    const pendientesActivos = _purSubmodulo === 'viaje' ? pendientesViaje : pendientesGeneral;
+    _pendientesActivosActual = _purSubmodulo === 'viaje' ? pendientesViaje : pendientesGeneral;
+    const pendientesActivos = _pendientesActivosActual;
     const comprasDelSubmoduloInicial = comprasSubmodulo(_purFiltered, _purSubmodulo);
 
     const html = `
@@ -727,7 +777,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
       </div>
 
       <div id="pur-pending-container">
-        ${renderPendingAlert(pendientesActivos, _cache.productos)}
+        ${renderPendingAlert(pendientesActivos, _cache.productos, _purPendingGroupBy)}
       </div>
 
       <div id="pur-kpi-container">
@@ -780,7 +830,7 @@ function attachGroupToggles() {
 }
 
 // ─── Create Purchase Modal (unchanged logic, improved UI) ──────────────────────
-export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => {
+export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, queueRestante = []) => {
     const [ventas, productos, comprasExistentes] = await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Productos'),
@@ -919,6 +969,11 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             
             <form id="purchase-form" onsubmit="return false;">
                 <div class="modal-body">
+                    ${queueRestante.length > 0 ? `
+                    <div style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;border-radius:12px;margin-bottom:1.2rem;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.3);">
+                        <span style="font-size:1.1rem;">🛒</span>
+                        <span style="font-size:0.82rem;color:#7C3AED;font-weight:700;">Compra en lote — al guardar esta, se abrirá automáticamente la siguiente. Quedan ${queueRestante.length} pendiente(s) más de este grupo.</span>
+                    </div>` : ''}
                     ${viajeBannerHTML}
                     ${buildEncargoBanner(ventaIdPrefill)}
                     <div class="form-grid-2" style="margin-bottom: 2rem; background: var(--surface-1); padding: 2rem; border-radius: 16px; border: 1px solid var(--border-base);">
@@ -1272,10 +1327,20 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                 }
             }
 
-            showToast('✅ Compra registrada correctamente.');
             window.closeModal();
             window.invalidateDashCache?.(); // Refrescar alertas del dashboard
             _cache = null;
+
+            // Compra en lote (agrupada por tienda/marca desde la alerta de
+            // pendientes): en vez de recargar todo el módulo, se encadena
+            // directamente con la siguiente compra pendiente del grupo.
+            if (queueRestante.length > 0) {
+                showToast(`✅ Compra registrada. Continuando con la siguiente (${queueRestante.length} más)...`);
+                setTimeout(() => createPurchaseModal(navigateTo, queueRestante[0], queueRestante.slice(1)), 300);
+                return;
+            }
+
+            showToast('✅ Compra registrada correctamente.');
             _currentView = 'tabla';
             // Si el modal fue abierto desde el módulo purchases, re-renderiza purchases.
             // Si fue abierto desde otro módulo (ej. dashboard), navega al dashboard para ver las alertas actualizadas.
