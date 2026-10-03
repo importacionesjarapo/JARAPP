@@ -31,6 +31,10 @@ let _purSubmodulo = 'general';
 // todo el módulo.
 let _purPendingGroupBy = 'tienda';
 let _pendientesActivosActual = [];
+// Cuántos grupos se muestran antes del botón "Mostrar más" (evita que la
+// pantalla se vuelva muy larga cuando hay muchas tiendas/marcas distintas).
+const PENDING_GROUPS_PAGE_SIZE = 5;
+let _purPendingGroupsShowAll = false;
 
 // ─── Helper: format date label ─────────────────────────────────────────────────
 const formatDateLabel = (dateStr) => {
@@ -61,13 +65,23 @@ const fasePriority = (fase) => {
     return 10;
 };
 
-// ─── Agrupa pendientes por tienda o marca del producto vinculado — así se
-// puede ir una sola vez a una tienda/marca y comprar todo lo pendiente ───
+// ─── Agrupa pendientes por tienda, marca o canal (online/en tienda) del
+// producto/venta vinculado — así se puede ir una sola vez a una
+// tienda/marca y comprar todo lo pendiente, o separar lo que se puede
+// pedir en línea de lo que requiere ir físicamente ───────────────────────
+const canalLabel = (p) => p.modo_compra === 'tienda' ? '🏬 En Tienda'
+    : (p.modo_compra === 'online' ? '🌐 Online' : '❓ Sin definir');
+
 const agruparPendientes = (pendientes, productos, criterio) => {
     const groups = {};
     pendientes.forEach(p => {
-        const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
-        const key = ((criterio === 'marca' ? prod.marca : prod.tienda_cotizacion) || '').trim() || 'Sin definir';
+        let key;
+        if (criterio === 'canal') {
+            key = canalLabel(p);
+        } else {
+            const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
+            key = ((criterio === 'marca' ? prod.marca : prod.tienda_cotizacion) || '').trim() || 'Sin definir';
+        }
         if (!groups[key]) groups[key] = [];
         groups[key].push(p);
     });
@@ -75,10 +89,19 @@ const agruparPendientes = (pendientes, productos, criterio) => {
 };
 
 // ─── Render: Alerta de pendientes (siempre visible) ────────────────────────────
-const renderPendingAlert = (pendientes, productos, criterio = 'tienda') => {
+// mostrarCanal: solo en el submódulo "Compras en Viaje" tiene sentido
+// clasificar por canal — en "Compras Online" todo es, por definición, en
+// línea, así que ahí ni se ofrece el agrupamiento ni se muestra el badge.
+const renderPendingAlert = (pendientes, productos, criterio = 'tienda', mostrarCanal = false) => {
     if (!pendientes || pendientes.length === 0) return '';
-    const grupos = agruparPendientes(pendientes, productos, criterio);
-    const etiquetaCriterio = criterio === 'marca' ? '🏷️ Marca' : '🏪 Tienda';
+    const criterioEfectivo = (criterio === 'canal' && !mostrarCanal) ? 'tienda' : criterio;
+    const grupos = agruparPendientes(pendientes, productos, criterioEfectivo);
+    const iconoCriterio = criterioEfectivo === 'marca' ? '🏷️' : (criterioEfectivo === 'canal' ? '' : '🏪');
+    const nombreCriterio = criterioEfectivo === 'marca' ? 'marca' : (criterioEfectivo === 'canal' ? 'canal de compra' : 'tienda');
+
+    const totalGrupos = grupos.length;
+    const gruposVisibles = _purPendingGroupsShowAll ? grupos : grupos.slice(0, PENDING_GROUPS_PAGE_SIZE);
+    const hayMasGrupos = totalGrupos > gruposVisibles.length;
 
     return `
     <div class="purchase-pending-alert">
@@ -86,36 +109,45 @@ const renderPendingAlert = (pendientes, productos, criterio = 'tienda') => {
             ⚠️ Encargos pendientes de compra
             <span class="pending-badge">${pendientes.length}</span>
         </h4>
-        <p style="font-size:0.78rem;opacity:0.75;margin:-0.4rem 0 0.9rem;">Agrupados por ${etiquetaCriterio.toLowerCase()} para ir una sola vez a comprar todo lo pendiente de un mismo lugar.</p>
-        <div style="display:flex;gap:6px;margin-bottom:1rem;">
-            <button class="btn-action" style="${criterio==='tienda' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('tienda')">🏪 Por Tienda</button>
-            <button class="btn-action" style="${criterio==='marca' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('marca')">🏷️ Por Marca</button>
+        <p style="font-size:0.78rem;opacity:0.75;margin:-0.4rem 0 0.9rem;">Agrupados por ${nombreCriterio} para ir una sola vez a comprar todo lo pendiente de un mismo lugar.</p>
+        <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap;">
+            <button class="btn-action" style="${criterioEfectivo==='tienda' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('tienda')">🏪 Por Tienda</button>
+            <button class="btn-action" style="${criterioEfectivo==='marca' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('marca')">🏷️ Por Marca</button>
+            ${mostrarCanal ? `<button class="btn-action" style="${criterioEfectivo==='canal' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('canal')">🌐 Por Canal (Online/Tienda)</button>` : ''}
         </div>
-        ${grupos.map(([nombre, items]) => `
-        <div class="purchase-pending-group">
-            <div class="purchase-pending-group-header">
-                <strong>${etiquetaCriterio.split(' ')[0]} ${nombre}</strong>
-                <span class="pending-badge">${items.length}</span>
-                ${auth.canEdit('purchases') && items.length > 1 ? `<button class="btn-primary" style="font-size:0.75rem;padding:7px 14px;" data-ids="${items.map(p => p.id).join(',')}" onclick="window.comprarGrupoPendiente(this)">🛒 Comprar todo (${items.length})</button>` : ''}
-            </div>
-            <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
-                ${items.map(p => {
-                    const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
-                    const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
-                    return `
-                    <div class="pending-item">
-                        <div>
-                            <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
-                            <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
-                        </div>
-                        ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
-                            class="btn-primary" style="font-size:0.75rem; padding:7px 12px;">
-                            Comprar Ahora
-                        </button>` : ''}
-                    </div>`;
-                }).join('')}
-            </div>
-        </div>`).join('')}
+        ${gruposVisibles.map(([nombre, items], idx) => {
+            const groupId = `ppg-${idx}`;
+            const abierto = idx === 0; // el grupo más grande (ya viene ordenado) arranca expandido
+            return `
+            <div class="purchase-pending-group${abierto ? ' open' : ''}" id="${groupId}">
+                <div class="purchase-pending-group-header" onclick="window.togglePendingGroup('${groupId}')">
+                    <strong>${criterioEfectivo === 'canal' ? nombre : `${iconoCriterio} ${nombre}`}</strong>
+                    <span class="pending-badge">${items.length}</span>
+                    ${auth.canEdit('purchases') && items.length > 1 ? `<button class="btn-primary" style="font-size:0.75rem;padding:7px 14px;" data-ids="${items.map(p => p.id).join(',')}" onclick="event.stopPropagation();window.comprarGrupoPendiente(this)">🛒 Comprar todo (${items.length})</button>` : ''}
+                    <span class="purchase-pending-group-caret">▼</span>
+                </div>
+                <div class="purchase-pending-group-body">
+                    ${items.map(p => {
+                        const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
+                        const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
+                        return `
+                        <div class="pending-item">
+                            <div>
+                                <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
+                                <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
+                                ${mostrarCanal && criterioEfectivo !== 'canal' ? `<br><span style="font-size:0.68rem;opacity:0.65;">${canalLabel(p)}</span>` : ''}
+                            </div>
+                            ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
+                                class="btn-primary" style="font-size:0.75rem; padding:7px 12px;">
+                                Comprar Ahora
+                            </button>` : ''}
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }).join('')}
+        ${hayMasGrupos ? `<button class="btn-action" style="width:100%;margin-top:0.4rem;" onclick="window.togglePurPendingGroupsShowAll()">Mostrar ${totalGrupos - gruposVisibles.length} más…</button>`
+          : (totalGrupos > PENDING_GROUPS_PAGE_SIZE ? `<button class="btn-action" style="width:100%;margin-top:0.4rem;" onclick="window.togglePurPendingGroupsShowAll()">Mostrar menos</button>` : '')}
     </div>`;
 };
 
@@ -607,14 +639,25 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
     window.setPurPendingGroupBy = (criterio) => {
         _purPendingGroupBy = criterio;
+        _purPendingGroupsShowAll = false;
         const pendCont = document.getElementById('pur-pending-container');
-        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy);
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
     };
 
     window.comprarGrupoPendiente = (btn) => {
         const ids = (btn.dataset.ids || '').split(',').filter(Boolean);
         if (!ids.length) return;
         window.modalCompra(ids[0], ids.slice(1));
+    };
+
+    window.togglePendingGroup = (groupId) => {
+        document.getElementById(groupId)?.classList.toggle('open');
+    };
+
+    window.togglePurPendingGroupsShowAll = () => {
+        _purPendingGroupsShowAll = !_purPendingGroupsShowAll;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
     };
 
     window.switchPurchaseView = (tab) => {
@@ -635,8 +678,10 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         if (btnViaje) { btnViaje.style.background = sub === 'viaje' ? '#D97706' : 'transparent'; btnViaje.style.color = sub === 'viaje' ? '#fff' : 'var(--text-main)'; btnViaje.style.opacity = sub === 'viaje' ? '1' : '0.6'; }
 
         _pendientesActivosActual = sub === 'viaje' ? pendientesViaje : pendientesGeneral;
+        if (_purPendingGroupBy === 'canal' && sub !== 'viaje') _purPendingGroupBy = 'tienda';
+        _purPendingGroupsShowAll = false;
         const pendCont = document.getElementById('pur-pending-container');
-        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy);
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, sub === 'viaje');
 
         const kpiCont = document.getElementById('pur-kpi-container');
         if (kpiCont) kpiCont.innerHTML = renderKPIStrip(comprasSubmodulo(_purFiltered, sub));
@@ -777,7 +822,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
       </div>
 
       <div id="pur-pending-container">
-        ${renderPendingAlert(pendientesActivos, _cache.productos, _purPendingGroupBy)}
+        ${renderPendingAlert(pendientesActivos, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje')}
       </div>
 
       <div id="pur-kpi-container">
@@ -954,6 +999,11 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                         <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Marca</div>
                         <div style="font-size:0.9rem; font-weight:800;">${marca}</div>
                     </div>
+                    ${vData.comprado_en_viaje ? `
+                    <div style="background:rgba(217,119,6,0.1); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid rgba(217,119,6,0.3);">
+                        <div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; margin-bottom:2px;">Canal de Compra</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:#D97706;">${canalLabel(vData)}</div>
+                    </div>` : ''}
                 </div>
                 ${linkCompra ? `<a href="${linkCompra}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; padding:6px 14px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.25); text-decoration:none; font-weight:700;">🔗 Abrir URL de Compra</a>` : '<span style="font-size:0.75rem; opacity:0.4;">Sin URL de compra registrada</span>'}
             </div>
@@ -1201,6 +1251,11 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                         <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Marca</div>
                         <div style="font-size:0.9rem; font-weight:800;">${marca}</div>
                     </div>
+                    ${vData.comprado_en_viaje ? `
+                    <div style="background:rgba(217,119,6,0.1); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid rgba(217,119,6,0.3);">
+                        <div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; margin-bottom:2px;">Canal de Compra</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:#D97706;">${canalLabel(vData)}</div>
+                    </div>` : ''}
                 </div>
                 ${linkCompra ? `<a href="${linkCompra}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; padding:6px 14px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.25); text-decoration:none; font-weight:700;">🔗 Abrir URL de Compra</a>` : '<span style="font-size:0.75rem; opacity:0.4;">Sin URL de compra registrada</span>'}
             </div>`;

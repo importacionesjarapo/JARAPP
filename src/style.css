@@ -1119,19 +1119,35 @@ input:focus, select:focus, textarea:focus {
 }
 .pending-item:hover { background: var(--surface-3); }
 
-.purchase-pending-group { margin-bottom: 1.1rem; }
+.purchase-pending-group { margin-bottom: 0.6rem; }
 .purchase-pending-group:last-child { margin-bottom: 0; }
 .purchase-pending-group-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 0.6rem;
+  padding: 0.6rem 0.2rem;
   flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
 }
 .purchase-pending-group-header strong {
   font-size: 0.88rem;
   color: var(--text-main);
 }
+.purchase-pending-group-caret {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+.purchase-pending-group.open .purchase-pending-group-caret { transform: rotate(180deg); }
+.purchase-pending-group-body {
+  display: none;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.6rem;
+}
+.purchase-pending-group.open .purchase-pending-group-body { display: flex; }
 
 /* ── KPI Strip Compact ── */
 .kpi-strip {

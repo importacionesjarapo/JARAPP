@@ -1750,6 +1750,7 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
                 comprado_en_viaje: esViaje,
                 viaje_id: viajeIdVenta,
+                modo_compra: esViaje ? (modoCompra || null) : null,
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
                 analista_id: auth.getProfile()?.id || null,
                 empresa_id: auth.getEmpresaId()
