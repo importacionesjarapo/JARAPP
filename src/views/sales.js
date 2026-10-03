@@ -1926,6 +1926,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                         </div>
                         <h3 style="margin:0 0 10px 0; font-size:1.2rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${producto.nombre_producto}</h3>
                         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                            <span style="font-size:0.72rem; padding:5px 10px; background:var(--success-green); color:#fff; border-radius:8px; font-weight:700;">🔢 Cantidad: ${producto.cantidad_encargada || 1}</span>
                             ${producto.talla?`<span style="font-size:0.72rem; padding:5px 10px; background:var(--primary-red); color:#fff; border-radius:8px; font-weight:700;">Talla ${producto.talla}</span>`:`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Talla: <strong>N/A</strong></span>`}
                             ${producto.genero?`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Género: <strong>${producto.genero}</strong></span>`:''}
                             ${producto.tienda_cotizacion?`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">🏪 ${producto.tienda_cotizacion}</span>`:''}

@@ -102,7 +102,8 @@ const renderPendingItemCard = (p, productos, mostrarCanal, criterioEfectivo) => 
                 ${imgUrl ? `<img src="${imgUrl}" alt="${prodName}">` : '<span>SIN<br>FOTO</span>'}
             </div>
             <div style="min-width:0;">
-                <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
+                <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong>
+                <span style="font-size:0.68rem;font-weight:700;color:var(--success-green);margin-left:4px;">× ${prod.cantidad_encargada || 1}</span><br>
                 <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
                 ${mostrarCanal && criterioEfectivo !== 'canal' ? `<br><span style="font-size:0.68rem;opacity:0.65;">${canalLabel(p)}</span>` : ''}
             </div>
@@ -761,7 +762,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
                        </div>
                        <div style="flex:1;">
                            <div style="font-weight:700; font-size:1.1rem; color:var(--text-main);">${pData.nombre_producto || 'Producto Stock General'}</div>
-                           <div style="display:flex; gap:8px; align-items:center; margin-top:6px; font-size:0.8rem;">
+                           <div style="display:flex; gap:8px; align-items:center; margin-top:6px; font-size:0.8rem; flex-wrap:wrap;">
+                               <span style="background:var(--success-green); color:#fff; padding:2px 8px; border-radius:4px; font-weight:700;">🔢 Cantidad: ${pData.cantidad_encargada || 1}</span>
                                <span style="opacity:0.7;">Tienda/Proveedor: <strong>${c.proveedor || pData.tienda_cotizacion || 'N/A'}</strong></span>
                                ${pData.talla ? `<span style="background:var(--primary-red); color:#fff; padding:2px 6px; border-radius:4px; font-weight:700;">Talla: ${pData.talla} ${pData.genero ? `(${pData.genero})` : ''}</span>` : ''}
                            </div>
@@ -980,6 +982,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
         const precioUsdDisplay = precioUsd ? `$${parseFloat(precioUsd).toFixed(2)} USD` : 'N/A';
         const precioCop = vData.valor_total_cop ? formatCOP(vData.valor_total_cop) : 'N/A';
         const talla = pData.talla || 'N/A';
+        const cantidad = pData.cantidad_encargada || 1;
         const tienda = pData.tienda_cotizacion || 'N/A';
         const marca = pData.marca || 'N/A';
         const categoria = pData.categoria || '';
@@ -1010,6 +1013,10 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                     ${marca !== 'N/A' ? `<span style="color:var(--primary-red); margin-right:6px;">${marca}</span>` : ''}${pData.nombre_producto || 'Sin nombre'}
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.8rem;">
+                    <div style="background:rgba(6,214,160,0.1); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid rgba(6,214,160,0.3); min-width:80px;">
+                        <div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; margin-bottom:2px;">Cantidad</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--success-green);">${cantidad}</div>
+                    </div>
                     <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border); min-width:80px;">
                         <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Valor USD</div>
                         <div style="font-size:0.9rem; font-weight:800; color:var(--success-green);">${precioUsdDisplay}</div>
@@ -1243,6 +1250,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
         const precioUsdDisplay = precioUsd ? `$${parseFloat(precioUsd).toFixed(2)} USD` : 'N/A';
         const precioCop = vData.valor_total_cop ? formatCOP(vData.valor_total_cop) : 'N/A';
         const talla = pData.talla || 'N/A';
+        const cantidad = pData.cantidad_encargada || 1;
         const tienda = pData.tienda_cotizacion || 'N/A';
         const marca = pData.marca || 'N/A';
         const categoria = pData.categoria || '';
@@ -1262,6 +1270,10 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                     ${marca !== 'N/A' ? `<span style="color:var(--primary-red); margin-right:6px;">${marca}</span>` : ''}${pData.nombre_producto || 'Sin nombre'}
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:0.6rem; margin-bottom:0.8rem;">
+                    <div style="background:rgba(6,214,160,0.1); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid rgba(6,214,160,0.3); min-width:80px;">
+                        <div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; margin-bottom:2px;">Cantidad</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:var(--success-green);">${cantidad}</div>
+                    </div>
                     <div style="background:var(--surface-2); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid var(--glass-border); min-width:80px;">
                         <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Valor USD</div>
                         <div style="font-size:0.9rem; font-weight:800; color:var(--success-green);">${precioUsdDisplay}</div>
