@@ -2,6 +2,7 @@ import { db } from '../db.js';
 import { auth } from '../auth.js';
 import { formatUSD, formatCOP, renderError, showToast, getLogisticaFase, getLogisticaColor, downloadExcel, buildComprobanteUploadHTML, attachComprobanteInput, uploadImageToSupabase } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
+import { ViajeService } from '../services/viajes.js';
 
 // Tiendas frecuentes en compras USA para personal shopping (#27, dato
 // semilla de referencia) — solo sugerencias del <datalist>, el campo sigue
@@ -20,6 +21,21 @@ let _currentView = 'tabla';
 let _purStartDate = '';
 let _purEndDate = '';
 let _purFiltered = [];
+// Compras USA se divide en 2 submódulos: "general" (Stock + encargos de
+// Compras Online) y "viaje" (solo lo que viene de ventas "En Viaje USA").
+let _purSubmodulo = 'general';
+// Agrupación de la alerta de pendientes: por tienda, marca o canal del
+// producto/venta, para comprar de una sola vez todo lo pendiente de un
+// mismo lugar. Se elige el grupo desde un <select> (en vez de listar todas
+// las tarjetas apiladas) para que la pantalla no crezca sin control cuando
+// hay muchas tiendas/marcas distintas. _pendientesActivosActual se
+// mantiene sincronizado con el submódulo activo para poder re-renderizar
+// el agrupamiento sin recalcular todo el módulo.
+let _purPendingGroupBy = 'tienda';
+let _pendientesActivosActual = [];
+let _purPendingSelectedGroup = null;
+let _purPendingItemsPage = 0;
+const PENDING_ITEMS_PAGE_SIZE = 8;
 
 // ─── Helper: format date label ─────────────────────────────────────────────────
 const formatDateLabel = (dateStr) => {
@@ -50,32 +66,114 @@ const fasePriority = (fase) => {
     return 10;
 };
 
+// ─── Agrupa pendientes por tienda, marca o canal (online/en tienda) del
+// producto/venta vinculado — así se puede ir una sola vez a una
+// tienda/marca y comprar todo lo pendiente, o separar lo que se puede
+// pedir en línea de lo que requiere ir físicamente ───────────────────────
+const canalLabel = (p) => p.modo_compra === 'tienda' ? '🏬 En Tienda'
+    : (p.modo_compra === 'online' ? '🌐 Online' : '❓ Sin definir');
+
+const agruparPendientes = (pendientes, productos, criterio) => {
+    const groups = {};
+    pendientes.forEach(p => {
+        let key;
+        if (criterio === 'canal') {
+            key = canalLabel(p);
+        } else {
+            const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
+            key = ((criterio === 'marca' ? prod.marca : prod.tienda_cotizacion) || '').trim() || 'Sin definir';
+        }
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(p);
+    });
+    return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+};
+
+// ─── Tarjeta de un pendiente — con miniatura del producto para identificarlo
+// sin necesidad de abrirlo ───────────────────────────────────────────────
+const renderPendingItemCard = (p, productos, mostrarCanal, criterioEfectivo) => {
+    const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
+    const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
+    const imgUrl = prod.url_imagen || '';
+    return `
+    <div class="pending-item">
+        <div style="display:flex; gap:10px; align-items:center; min-width:0;">
+            <div class="pending-item-thumb">
+                ${imgUrl ? `<img src="${imgUrl}" alt="${prodName}">` : '<span>SIN<br>FOTO</span>'}
+            </div>
+            <div style="min-width:0;">
+                <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
+                <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
+                ${mostrarCanal && criterioEfectivo !== 'canal' ? `<br><span style="font-size:0.68rem;opacity:0.65;">${canalLabel(p)}</span>` : ''}
+            </div>
+        </div>
+        ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
+            class="btn-primary" style="font-size:0.75rem; padding:7px 12px; flex-shrink:0;">
+            Comprar Ahora
+        </button>` : ''}
+    </div>`;
+};
+
 // ─── Render: Alerta de pendientes (siempre visible) ────────────────────────────
-const renderPendingAlert = (pendientes, productos) => {
+// mostrarCanal: solo en el submódulo "Compras en Viaje" tiene sentido
+// clasificar por canal — en "Compras Online" todo es, por definición, en
+// línea, así que ahí ni se ofrece el agrupamiento ni se muestra el badge.
+const renderPendingAlert = (pendientes, productos, criterio = 'tienda', mostrarCanal = false) => {
     if (!pendientes || pendientes.length === 0) return '';
+    const criterioEfectivo = (criterio === 'canal' && !mostrarCanal) ? 'tienda' : criterio;
+    const grupos = agruparPendientes(pendientes, productos, criterioEfectivo);
+    const nombreCriterio = criterioEfectivo === 'marca' ? 'marca' : (criterioEfectivo === 'canal' ? 'canal' : 'tienda');
+    const selectLabel = criterioEfectivo === 'marca' ? 'Seleccionar marca pendiente de compra'
+        : (criterioEfectivo === 'canal' ? 'Seleccionar canal pendiente de compra' : 'Seleccionar tienda pendiente de compra');
+
+    // Si el grupo seleccionado ya no existe (cambió el criterio, cambió de
+    // submódulo, o ya no quedan pendientes ahí), se reinicia la selección.
+    if (_purPendingSelectedGroup && !grupos.some(([nombre]) => nombre === _purPendingSelectedGroup)) {
+        _purPendingSelectedGroup = null;
+    }
+    const grupoActivo = _purPendingSelectedGroup ? grupos.find(([nombre]) => nombre === _purPendingSelectedGroup) : null;
+
+    let panelGrupoHTML;
+    if (!grupoActivo) {
+        panelGrupoHTML = `<p style="opacity:0.5;font-size:0.82rem;text-align:center;padding:1.5rem 0;">Selecciona ${nombreCriterio === 'tienda' ? 'una tienda' : (nombreCriterio === 'marca' ? 'una marca' : 'un canal')} arriba para ver sus pendientes.</p>`;
+    } else {
+        const [nombre, items] = grupoActivo;
+        const visibles = items.slice(0, (_purPendingItemsPage + 1) * PENDING_ITEMS_PAGE_SIZE);
+        const hayMasItems = items.length > visibles.length;
+        panelGrupoHTML = `
+        <div class="purchase-pending-group open">
+            <div class="purchase-pending-group-header" style="cursor:default;">
+                <strong>${nombre}</strong>
+                <span class="pending-badge">${items.length}</span>
+                ${auth.canEdit('purchases') && items.length > 1 ? `<button class="btn-primary" style="font-size:0.75rem;padding:7px 14px;" data-ids="${items.map(p => p.id).join(',')}" onclick="window.comprarGrupoPendiente(this)">🛒 Comprar todo (${items.length})</button>` : ''}
+            </div>
+            <div class="purchase-pending-group-body">
+                ${visibles.map(p => renderPendingItemCard(p, productos, mostrarCanal, criterioEfectivo)).join('')}
+            </div>
+            ${hayMasItems ? `<button class="btn-action" style="width:100%;margin-top:0.6rem;" onclick="window.showMorePurPendingItems()">Mostrar ${items.length - visibles.length} más…</button>` : ''}
+        </div>`;
+    }
+
     return `
     <div class="purchase-pending-alert">
         <h4>
             ⚠️ Encargos pendientes de compra
             <span class="pending-badge">${pendientes.length}</span>
         </h4>
-        <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
-            ${pendientes.map(p => {
-                const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
-                const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
-                return `
-                <div class="pending-item">
-                    <div>
-                        <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
-                        <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
-                    </div>
-                    ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
-                        class="btn-primary" style="font-size:0.75rem; padding:7px 12px;">
-                        Comprar Ahora
-                    </button>` : ''}
-                </div>`;
-            }).join('')}
+        <p style="font-size:0.78rem;opacity:0.75;margin:-0.4rem 0 0.9rem;">Agrupados por ${nombreCriterio} para ir una sola vez a comprar todo lo pendiente de un mismo lugar.</p>
+        <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap;">
+            <button class="btn-action" style="${criterioEfectivo==='tienda' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('tienda')">🏪 Por Tienda</button>
+            <button class="btn-action" style="${criterioEfectivo==='marca' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('marca')">🏷️ Por Marca</button>
+            ${mostrarCanal ? `<button class="btn-action" style="${criterioEfectivo==='canal' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('canal')">🌐 Por Canal (Online/Tienda)</button>` : ''}
         </div>
+        <div style="margin-bottom:1rem;">
+            <label style="display:block;font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">${selectLabel}</label>
+            <select id="pur-pending-group-select" style="width:100%;max-width:420px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-weight:700;outline:none;" onchange="window.selectPurPendingGroup(this.value)">
+                <option value="">-- Selecciona --</option>
+                ${grupos.map(([nombre, items]) => `<option value="${encodeURIComponent(nombre)}" ${_purPendingSelectedGroup === nombre ? 'selected' : ''}>${nombre} (${items.length})</option>`).join('')}
+            </select>
+        </div>
+        ${panelGrupoHTML}
     </div>`;
 };
 
@@ -191,6 +289,7 @@ function _montarTablaCompras() {
         containerId: 'compras-tabla-container',
         tabla: 'Compras',
         supabase: db.client,
+        filtrosExtra: { es_viaje: _purSubmodulo === 'viaje' },
         searchColumns: ['proveedor', 'estado_compra', 'numero_factura'],
         columnas: [
             { key: 'id', label: 'ID', width: '90px',
@@ -240,7 +339,8 @@ function _renderPurchasePanel(tab) {
         panel.innerHTML = `<div id="compras-tabla-container"></div>`;
         _montarTablaCompras();
     } else {
-        panel.innerHTML = getPanelHTML(tab, { ..._cache, compras: _purFiltered });
+        const comprasDelSubmodulo = _purFiltered.filter(c => !!c.es_viaje === (_purSubmodulo === 'viaje'));
+        panel.innerHTML = getPanelHTML(tab, { ..._cache, compras: comprasDelSubmodulo });
     }
     attachGroupToggles();
 }
@@ -471,12 +571,13 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
     renderLayout(`<div style="text-align:center; padding:5rem;"><div class="loader"></div> Cargando Compras...</div>`);
 
-    const [compras, ventas, productos, clientes, logistica] = await Promise.all([
+    const [compras, ventas, productos, clientes, logistica, viajes] = await Promise.all([
         db.fetchData('Compras'),
         db.fetchData('Ventas'),
         db.fetchData('Productos'),
         db.fetchData('Clientes'),
         db.fetchData('Logistica'),
+        db.fetchData('viajes'),
     ]);
 
     if (compras.error) return renderError(renderLayout, compras.error, navigateTo);
@@ -485,7 +586,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     const comprasDesc = [...(compras || [])].reverse();
 
     // Store cache
-    _cache = { compras: comprasDesc, ventas: ventas || [], productos: productos || [], clientes: clientes || [], logisticaList };
+    _cache = { compras: comprasDesc, ventas: ventas || [], productos: productos || [], clientes: clientes || [], logisticaList, viajes: viajes.error ? [] : (viajes || []) };
 
     const applyPurFilter = () => {
         const _s = _purStartDate ? new Date(_purStartDate + 'T00:00:00') : null;
@@ -508,11 +609,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         });
 
         // Re-inject KPI and Panel using filtered array
-        const kpi = document.querySelector('.kpi-strip'); // Replace exact strip if needed, here we recreate HTML below so we only need it on init, but for dynamic updating we need wrappers.
-        // It's easier if we re-render the layout using a wrapper if we want dynamic KPIs. 
-        // We will make `window.switchPurchaseView` handle panel updates.
         const kpiCont = document.getElementById('pur-kpi-container');
-        if (kpiCont) kpiCont.innerHTML = renderKPIStrip(_purFiltered);
+        if (kpiCont) kpiCont.innerHTML = renderKPIStrip(comprasSubmodulo(_purFiltered, _purSubmodulo));
 
         _renderPurchasePanel(_currentView);
     };
@@ -543,12 +641,19 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
     // Excluir encargos que ya tienen compra registrada en BD
     const comprasVentaIds = new Set((_cache.compras || []).map(c => c.venta_id?.toString()).filter(Boolean));
-    const pendientes = (ventas || []).filter(v =>
+    const pendientesTodos = (ventas || []).filter(v =>
         v.tipo_venta === 'Encargo' &&
         v.estado_orden === 'Validando Compra EEUU' &&
         !comprasVentaIds.has(v.id?.toString())
     );
-    
+    // Solo cuentan como "de viaje" los encargos tomados en una venta
+    // "En Viaje USA" — el resto (Compras Online) va siempre al submódulo
+    // general, sin importar si hay un viaje activo en este momento.
+    const pendientesGeneral = pendientesTodos.filter(v => !v.comprado_en_viaje);
+    const pendientesViaje = pendientesTodos.filter(v => v.comprado_en_viaje);
+
+    const comprasSubmodulo = (lista, sub) => lista.filter(c => !!c.es_viaje === (sub === 'viaje'));
+
     // Initial Filter
     _purFiltered = [..._cache.compras];
     const _s = _purStartDate ? new Date(_purStartDate + 'T00:00:00') : null;
@@ -556,7 +661,34 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     if (_s || _e) { applyPurFilter(); }
 
     // Attach global functions
-    window.modalCompra = (ventaId = null) => createPurchaseModal(navigateTo, ventaId);
+    window.modalCompra = (ventaId = null, queueRestante = []) => createPurchaseModal(navigateTo, ventaId, queueRestante);
+
+    window.setPurPendingGroupBy = (criterio) => {
+        _purPendingGroupBy = criterio;
+        _purPendingSelectedGroup = null;
+        _purPendingItemsPage = 0;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
+    };
+
+    window.selectPurPendingGroup = (value) => {
+        _purPendingSelectedGroup = value ? decodeURIComponent(value) : null;
+        _purPendingItemsPage = 0;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
+    };
+
+    window.showMorePurPendingItems = () => {
+        _purPendingItemsPage++;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
+    };
+
+    window.comprarGrupoPendiente = (btn) => {
+        const ids = (btn.dataset.ids || '').split(',').filter(Boolean);
+        if (!ids.length) return;
+        window.modalCompra(ids[0], ids.slice(1));
+    };
 
     window.switchPurchaseView = (tab) => {
         _currentView = tab;
@@ -567,15 +699,37 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         _renderPurchasePanel(tab);
     };
 
+    window.switchPurSubmodulo = (sub) => {
+        _purSubmodulo = sub;
+
+        const btnGeneral = document.getElementById('pur-sub-general');
+        const btnViaje = document.getElementById('pur-sub-viaje');
+        if (btnGeneral) { btnGeneral.style.background = sub === 'general' ? 'var(--brand-magenta)' : 'transparent'; btnGeneral.style.color = sub === 'general' ? '#fff' : 'var(--text-main)'; btnGeneral.style.opacity = sub === 'general' ? '1' : '0.6'; }
+        if (btnViaje) { btnViaje.style.background = sub === 'viaje' ? '#D97706' : 'transparent'; btnViaje.style.color = sub === 'viaje' ? '#fff' : 'var(--text-main)'; btnViaje.style.opacity = sub === 'viaje' ? '1' : '0.6'; }
+
+        _pendientesActivosActual = sub === 'viaje' ? pendientesViaje : pendientesGeneral;
+        if (_purPendingGroupBy === 'canal' && sub !== 'viaje') _purPendingGroupBy = 'tienda';
+        _purPendingSelectedGroup = null;
+        _purPendingItemsPage = 0;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, sub === 'viaje');
+
+        const kpiCont = document.getElementById('pur-kpi-container');
+        if (kpiCont) kpiCont.innerHTML = renderKPIStrip(comprasSubmodulo(_purFiltered, sub));
+
+        _renderPurchasePanel(_currentView);
+    };
+
     window.togglePurchaseGroup = (cardId) => {
         const el = document.getElementById(cardId);
         if (el) el.classList.toggle('open');
     };
 
     window.modalDetalleCompra = (id) => {
-        const { compras, productos, ventas, clientes } = _cache;
+        const { compras, productos, ventas, clientes, viajes } = _cache;
         const c = compras.find(x => x.id.toString() === id.toString());
         if (!c) return;
+        const viajeVinculado = c.viaje_id ? (viajes || []).find(v => v.id?.toString() === c.viaje_id.toString()) : null;
 
         const pData = productos.find(p => p.id?.toString() === c.producto_id?.toString()) || {};
         const vData = c.venta_id ? ventas.find(v => v.id?.toString() === c.venta_id?.toString()) : null;
@@ -632,6 +786,12 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
                             <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">💸 Costo USD Asumido</p>
                             <strong style="font-size:1.3rem; color:var(--primary-red);">${formatUSD(c.costo_usd || 0)}</strong>
                         </div>
+                        ${viajeVinculado ? `
+                        <div>
+                            <p style="margin:0 0 5px 0; font-size:0.75rem; opacity:0.6;">✈️ Viaje Vinculado</p>
+                            <strong style="font-size:1rem; color:#D97706;">${viajeVinculado.nombre}</strong>
+                        </div>
+                        ` : ''}
                         ${(vData && (auth.isAdmin() || auth.getUserRole() === 'gerente' || auth.getUserRole() === 'finanzas')) ? `
                         <div>
                             <p style="margin:0 0 5px 0; font-size:0.75rem; color:var(--violet); opacity:0.8;">✈️ Envío Int. (Calculado)</p>
@@ -659,6 +819,10 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         { id: 'timeline', icon: '📅', label: 'Línea de Tiempo' },
     ];
 
+    _pendientesActivosActual = _purSubmodulo === 'viaje' ? pendientesViaje : pendientesGeneral;
+    const pendientesActivos = _pendientesActivosActual;
+    const comprasDelSubmoduloInicial = comprasSubmodulo(_purFiltered, _purSubmodulo);
+
     const html = `
       <div class="module-header">
         <div>
@@ -667,6 +831,13 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
           <p style="opacity:0.5; font-size:0.82rem; margin-top:4px;">Adquisiciones para inventario o fulfilling de encargos.</p>
         </div>
         ${auth.canEdit('purchases') ? `<button class="btn-primary" style="padding:12px 28px;font-size:0.9rem;" onclick="window.modalCompra()">+ Registrar Compra</button>` : ''}
+      </div>
+
+      <!-- Submódulos: Compras Online (general) vs. Compras en Viaje (solo lo
+           que vino de ventas "En Viaje USA") -->
+      <div style="display:flex;background:var(--surface-2);border:1px solid var(--border-base);border-radius:12px;padding:4px;gap:4px;margin-bottom:1.2rem;width:fit-content;">
+        <button id="pur-sub-general" onclick="window.switchPurSubmodulo('general')" style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:0.85rem;font-weight:700;background:${_purSubmodulo==='general'?'var(--brand-magenta)':'transparent'};color:${_purSubmodulo==='general'?'#fff':'var(--text-main)'};opacity:${_purSubmodulo==='general'?'1':'0.6'};">🛍️ Compras Online</button>
+        <button id="pur-sub-viaje" onclick="window.switchPurSubmodulo('viaje')" style="padding:8px 20px;border-radius:9px;border:none;cursor:pointer;font-size:0.85rem;font-weight:700;background:${_purSubmodulo==='viaje'?'#D97706':'transparent'};color:${_purSubmodulo==='viaje'?'#fff':'var(--text-main)'};opacity:${_purSubmodulo==='viaje'?'1':'0.6'};">✈️ Compras en Viaje</button>
       </div>
 
       <div class="module-filters-bar" style="margin-bottom:1.5rem;">
@@ -681,10 +852,12 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
           <button class="btn-excel" onclick="window.exportPurExcel()">📥 Excel</button>
       </div>
 
-      ${renderPendingAlert(pendientes, _cache.productos)}
+      <div id="pur-pending-container">
+        ${renderPendingAlert(pendientesActivos, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje')}
+      </div>
 
       <div id="pur-kpi-container">
-        ${renderKPIStrip(_purFiltered)}
+        ${renderKPIStrip(comprasDelSubmoduloInicial)}
       </div>
 
       <!-- View Switcher + separator -->
@@ -700,7 +873,7 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
       <!-- Active view panel -->
       <div id="purchase-view-container">
-        ${_currentView === 'tabla' ? `<div id="compras-tabla-container"></div>` : getPanelHTML(_currentView, { ..._cache, compras: _purFiltered })}
+        ${_currentView === 'tabla' ? `<div id="compras-tabla-container"></div>` : getPanelHTML(_currentView, { ..._cache, compras: comprasDelSubmoduloInicial })}
       </div>
     `;
 
@@ -733,7 +906,7 @@ function attachGroupToggles() {
 }
 
 // ─── Create Purchase Modal (unchanged logic, improved UI) ──────────────────────
-export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => {
+export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, queueRestante = []) => {
     const [ventas, productos, comprasExistentes] = await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Productos'),
@@ -741,6 +914,56 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
     ]);
 
     const encargos = (ventas || []).filter(v => v.tipo_venta === 'Encargo');
+
+    // Si hay un viaje activo en el módulo Viaje USA, las compras de Stock se
+    // vinculan automáticamente a él. Las compras de un Encargo, en cambio,
+    // heredan el viaje de la venta que las originó (si esa venta se registró
+    // como "En Viaje USA") — así que el banner se recalcula según lo que el
+    // usuario vaya seleccionando (ver window.updateViajeBanner más abajo).
+    let viajeActivo = null;
+    try { viajeActivo = await ViajeService.getActivo(); } catch (_) { /* sin viaje activo */ }
+    const viajeBannerHTML = `<div id="pc-viaje-banner" style="display:none;align-items:center;gap:10px;padding:0.8rem 1.2rem;border-radius:12px;margin-bottom:1.2rem;"></div>`;
+    // Con viaje activo, el registro se agiliza: solo tienda/costo quedan
+    // fijos y obligatorios, el resto se agrega bajo demanda desde el
+    // checklist "Campos Adicionales" — mismo patrón que Ventas · En Viaje
+    // USA · En Tienda, porque en un viaje se registran muchísimas compras
+    // seguidas y cada campo de más cuenta.
+    const esViajeCompra = !!viajeActivo;
+    const CAMPOS_COMPRA_AGIL = [
+        { key:'costo_cop',     label:'Valor descontado banco (COP)' },
+        { key:'num_factura',   label:'Número de Factura' },
+        { key:'codigo_factura',label:'Código producto en factura' },
+    ];
+    const campoCompraHTML = (key) => {
+        switch (key) {
+            case 'costo_cop': return `<div class="form-group" data-campo-compra="costo_cop">
+                <label class="form-label">Valor descontado banco (COP)</label>
+                <input type="number" id="pc-costo-cop" placeholder="0" step="1">
+            </div>`;
+            case 'num_factura': return `<div class="form-group" data-campo-compra="num_factura">
+                <label class="form-label">Número de Factura</label>
+                <input type="text" id="pc-num-factura" placeholder="Ej. SHOP-9988">
+            </div>`;
+            case 'codigo_factura': return `<div class="form-group" data-campo-compra="codigo_factura">
+                <label class="form-label">Código producto en factura</label>
+                <input type="text" id="pc-codigo-factura" placeholder="Ej. SKU-7766">
+            </div>`;
+            default: return '';
+        }
+    };
+    window.toggleCampoCompra = (key, activo) => {
+        const cont = document.getElementById('pc-campos-agregados');
+        if (!cont) return;
+        const fila = document.getElementById(`fila-campo-compra-${key}`);
+        const dot = fila?.querySelector('.admin-perm-dot');
+        if (activo) {
+            if (!cont.querySelector(`[data-campo-compra="${key}"]`)) cont.insertAdjacentHTML('beforeend', campoCompraHTML(key));
+            dot?.classList.add('active');
+        } else {
+            cont.querySelector(`[data-campo-compra="${key}"]`)?.remove();
+            dot?.classList.remove('active');
+        }
+    };
 
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
@@ -807,6 +1030,11 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Marca</div>
                         <div style="font-size:0.9rem; font-weight:800;">${marca}</div>
                     </div>
+                    ${vData.comprado_en_viaje ? `
+                    <div style="background:rgba(217,119,6,0.1); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid rgba(217,119,6,0.3);">
+                        <div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; margin-bottom:2px;">Canal de Compra</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:#D97706;">${canalLabel(vData)}</div>
+                    </div>` : ''}
                 </div>
                 ${linkCompra ? `<a href="${linkCompra}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; padding:6px 14px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.25); text-decoration:none; font-weight:700;">🔗 Abrir URL de Compra</a>` : '<span style="font-size:0.75rem; opacity:0.4;">Sin URL de compra registrada</span>'}
             </div>
@@ -822,6 +1050,12 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             
             <form id="purchase-form" onsubmit="return false;">
                 <div class="modal-body">
+                    ${queueRestante.length > 0 ? `
+                    <div style="display:flex;align-items:center;gap:10px;padding:0.8rem 1.2rem;border-radius:12px;margin-bottom:1.2rem;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.3);">
+                        <span style="font-size:1.1rem;">🛒</span>
+                        <span style="font-size:0.82rem;color:#7C3AED;font-weight:700;">Compra en lote — al guardar esta, se abrirá automáticamente la siguiente. Quedan ${queueRestante.length} pendiente(s) más de este grupo.</span>
+                    </div>` : ''}
+                    ${viajeBannerHTML}
                     ${buildEncargoBanner(ventaIdPrefill)}
                     <div class="form-grid-2" style="margin-bottom: 2rem; background: var(--surface-1); padding: 2rem; border-radius: 16px; border: 1px solid var(--border-base);">
                         <div class="form-group">
@@ -834,11 +1068,12 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         
                         <div class="form-group" id="pc-encargo-section">
                             <label class="form-label">Orden de Encargo *</label>
-                            <select id="pc-venta-select" onchange="window.updateEncargoBanner()">
+                            <select id="pc-venta-select" onchange="window.updateEncargoBanner(); window.updateViajeBanner();">
                                 <option value="">-- Seleccionar Encargo --</option>
-                                ${encargos.map(v => {
+                                ${[...encargos].sort((a, b) => (b.comprado_en_viaje ? 1 : 0) - (a.comprado_en_viaje ? 1 : 0)).map(v => {
                                     const prod = productos.find(p => p.id?.toString() === v.producto_id?.toString());
-                                    return `<option value="${v.id}" ${ventaIdPrefill && ventaIdPrefill.toString() === v.id.toString() ? 'selected' : ''}>${prod ? prod.nombre_producto : 'Prod #'+v.producto_id} — Orden #${v.id.toString().slice(-4)}</option>`;
+                                    const tag = v.comprado_en_viaje ? '✈️ ' : '🛍️ ';
+                                    return `<option value="${v.id}" ${ventaIdPrefill && ventaIdPrefill.toString() === v.id.toString() ? 'selected' : ''}>${tag}${prod ? prod.nombre_producto : 'Prod #'+v.producto_id} — Orden #${v.id.toString().slice(-4)}</option>`;
                                 }).join('')}
                             </select>
                         </div>
@@ -865,11 +1100,6 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Valor descontado banco (COP)</label>
-                            <input type="number" id="pc-costo-cop" placeholder="0" step="1">
-                        </div>
-
-                        <div class="form-group">
                             <label class="form-label">Comprobante de Pago</label>
                             ${buildComprobanteUploadHTML('comp-purchase-file')}
                         </div>
@@ -880,16 +1110,6 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Número de Factura *</label>
-                            <input type="text" id="pc-num-factura" placeholder="Ej. SHOP-9988" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label class="form-label">Código producto en factura (Opcional)</label>
-                            <input type="text" id="pc-codigo-factura" placeholder="Ej. SKU-7766">
-                        </div>
-
-                        <div class="form-group">
                             <label class="form-label">Estado Inicial</label>
                             <select id="pc-estado">
                                 <option value="Comprado en tienda EEUU">Comprado en tienda EEUU</option>
@@ -897,7 +1117,47 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                                 <option value="Bodega USA">Bodega USA</option>
                             </select>
                         </div>
+
+                        ${esViajeCompra ? '' : `
+                        <div class="form-group">
+                            <label class="form-label">Valor descontado banco (COP)</label>
+                            <input type="number" id="pc-costo-cop" placeholder="0" step="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Número de Factura *</label>
+                            <input type="text" id="pc-num-factura" placeholder="Ej. SHOP-9988" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Código producto en factura (Opcional)</label>
+                            <input type="text" id="pc-codigo-factura" placeholder="Ej. SKU-7766">
+                        </div>
+                        `}
                     </div>
+
+                    ${esViajeCompra ? `
+                    <div class="form-group full-width" style="margin-top:1.5rem;">
+                        <button type="button" id="btn-campos-adicionales-compra" class="btn-action" style="font-size:0.8rem;padding:8px 16px;" onclick="window.toggleSeccionCamposAdicionalesCompra()">▸ Campos Adicionales</button>
+                        <div id="pc-seccion-campos-adicionales" style="display:none;margin-top:12px;">
+                            <div class="admin-perms-grid">
+                                ${CAMPOS_COMPRA_AGIL.map(c => `
+                                <div class="admin-perm-row" id="fila-campo-compra-${c.key}">
+                                    <div class="admin-perm-label">
+                                        <span class="admin-perm-dot"></span>
+                                        <span>${c.label}</span>
+                                    </div>
+                                    <div class="admin-perm-controls">
+                                        <label class="admin-toggle-wrap">
+                                            <input type="checkbox" class="chk-campo-compra" value="${c.key}" onchange="window.toggleCampoCompra('${c.key}', this.checked)" />
+                                            <span class="admin-toggle-slider"></span>
+                                            <span class="admin-toggle-label">Incluido</span>
+                                        </label>
+                                    </div>
+                                </div>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    <div id="pc-campos-agregados" class="form-grid-3" style="margin-top:1rem;"></div>
+                    ` : ''}
 
                     <div id="pc-error" style="display:none; color:var(--primary-red); background:rgba(229,19,101,0.1); padding:10px; border-radius:8px; font-size:0.85rem; margin-top:1rem; text-align:center; font-weight:600;"></div>
                 </div>
@@ -909,8 +1169,17 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             </form>
         </div>`;
     container.style.display = 'flex';
-    
-    setTimeout(() => { attachComprobanteInput('comp-purchase-file'); }, 100);
+
+    setTimeout(() => { attachComprobanteInput('comp-purchase-file'); window.updateViajeBanner(); }, 100);
+
+    window.toggleSeccionCamposAdicionalesCompra = () => {
+        const el = document.getElementById('pc-seccion-campos-adicionales');
+        const btn = document.getElementById('btn-campos-adicionales-compra');
+        if (!el) return;
+        const showing = el.style.display !== 'none';
+        el.style.display = showing ? 'none' : 'block';
+        if (btn) btn.textContent = showing ? '▸ Campos Adicionales' : '▾ Campos Adicionales';
+    };
 
     window.togglePurchaseType = () => {
         const tipo = document.getElementById('pc-tipo').value;
@@ -921,6 +1190,40 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             if (banner) banner.style.display = 'none';
         } else {
             window.updateEncargoBanner();
+        }
+        window.updateViajeBanner();
+    };
+
+    // A qué viaje (si aplica) quedará vinculada la compra según lo que el
+    // usuario va seleccionando — ver la misma lógica en window.submitPurchase.
+    window.updateViajeBanner = () => {
+        const banner = document.getElementById('pc-viaje-banner');
+        if (!banner) return;
+        const tipo = document.getElementById('pc-tipo')?.value;
+        const estilo = (bg, border) => { banner.style.background = bg; banner.style.border = `1px solid ${border}`; };
+
+        if (tipo === 'encargo') {
+            const ventaId = document.getElementById('pc-venta-select')?.value;
+            const ventaTarget = ventaId ? encargos.find(v => v.id.toString() === ventaId) : null;
+            if (!ventaTarget) { banner.style.display = 'none'; return; }
+            if (ventaTarget.comprado_en_viaje && ventaTarget.viaje_id) {
+                const nombreViaje = (_cache?.viajes || []).find(v => v.id?.toString() === ventaTarget.viaje_id.toString())?.nombre || 'un viaje de encargos';
+                estilo('rgba(217,119,6,0.08)', 'rgba(217,119,6,0.3)');
+                banner.innerHTML = `<span>✈️</span><span style="font-size:0.82rem;color:#D97706;font-weight:700;">Este encargo se tomó "En Viaje USA" — la compra quedará vinculada al viaje: <strong>${nombreViaje}</strong>.</span>`;
+            } else {
+                estilo('var(--surface-2)', 'var(--border-base)');
+                banner.innerHTML = `<span>🛍️</span><span style="font-size:0.82rem;opacity:0.7;font-weight:700;">Este encargo es de Compras Online — la compra se registrará sin vincular a ningún viaje, así haya uno activo ahora.</span>`;
+            }
+            banner.style.display = 'flex';
+        } else {
+            if (viajeActivo) {
+                estilo('rgba(217,119,6,0.08)', 'rgba(217,119,6,0.3)');
+                banner.innerHTML = `<span>✈️</span><span style="font-size:0.82rem;color:#D97706;font-weight:700;">Se asociará automáticamente al viaje activo: <strong>${viajeActivo.nombre}</strong> (${viajeActivo.destino || 'EEUU'}, desde ${viajeActivo.fecha_inicio}).</span>`;
+            } else {
+                estilo('rgba(239,68,68,0.08)', 'rgba(239,68,68,0.25)');
+                banner.innerHTML = `<span>⚠️</span><span style="font-size:0.82rem;color:var(--primary-red);font-weight:700;">No hay un viaje activo en este momento — esta compra se registrará normal, sin vincular a un viaje.</span>`;
+            }
+            banner.style.display = 'flex';
         }
     };
 
@@ -979,6 +1282,11 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                         <div style="font-size:0.6rem; opacity:0.5; text-transform:uppercase; margin-bottom:2px;">Marca</div>
                         <div style="font-size:0.9rem; font-weight:800;">${marca}</div>
                     </div>
+                    ${vData.comprado_en_viaje ? `
+                    <div style="background:rgba(217,119,6,0.1); border-radius:10px; padding:0.5rem 0.8rem; border:1px solid rgba(217,119,6,0.3);">
+                        <div style="font-size:0.6rem; opacity:0.6; text-transform:uppercase; margin-bottom:2px;">Canal de Compra</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:#D97706;">${canalLabel(vData)}</div>
+                    </div>` : ''}
                 </div>
                 ${linkCompra ? `<a href="${linkCompra}" target="_blank" style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; padding:6px 14px; border-radius:8px; background:rgba(6,214,160,0.1); color:var(--success-green); border:1px solid rgba(6,214,160,0.25); text-decoration:none; font-weight:700;">🔗 Abrir URL de Compra</a>` : '<span style="font-size:0.75rem; opacity:0.4;">Sin URL de compra registrada</span>'}
             </div>`;
@@ -988,18 +1296,20 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
         const tipo = document.getElementById('pc-tipo').value;
         const proveedor = document.getElementById('pc-proveedor').value.trim();
         const costo = parseFloat(document.getElementById('pc-costo').value);
-        const costoCop = parseFloat(document.getElementById('pc-costo-cop').value) || 0;
+        // En modo ágil (viaje activo) estos 3 campos pueden no existir en el
+        // DOM si el usuario no los agregó desde "Campos Adicionales".
+        const costoCop = parseFloat(document.getElementById('pc-costo-cop')?.value) || 0;
         const compFileInput = document.getElementById('comp-purchase-file');
         const compFile = compFileInput && compFileInput.files[0] ? compFileInput.files[0] : null;
         const fechaComp = document.getElementById('pc-fecha').value;
-        const numFact = document.getElementById('pc-num-factura').value;
-        const codFact = document.getElementById('pc-codigo-factura').value;
+        const numFact = document.getElementById('pc-num-factura')?.value || '';
+        const codFact = document.getElementById('pc-codigo-factura')?.value || '';
         const estado = document.getElementById('pc-estado').value;
         const ventaId = tipo === 'encargo' ? document.getElementById('pc-venta-select').value : null;
         const productoId = tipo === 'stock' ? document.getElementById('pc-producto-select').value : null;
 
         const errEl = document.getElementById('pc-error');
-        if (!proveedor || isNaN(costo) || costo <= 0 || !fechaComp || !numFact) {
+        if (!proveedor || isNaN(costo) || costo <= 0 || !fechaComp || (!numFact && !esViajeCompra)) {
             errEl.textContent = 'Completa los campos obligatorios correctamente.';
             errEl.style.display = '';
             return;
@@ -1022,9 +1332,29 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             }
             const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile, 'comprobantes') : "";
 
-            const payload = { 
+            // A qué viaje (si aplica) queda vinculada esta compra:
+            // - Encargo cuya venta se registró como "En Viaje USA": hereda el
+            //   viaje de esa venta, sin importar si ese viaje sigue activo hoy
+            //   — la compra siempre pertenece al mismo viaje que el encargo.
+            // - Encargo de "Compras Online" (no fue venta de viaje): nunca se
+            //   vincula a un viaje, así haya uno activo en este momento — el
+            //   submódulo de Compras en Viaje solo debe recibir lo que vino de
+            //   ventas "En Viaje USA".
+            // - Stock (sin venta asociada): no hay venta que lo clasifique, así
+            //   que se vincula solo si hay un viaje activo ahora mismo.
+            let viajeIdCompra = null;
+            if (tipo === 'encargo' && ventaId) {
+                const ventaTarget = encargos.find(v => v.id.toString() === ventaId);
+                if (ventaTarget?.comprado_en_viaje && ventaTarget?.viaje_id) {
+                    viajeIdCompra = ventaTarget.viaje_id;
+                }
+            } else {
+                try { const activoAlGuardar = await ViajeService.getActivo(); viajeIdCompra = activoAlGuardar?.id || null; } catch (_) { /* sin viaje activo */ }
+            }
+
+            const payload = {
                 id: Date.now().toString(),
-                proveedor, 
+                proveedor,
                 costo_usd: costo,
                 costo_cop: costoCop,
                 comprobante_url: comprobanteUrl,
@@ -1033,6 +1363,8 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                 numero_factura: numFact,
                 codigo_producto_factura: codFact,
                 estado_compra: estado,
+                viaje_id: viajeIdCompra,
+                es_viaje: !!viajeIdCompra,
                 empresa_id: auth.getEmpresaId()
             };
             if (ventaId) payload.venta_id = ventaId;
@@ -1045,6 +1377,14 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
             }
 
             await db.postData('Compras', payload, 'INSERT');
+
+            if (viajeIdCompra) {
+                // Best-effort: recalcula de inmediato cómo se reparten los gastos
+                // del viaje entre las compras vinculadas. Si falla, la compra ya
+                // quedó guardada — no bloquea el flujo.
+                try { await db.client.rpc('distribuir_gastos_viaje', { p_viaje_id: viajeIdCompra }); }
+                catch (e) { console.warn('[Compras] No se pudo redistribuir gastos del viaje:', e.message); }
+            }
 
             if (tipo === 'encargo' && ventaId) {
                 await db.postData('Ventas', { id: ventaId, estado_orden: 'Comprado en tienda EEUU' }, 'UPDATE');
@@ -1073,10 +1413,20 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null) => 
                 }
             }
 
-            showToast('✅ Compra registrada correctamente.');
             window.closeModal();
             window.invalidateDashCache?.(); // Refrescar alertas del dashboard
             _cache = null;
+
+            // Compra en lote (agrupada por tienda/marca desde la alerta de
+            // pendientes): en vez de recargar todo el módulo, se encadena
+            // directamente con la siguiente compra pendiente del grupo.
+            if (queueRestante.length > 0) {
+                showToast(`✅ Compra registrada. Continuando con la siguiente (${queueRestante.length} más)...`);
+                setTimeout(() => createPurchaseModal(navigateTo, queueRestante[0], queueRestante.slice(1)), 300);
+                return;
+            }
+
+            showToast('✅ Compra registrada correctamente.');
             _currentView = 'tabla';
             // Si el modal fue abierto desde el módulo purchases, re-renderiza purchases.
             // Si fue abierto desde otro módulo (ej. dashboard), navega al dashboard para ver las alertas actualizadas.

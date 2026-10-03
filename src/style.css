@@ -1119,6 +1119,41 @@ input:focus, select:focus, textarea:focus {
 }
 .pending-item:hover { background: var(--surface-3); }
 
+.purchase-pending-group { margin-bottom: 0.6rem; }
+.purchase-pending-group:last-child { margin-bottom: 0; }
+.purchase-pending-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.6rem 0.2rem;
+  flex-wrap: wrap;
+}
+.purchase-pending-group-header strong {
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+.pending-item-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--input-bg);
+  border: 1px solid var(--glass-border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pending-item-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pending-item-thumb span { font-size: 0.5rem; opacity: 0.4; text-align: center; line-height: 1.2; }
+.purchase-pending-group-body {
+  display: none;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.6rem;
+}
+.purchase-pending-group.open .purchase-pending-group-body { display: flex; }
+
 /* ── KPI Strip Compact ── */
 .kpi-strip {
   display: grid;
