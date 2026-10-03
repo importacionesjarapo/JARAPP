@@ -24,17 +24,18 @@ let _purFiltered = [];
 // Compras USA se divide en 2 submódulos: "general" (Stock + encargos de
 // Compras Online) y "viaje" (solo lo que viene de ventas "En Viaje USA").
 let _purSubmodulo = 'general';
-// Agrupación de la alerta de pendientes: por tienda o por marca del
-// producto, para comprar de una sola vez todo lo pendiente de un mismo
-// lugar. _pendientesActivosActual se mantiene sincronizado con el
-// submódulo activo para poder re-renderizar el agrupamiento sin recalcular
-// todo el módulo.
+// Agrupación de la alerta de pendientes: por tienda, marca o canal del
+// producto/venta, para comprar de una sola vez todo lo pendiente de un
+// mismo lugar. Se elige el grupo desde un <select> (en vez de listar todas
+// las tarjetas apiladas) para que la pantalla no crezca sin control cuando
+// hay muchas tiendas/marcas distintas. _pendientesActivosActual se
+// mantiene sincronizado con el submódulo activo para poder re-renderizar
+// el agrupamiento sin recalcular todo el módulo.
 let _purPendingGroupBy = 'tienda';
 let _pendientesActivosActual = [];
-// Cuántos grupos se muestran antes del botón "Mostrar más" (evita que la
-// pantalla se vuelva muy larga cuando hay muchas tiendas/marcas distintas).
-const PENDING_GROUPS_PAGE_SIZE = 5;
-let _purPendingGroupsShowAll = false;
+let _purPendingSelectedGroup = null;
+let _purPendingItemsPage = 0;
+const PENDING_ITEMS_PAGE_SIZE = 8;
 
 // ─── Helper: format date label ─────────────────────────────────────────────────
 const formatDateLabel = (dateStr) => {
@@ -88,6 +89,31 @@ const agruparPendientes = (pendientes, productos, criterio) => {
     return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
 };
 
+// ─── Tarjeta de un pendiente — con miniatura del producto para identificarlo
+// sin necesidad de abrirlo ───────────────────────────────────────────────
+const renderPendingItemCard = (p, productos, mostrarCanal, criterioEfectivo) => {
+    const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
+    const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
+    const imgUrl = prod.url_imagen || '';
+    return `
+    <div class="pending-item">
+        <div style="display:flex; gap:10px; align-items:center; min-width:0;">
+            <div class="pending-item-thumb">
+                ${imgUrl ? `<img src="${imgUrl}" alt="${prodName}">` : '<span>SIN<br>FOTO</span>'}
+            </div>
+            <div style="min-width:0;">
+                <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
+                <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
+                ${mostrarCanal && criterioEfectivo !== 'canal' ? `<br><span style="font-size:0.68rem;opacity:0.65;">${canalLabel(p)}</span>` : ''}
+            </div>
+        </div>
+        ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
+            class="btn-primary" style="font-size:0.75rem; padding:7px 12px; flex-shrink:0;">
+            Comprar Ahora
+        </button>` : ''}
+    </div>`;
+};
+
 // ─── Render: Alerta de pendientes (siempre visible) ────────────────────────────
 // mostrarCanal: solo en el submódulo "Compras en Viaje" tiene sentido
 // clasificar por canal — en "Compras Online" todo es, por definición, en
@@ -96,12 +122,37 @@ const renderPendingAlert = (pendientes, productos, criterio = 'tienda', mostrarC
     if (!pendientes || pendientes.length === 0) return '';
     const criterioEfectivo = (criterio === 'canal' && !mostrarCanal) ? 'tienda' : criterio;
     const grupos = agruparPendientes(pendientes, productos, criterioEfectivo);
-    const iconoCriterio = criterioEfectivo === 'marca' ? '🏷️' : (criterioEfectivo === 'canal' ? '' : '🏪');
-    const nombreCriterio = criterioEfectivo === 'marca' ? 'marca' : (criterioEfectivo === 'canal' ? 'canal de compra' : 'tienda');
+    const nombreCriterio = criterioEfectivo === 'marca' ? 'marca' : (criterioEfectivo === 'canal' ? 'canal' : 'tienda');
+    const selectLabel = criterioEfectivo === 'marca' ? 'Seleccionar marca pendiente de compra'
+        : (criterioEfectivo === 'canal' ? 'Seleccionar canal pendiente de compra' : 'Seleccionar tienda pendiente de compra');
 
-    const totalGrupos = grupos.length;
-    const gruposVisibles = _purPendingGroupsShowAll ? grupos : grupos.slice(0, PENDING_GROUPS_PAGE_SIZE);
-    const hayMasGrupos = totalGrupos > gruposVisibles.length;
+    // Si el grupo seleccionado ya no existe (cambió el criterio, cambió de
+    // submódulo, o ya no quedan pendientes ahí), se reinicia la selección.
+    if (_purPendingSelectedGroup && !grupos.some(([nombre]) => nombre === _purPendingSelectedGroup)) {
+        _purPendingSelectedGroup = null;
+    }
+    const grupoActivo = _purPendingSelectedGroup ? grupos.find(([nombre]) => nombre === _purPendingSelectedGroup) : null;
+
+    let panelGrupoHTML;
+    if (!grupoActivo) {
+        panelGrupoHTML = `<p style="opacity:0.5;font-size:0.82rem;text-align:center;padding:1.5rem 0;">Selecciona ${nombreCriterio === 'tienda' ? 'una tienda' : (nombreCriterio === 'marca' ? 'una marca' : 'un canal')} arriba para ver sus pendientes.</p>`;
+    } else {
+        const [nombre, items] = grupoActivo;
+        const visibles = items.slice(0, (_purPendingItemsPage + 1) * PENDING_ITEMS_PAGE_SIZE);
+        const hayMasItems = items.length > visibles.length;
+        panelGrupoHTML = `
+        <div class="purchase-pending-group open">
+            <div class="purchase-pending-group-header" style="cursor:default;">
+                <strong>${nombre}</strong>
+                <span class="pending-badge">${items.length}</span>
+                ${auth.canEdit('purchases') && items.length > 1 ? `<button class="btn-primary" style="font-size:0.75rem;padding:7px 14px;" data-ids="${items.map(p => p.id).join(',')}" onclick="window.comprarGrupoPendiente(this)">🛒 Comprar todo (${items.length})</button>` : ''}
+            </div>
+            <div class="purchase-pending-group-body">
+                ${visibles.map(p => renderPendingItemCard(p, productos, mostrarCanal, criterioEfectivo)).join('')}
+            </div>
+            ${hayMasItems ? `<button class="btn-action" style="width:100%;margin-top:0.6rem;" onclick="window.showMorePurPendingItems()">Mostrar ${items.length - visibles.length} más…</button>` : ''}
+        </div>`;
+    }
 
     return `
     <div class="purchase-pending-alert">
@@ -115,39 +166,14 @@ const renderPendingAlert = (pendientes, productos, criterio = 'tienda', mostrarC
             <button class="btn-action" style="${criterioEfectivo==='marca' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('marca')">🏷️ Por Marca</button>
             ${mostrarCanal ? `<button class="btn-action" style="${criterioEfectivo==='canal' ? 'background:var(--brand-magenta);color:#fff;border-color:var(--brand-magenta);' : ''}" onclick="window.setPurPendingGroupBy('canal')">🌐 Por Canal (Online/Tienda)</button>` : ''}
         </div>
-        ${gruposVisibles.map(([nombre, items], idx) => {
-            const groupId = `ppg-${idx}`;
-            const abierto = idx === 0; // el grupo más grande (ya viene ordenado) arranca expandido
-            return `
-            <div class="purchase-pending-group${abierto ? ' open' : ''}" id="${groupId}">
-                <div class="purchase-pending-group-header" onclick="window.togglePendingGroup('${groupId}')">
-                    <strong>${criterioEfectivo === 'canal' ? nombre : `${iconoCriterio} ${nombre}`}</strong>
-                    <span class="pending-badge">${items.length}</span>
-                    ${auth.canEdit('purchases') && items.length > 1 ? `<button class="btn-primary" style="font-size:0.75rem;padding:7px 14px;" data-ids="${items.map(p => p.id).join(',')}" onclick="event.stopPropagation();window.comprarGrupoPendiente(this)">🛒 Comprar todo (${items.length})</button>` : ''}
-                    <span class="purchase-pending-group-caret">▼</span>
-                </div>
-                <div class="purchase-pending-group-body">
-                    ${items.map(p => {
-                        const prod = productos.find(x => x.id?.toString() === p.producto_id?.toString()) || {};
-                        const prodName = prod.nombre_producto || `Prod #${p.producto_id}`;
-                        return `
-                        <div class="pending-item">
-                            <div>
-                                <strong style="font-size:0.85rem;">Orden #${p.id.toString().slice(-4)}</strong><br>
-                                <span style="font-size:0.75rem; opacity:0.7;">${prodName}</span>
-                                ${mostrarCanal && criterioEfectivo !== 'canal' ? `<br><span style="font-size:0.68rem;opacity:0.65;">${canalLabel(p)}</span>` : ''}
-                            </div>
-                            ${auth.canEdit('purchases') ? `<button onclick="window.modalCompra('${p.id}')"
-                                class="btn-primary" style="font-size:0.75rem; padding:7px 12px;">
-                                Comprar Ahora
-                            </button>` : ''}
-                        </div>`;
-                    }).join('')}
-                </div>
-            </div>`;
-        }).join('')}
-        ${hayMasGrupos ? `<button class="btn-action" style="width:100%;margin-top:0.4rem;" onclick="window.togglePurPendingGroupsShowAll()">Mostrar ${totalGrupos - gruposVisibles.length} más…</button>`
-          : (totalGrupos > PENDING_GROUPS_PAGE_SIZE ? `<button class="btn-action" style="width:100%;margin-top:0.4rem;" onclick="window.togglePurPendingGroupsShowAll()">Mostrar menos</button>` : '')}
+        <div style="margin-bottom:1rem;">
+            <label style="display:block;font-size:0.72rem;font-weight:700;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">${selectLabel}</label>
+            <select id="pur-pending-group-select" style="width:100%;max-width:420px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:10px 14px;border-radius:12px;font-weight:700;outline:none;" onchange="window.selectPurPendingGroup(this.value)">
+                <option value="">-- Selecciona --</option>
+                ${grupos.map(([nombre, items]) => `<option value="${encodeURIComponent(nombre)}" ${_purPendingSelectedGroup === nombre ? 'selected' : ''}>${nombre} (${items.length})</option>`).join('')}
+            </select>
+        </div>
+        ${panelGrupoHTML}
     </div>`;
 };
 
@@ -639,7 +665,21 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
     window.setPurPendingGroupBy = (criterio) => {
         _purPendingGroupBy = criterio;
-        _purPendingGroupsShowAll = false;
+        _purPendingSelectedGroup = null;
+        _purPendingItemsPage = 0;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
+    };
+
+    window.selectPurPendingGroup = (value) => {
+        _purPendingSelectedGroup = value ? decodeURIComponent(value) : null;
+        _purPendingItemsPage = 0;
+        const pendCont = document.getElementById('pur-pending-container');
+        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
+    };
+
+    window.showMorePurPendingItems = () => {
+        _purPendingItemsPage++;
         const pendCont = document.getElementById('pur-pending-container');
         if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
     };
@@ -648,16 +688,6 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
         const ids = (btn.dataset.ids || '').split(',').filter(Boolean);
         if (!ids.length) return;
         window.modalCompra(ids[0], ids.slice(1));
-    };
-
-    window.togglePendingGroup = (groupId) => {
-        document.getElementById(groupId)?.classList.toggle('open');
-    };
-
-    window.togglePurPendingGroupsShowAll = () => {
-        _purPendingGroupsShowAll = !_purPendingGroupsShowAll;
-        const pendCont = document.getElementById('pur-pending-container');
-        if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, _purSubmodulo === 'viaje');
     };
 
     window.switchPurchaseView = (tab) => {
@@ -679,7 +709,8 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
 
         _pendientesActivosActual = sub === 'viaje' ? pendientesViaje : pendientesGeneral;
         if (_purPendingGroupBy === 'canal' && sub !== 'viaje') _purPendingGroupBy = 'tienda';
-        _purPendingGroupsShowAll = false;
+        _purPendingSelectedGroup = null;
+        _purPendingItemsPage = 0;
         const pendCont = document.getElementById('pur-pending-container');
         if (pendCont) pendCont.innerHTML = renderPendingAlert(_pendientesActivosActual, _cache.productos, _purPendingGroupBy, sub === 'viaje');
 
