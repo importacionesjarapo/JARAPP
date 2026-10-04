@@ -457,6 +457,9 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                                       const num = tel.replace(/\D/g,'');
                                       contactHtml = `<br><div style="margin-top:8px; font-size:0.8rem; opacity:0.8;">📞 Wa/Tel: <strong>${tel}</strong> <a href="https://wa.me/57${num}" target="_blank" style="text-decoration:none; margin-left:3px;" title="Abrir Chat WA">💬</a></div>`;
                                   }
+                                  if (cliInfo.email) {
+                                      contactHtml += `<div style="margin-top:4px; font-size:0.8rem; opacity:0.8;">✉️ <a href="mailto:${cliInfo.email}" style="color:var(--info-blue); text-decoration:none;">${cliInfo.email}</a></div>`;
+                                  }
                               }
                               td1 = `<strong style="font-size:1rem; display:inline-block; color:var(--info-blue);">${c.col_bodega_fecha || 'Pendiente Ingreso'}</strong>`;
                               td3 = badgeHtml + contactHtml;
@@ -1138,6 +1141,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
                             <strong>WhatsApp/Tel:</strong> ${cData.telefono || cData.whatsapp || 'No registrado'}
                             ${telefonoNum ? `<a href="${whatsappLink}" target="_blank" style="margin-left:5px; color:var(--success-green); text-decoration:none; font-weight:bold;">[💬 WA]</a>` : ''}
                         </div>
+                        ${cData.email ? `<div style="font-size:0.85rem; margin-top:3px;"><strong>Email:</strong> <a href="mailto:${cData.email}" style="color:var(--info-blue); text-decoration:none;">${cData.email}</a></div>` : ''}
                         ${saldoHtml}
                     </div>
                     <div style="text-align:right;">

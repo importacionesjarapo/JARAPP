@@ -130,7 +130,7 @@ function _montarTablaClientes(list, clientStats) {
         containerId: 'clientes-tabla-container',
         tabla: 'Clientes',
         supabase: db.client,
-        searchColumns: ['nombre', 'numero_identificacion', 'whatsapp', 'ciudad', 'direccion', 'numero_lead_kommo'],
+        searchColumns: ['nombre', 'numero_identificacion', 'whatsapp', 'email', 'ciudad', 'direccion', 'numero_lead_kommo'],
         columnas: [
             { key: 'nombre', label: 'Nombre', width: '180px',
               render: (v) => `<strong style="color:var(--text-main);">${v || '—'}</strong>` },
@@ -138,6 +138,8 @@ function _montarTablaClientes(list, clientStats) {
               render: (v) => `<span style="font-family:monospace;font-size:0.82rem;">${v || '—'}</span>` },
             { key: 'whatsapp', label: 'WhatsApp', width: '140px',
               render: (v) => `<span style="color:var(--success-green);font-weight:600;">${v || '—'}</span>` },
+            { key: 'email', label: 'Email', width: '180px',
+              render: (v) => v ? `<span style="font-size:0.82rem;">${v}</span>` : `<span style="opacity:0.4;">—</span>` },
             { key: 'ciudad', label: 'Ciudad / Dirección', width: '200px',
               render: (v, row) => `<div>${v || '—'}</div><div style="font-size:0.76rem;color:var(--text-faint);white-space:normal;">${row.direccion || ''}</div>` },
             { key: 'numero_lead_kommo', label: 'Lead Kommo', width: '130px',
@@ -438,6 +440,7 @@ export const renderClients = async (renderLayout, navigateTo) => {
                 'Nombre': c.nombre || '',
                 'Identificación': c.numero_identificacion || '',
                 'WhatsApp': c.whatsapp || '',
+                'Email': c.email || '',
                 'Ciudad': c.ciudad || '',
                 'Dirección': c.direccion || '',
                 'Lead Kommo': c.numero_lead_kommo || '',
@@ -474,6 +477,7 @@ export const renderClients = async (renderLayout, navigateTo) => {
 
                 const nid = buscarColumna(fila, 'Identificación', 'Identificacion', 'Cédula', 'Cedula', 'NIT').toString().trim();
                 const whatsapp = buscarColumna(fila, 'WhatsApp', 'Whatsapp', 'Celular', 'Teléfono', 'Telefono').toString().trim();
+                const email = buscarColumna(fila, 'Email', 'Correo', 'Correo Electrónico', 'Correo Electronico').toString().trim();
                 const ciudad = buscarColumna(fila, 'Ciudad').toString().trim();
                 const direccion = buscarColumna(fila, 'Dirección', 'Direccion').toString().trim();
 
@@ -485,7 +489,7 @@ export const renderClients = async (renderLayout, navigateTo) => {
 
                 const payload = {
                     id: (Date.now() + i).toString(),
-                    nombre, numero_identificacion: nid, whatsapp,
+                    nombre, numero_identificacion: nid, whatsapp, email,
                     ciudad, direccion: direccion && ciudad ? `${direccion} (${ciudad})` : direccion,
                     numero_lead_kommo: '',
                     fecha_registro: new Date().toLocaleDateString(),
@@ -571,6 +575,10 @@ export const renderClients = async (renderLayout, navigateTo) => {
                             <div class="modal-info-box">
                                 <p style="margin:0 0 5px; font-size:0.75rem; opacity:0.6;">📱 WhatsApp</p>
                                 <strong style="font-size:1.1rem; color:var(--success-green);">${c.whatsapp || 'No registrado'}</strong>
+                            </div>
+                            <div class="modal-info-box">
+                                <p style="margin:0 0 5px; font-size:0.75rem; opacity:0.6;">✉️ Email</p>
+                                <strong style="font-size:1.1rem;">${c.email || 'No registrado'}</strong>
                             </div>
                             <div class="modal-info-box">
                                 <p style="margin:0 0 5px; font-size:0.75rem; opacity:0.6;">🏢 Lead Kommo</p>
@@ -754,7 +762,7 @@ window.enviarPortalWhatsApp = function(clienteId, token, nombre, whatsapp) {
 // ─── Create Client Modal (unchanged) ──────────────────────────────────────────
 export const createClientModal = async (id, navigateTo) => {
     let mode = id ? 'UPDATE' : 'INSERT';
-    let data = { nombre:'', numero_identificacion:'', numero_lead_kommo:'', direccion:'', ciudad:'', whatsapp:'' };
+    let data = { nombre:'', numero_identificacion:'', numero_lead_kommo:'', direccion:'', ciudad:'', whatsapp:'', email:'' };
     const container = document.getElementById('modal-container');
     const content   = document.getElementById('modal-content');
 
@@ -807,6 +815,10 @@ export const createClientModal = async (id, navigateTo) => {
                         <div class="form-group">
                             <label class="form-label">Ciudad de Residencia</label>
                             <input type="text" name="ciu" value="${data.ciudad}" required placeholder="Ciudad del cliente">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email (Opcional)</label>
+                            <input type="email" name="email" value="${data.email || ''}" placeholder="cliente@correo.com">
                         </div>
                         <div class="form-group" style="grid-column: span 3;">
                             ${id ? `
@@ -861,6 +873,8 @@ export const createClientModal = async (id, navigateTo) => {
                         if (nid && !existing.numero_identificacion) existing.numero_identificacion = nid;
                         if (wa && (!existing.whatsapp || !existing.whatsapp.includes(wa))) existing.whatsapp = existing.whatsapp ? existing.whatsapp + ' | ' + wa : wa;
                         if (kommo && (!existing.numero_lead_kommo || !existing.numero_lead_kommo.includes(kommo))) existing.numero_lead_kommo = existing.numero_lead_kommo ? existing.numero_lead_kommo + ' | ' + kommo : kommo;
+                        const emailNuevo = (fd.get('email')||'').trim();
+                        if (emailNuevo && !existing.email) existing.email = emailNuevo;
                         
                         const fullDir = `${fd.get('dir')} (${fd.get('ciu')})`;
                         if (dir && (!existing.direccion || !existing.direccion.includes(fd.get('dir')))) {
@@ -889,14 +903,15 @@ export const createClientModal = async (id, navigateTo) => {
                 dir = `${dir} (${fd.get('ciu')})`;
             }
 
-            const payload = { 
-                id:id||Date.now().toString(), 
-                nombre:fd.get('nombre'), 
-                numero_identificacion:nid, 
-                numero_lead_kommo:kommo, 
-                direccion:dir, 
-                ciudad:fd.get('ciu'), 
-                whatsapp:wa, 
+            const payload = {
+                id:id||Date.now().toString(),
+                nombre:fd.get('nombre'),
+                numero_identificacion:nid,
+                numero_lead_kommo:kommo,
+                direccion:dir,
+                ciudad:fd.get('ciu'),
+                whatsapp:wa,
+                email:(fd.get('email')||'').trim(),
                 fecha_registro:data.fecha_registro||new Date().toLocaleDateString()
             };
             if (mode === 'INSERT') payload.empresa_id = auth.getEmpresaId();
