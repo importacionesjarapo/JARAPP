@@ -261,18 +261,24 @@ function buildConceptosAdminRows() {
   return `
     <div style="display:flex;flex-direction:column;gap:8px;">
       ${_conceptosDraft.map((c, i) => `
-        <div style="display:flex;gap:10px;align-items:center;">
+        <div style="display:grid;grid-template-columns:1fr 150px 100px 40px;gap:10px;align-items:center;">
           <input type="text" id="concepto-nombre-${i}" value="${c.nombre || ''}" placeholder="Ej: Bolsa de empaque"
-            style="flex:1;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px;border-radius:10px;font-weight:600;outline:none;">
-          <div style="position:relative;width:150px;">
+            style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px;border-radius:10px;font-weight:600;outline:none;">
+          <div style="position:relative;">
             <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:0.85rem;">$</span>
             <input type="number" id="concepto-valor-${i}" value="${c.valor || 0}" min="0"
-              style="width:100%;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px 9px 24px;border-radius:10px;font-weight:700;outline:none;">
+              style="width:100%;box-sizing:border-box;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:9px 12px 9px 24px;border-radius:10px;font-weight:700;outline:none;">
           </div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-faint);white-space:nowrap;cursor:pointer;">
-            <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}> Activo
+          <label class="admin-toggle-wrap">
+            <input type="checkbox" id="concepto-activo-${i}" ${c.activo ? 'checked' : ''}>
+            <span class="admin-toggle-slider"></span>
+            <span class="admin-toggle-label">Activo</span>
           </label>
-          <button type="button" class="concepto-admin-del-btn" data-idx="${i}" title="Eliminar" style="background:none;border:none;color:var(--primary-red);cursor:pointer;font-size:1.1rem;padding:4px;">🗑</button>
+          <button type="button" class="concepto-admin-del-btn" data-idx="${i}" title="Eliminar concepto"
+            style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+              background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--primary-red);
+              border-radius:10px;cursor:pointer;font-size:1rem;transition:background 0.15s,transform 0.15s;"
+            onmouseover="this.style.background='rgba(230,57,70,0.2)'" onmouseout="this.style.background='rgba(230,57,70,0.1)'">🗑️</button>
         </div>
       `).join('')}
     </div>
@@ -390,6 +396,34 @@ function buildCalcAdminPanel(config) {
         </div>
       </div>
 
+      <!-- Visualización de Ganancia en la Calculadora -->
+      <div class="glass-card" style="padding:1.5rem;">
+        <h3 style="font-size:0.85rem;font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">Visualización de Ganancia en la Calculadora</h3>
+        <p style="font-size:0.72rem;color:var(--text-faint);margin-bottom:1rem;">Elige qué ve el usuario en la pantalla principal de la Calculadora y el Cotizador. Los administradores siempre ven el detalle completo (pesos y %) en el panel de desglose, sin importar esta opción. Solo una opción puede estar activa.</p>
+        <div class="admin-perms-grid">
+          <div class="admin-perm-row">
+            <span class="admin-perm-label">Ganancia en pesos</span>
+            <label class="admin-toggle-wrap">
+              <input type="checkbox" id="calc-mostrar-ganancia-pesos" ${(config.mostrarGanancia || 'pesos') === 'pesos' ? 'checked' : ''} onchange="window.toggleMostrarGanancia('pesos', this.checked)" />
+              <span class="admin-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="admin-perm-row">
+            <span class="admin-perm-label">Ganancia en porcentaje</span>
+            <label class="admin-toggle-wrap">
+              <input type="checkbox" id="calc-mostrar-ganancia-porcentaje" ${config.mostrarGanancia === 'porcentaje' ? 'checked' : ''} onchange="window.toggleMostrarGanancia('porcentaje', this.checked)" />
+              <span class="admin-toggle-slider"></span>
+            </label>
+          </div>
+          <div class="admin-perm-row">
+            <span class="admin-perm-label">Ambas (2 cuadros: $ y %)</span>
+            <label class="admin-toggle-wrap">
+              <input type="checkbox" id="calc-mostrar-ganancia-ambas" ${config.mostrarGanancia === 'ambas' ? 'checked' : ''} onchange="window.toggleMostrarGanancia('ambas', this.checked)" />
+              <span class="admin-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
 
       <!-- Gastos administrativos (#15/#16) -->
       <div class="glass-card" style="padding:1.5rem;">
@@ -408,17 +442,22 @@ function buildCalcAdminPanel(config) {
         <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border-base);">
           <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">3. Matriz de Pesos y Ganancias</h3>
         </div>
+        <p style="font-size:0.72rem;color:var(--text-faint);padding:0 1.5rem;margin:-0.6rem 0 1rem;">Para cada categoría, elige si la ganancia se calcula como un valor fijo en pesos o como un porcentaje sobre el costo total ya cargado (tax, comisión, logística, domicilio y gastos administrativos).</p>
         <div class="table-wrapper" style="border-radius:0;border:none;box-shadow:none;">
           <table class="data-table">
             <thead>
               <tr>
                 <th>Categoría</th>
                 <th class="text-center">Peso (Lbs)</th>
+                <th class="text-center">Tipo de Ganancia</th>
                 <th class="text-center">Ganancia (COP)</th>
+                <th class="text-center">Ganancia (%)</th>
               </tr>
             </thead>
             <tbody>
-              ${Object.entries(config.categorias).map(([key, cat]) => `
+              ${Object.entries(config.categorias).map(([key, cat]) => {
+                const esPct = cat.gananciaTipo === 'porcentaje';
+                return `
                 <tr>
                   <td><span style="font-weight:700;">${cat.label}</span></td>
                   <td class="text-center">
@@ -426,11 +465,22 @@ function buildCalcAdminPanel(config) {
                       style="width:80px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
                   </td>
                   <td class="text-center">
-                    <input type="number" id="calc-cat-gan-${key}" value="${cat.ganancia || 0}"
-                      style="width:120px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
+                    <label class="admin-toggle-wrap" style="justify-content:center;">
+                      <input type="checkbox" id="calc-cat-tipo-${key}" ${esPct ? 'checked' : ''} onchange="window.toggleGananciaTipo('${key}', this.checked)" />
+                      <span class="admin-toggle-slider"></span>
+                      <span class="admin-toggle-label" id="calc-cat-tipo-label-${key}">${esPct ? 'Porcentaje' : 'Fijo'}</span>
+                    </label>
+                  </td>
+                  <td class="text-center">
+                    <input type="number" id="calc-cat-gan-${key}" value="${cat.ganancia || 0}" ${esPct ? 'disabled' : ''}
+                      style="width:120px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? 'opacity:0.4;' : ''}">
+                  </td>
+                  <td class="text-center">
+                    <input type="number" id="calc-cat-pct-${key}" value="${cat.gananciaPct || 0}" step="0.1" ${esPct ? '' : 'disabled'}
+                      style="width:90px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? '' : 'opacity:0.4;'}">
                   </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
           </table>
         </div>
@@ -511,6 +561,33 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
     }
   };
 
+  // Matriz de Pesos y Ganancias: alterna entre ganancia fija (COP) y por
+  // porcentaje para una categoría, habilitando/deshabilitando la columna
+  // que no aplica en vez de perder lo que ya estaba escrito ahí.
+  window.toggleGananciaTipo = (key, esPct) => {
+    const inputGan = document.getElementById(`calc-cat-gan-${key}`);
+    const inputPct = document.getElementById(`calc-cat-pct-${key}`);
+    const label    = document.getElementById(`calc-cat-tipo-label-${key}`);
+    if (inputGan) { inputGan.disabled = esPct; inputGan.style.opacity = esPct ? '0.4' : '1'; }
+    if (inputPct) { inputPct.disabled = !esPct; inputPct.style.opacity = esPct ? '1' : '0.4'; }
+    if (label) label.textContent = esPct ? 'Porcentaje' : 'Fijo';
+  };
+
+  // Visualización de Ganancia: switches mutuamente excluyentes — activar
+  // uno apaga los otros dos; no se permite apagar el único activo.
+  window.toggleMostrarGanancia = (key, checked) => {
+    const keys = ['pesos', 'porcentaje', 'ambas'];
+    if (!checked) {
+      const input = document.getElementById(`calc-mostrar-ganancia-${key}`);
+      if (input) input.checked = true;
+      return;
+    }
+    keys.forEach(k => {
+      const input = document.getElementById(`calc-mostrar-ganancia-${k}`);
+      if (input) input.checked = (k === key);
+    });
+  };
+
   window.adminResetPassword = (userId, userName) => {
     openResetPasswordModal(userId, userName);
   };
@@ -566,14 +643,18 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
         valorLibraUsd,
         valorLibra:     valorLibraUsd * refTrm,   // COP calculado = USD × TRM referencia
         costoDomicilio: parseFloat(document.getElementById('calc-cfg-costoDomicilio')?.value) || 0,
+        mostrarGanancia: ['pesos', 'porcentaje', 'ambas'].find(k => document.getElementById(`calc-mostrar-ganancia-${k}`)?.checked) || 'pesos',
         conceptosAdmin: _conceptosDraft.filter(c => c.nombre.trim()),
         categorias: {}
       };
       Object.keys(calcConfig.categorias).forEach(key => {
+        const esPct = document.getElementById(`calc-cat-tipo-${key}`)?.checked || false;
         newConfig.categorias[key] = {
           ...calcConfig.categorias[key],
-          peso:     parseFloat(document.getElementById(`calc-cat-peso-${key}`)?.value) || 0,
-          ganancia: parseFloat(document.getElementById(`calc-cat-gan-${key}`)?.value) || 0,
+          peso:         parseFloat(document.getElementById(`calc-cat-peso-${key}`)?.value) || 0,
+          ganancia:     parseFloat(document.getElementById(`calc-cat-gan-${key}`)?.value) || 0,
+          gananciaPct:  parseFloat(document.getElementById(`calc-cat-pct-${key}`)?.value) || 0,
+          gananciaTipo: esPct ? 'porcentaje' : 'fijo',
         };
       });
       await saveCalcConfig(newConfig);
@@ -756,7 +837,7 @@ function openUserModal(user, allUsers, navigateTo, renderLayout) {
 }
 
 function buildPermsGrid(perms = {}) {
-  const modules = ['dashboard','clients','inventory','sales','vendedores','purchases','logistics','finance','calculadora','params','documentacion','admin','feat_money','feat_usa','feat_calc_desglose','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno','calendario_ver','calendario_crear','calendario_editar','calendario_eliminar','calendario_plantilla_editar','calendario_fechas_editar'];
+  const modules = ['dashboard','clients','inventory','sales','vendedores','purchases','logistics','finance','calculadora','params','documentacion','admin','feat_money','feat_usa','feat_calc_desglose','feat_calc_editar_ganancia','cotizador_ver','cotizador_desglose','cotizador_pdf_cliente','cotizador_pdf_interno','calendario_ver','calendario_crear','calendario_editar','calendario_eliminar','calendario_plantilla_editar','calendario_fechas_editar'];
 
   return modules.map(mod => {
     const perm = perms[mod];

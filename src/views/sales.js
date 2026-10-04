@@ -871,9 +871,18 @@ const MODO_COMPRA_VIAJE_CARDS = [
     { modo:'tienda',  icon:'🏬', color:'#D97706',             titulo:'En Tienda', desc:'Se compra en persona en una tienda física. Registro ágil, pocos campos obligatorios.' },
 ];
 
-const renderSaleTypeSelector = () => {
+const renderSaleTypeSelector = async () => {
     const container = document.getElementById('modal-container');
     const content = document.getElementById('modal-content');
+    content.innerHTML = `<div style="text-align:center;padding:2rem;"><div class="loader"></div> Cargando...</div>`;
+    container.style.display = 'flex';
+
+    // "En Viaje USA" solo se habilita si hay un viaje activo en el módulo
+    // Viaje USA — sin eso no hay a qué vincular la venta.
+    let viajeActivo = null;
+    try { viajeActivo = await ViajeService.getActivo(); } catch (_) { /* sin viaje activo */ }
+    const hayViajeActivo = !!viajeActivo;
+
     content.innerHTML = `
         <div class="modal-content modal-wide">
             <div class="modal-header">
@@ -883,15 +892,23 @@ const renderSaleTypeSelector = () => {
             <div class="modal-body">
                 <p style="opacity:0.6;font-size:0.85rem;margin:0 0 1.5rem;">¿Qué tipo de transacción vas a registrar?</p>
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;">
-                    ${SALE_TYPE_CARDS.map(c => `
-                    <button type="button" onclick="window.modalVenta('${c.tipo}')"
-                        style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:2rem 1.2rem;background:var(--surface-1);border:2px solid var(--border-base);border-radius:18px;cursor:pointer;font-family:inherit;transition:all .15s ease;"
+                    ${SALE_TYPE_CARDS.map(c => {
+                        const deshabilitada = c.tipo === 'Viaje' && !hayViajeActivo;
+                        const onclick = deshabilitada
+                            ? `window.showToast('No hay un viaje activo — actívalo desde el módulo Viaje USA para poder registrar ventas ahí.','error')`
+                            : `window.modalVenta('${c.tipo}')`;
+                        return `
+                    <button type="button" onclick="${onclick}"
+                        style="position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:2rem 1.2rem;background:var(--surface-1);border:2px solid var(--border-base);border-radius:18px;cursor:${deshabilitada?'not-allowed':'pointer'};font-family:inherit;transition:all .15s ease;${deshabilitada?'opacity:0.45;filter:grayscale(0.6);':''}"
+                        ${deshabilitada ? '' : `
                         onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateY(-3px)';"
-                        onmouseout="this.style.borderColor='var(--border-base)';this.style.transform='translateY(0)';">
+                        onmouseout="this.style.borderColor='var(--border-base)';this.style.transform='translateY(0)';"`}>
+                        ${deshabilitada ? `<span style="position:absolute;top:10px;right:10px;font-size:0.62rem;font-weight:800;padding:3px 9px;border-radius:20px;background:var(--surface-3);color:var(--text-faint);letter-spacing:0.5px;">SIN VIAJE ACTIVO</span>` : ''}
                         <div style="font-size:2.6rem;line-height:1;">${c.icon}</div>
                         <h3 style="margin:0;font-size:1rem;font-weight:800;color:${c.color};">${c.titulo}</h3>
                         <p style="margin:0;font-size:0.78rem;opacity:0.65;line-height:1.5;">${c.desc}</p>
-                    </button>`).join('')}
+                    </button>`;
+                    }).join('')}
                 </div>
             </div>
         </div>`;
@@ -928,7 +945,7 @@ const renderModoCompraViajeSelector = () => {
 
 // ─── Create Sale Modal ──────────────────────────────────────────────────────
 export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
-    if (!tipoUI) { renderSaleTypeSelector(); return; }
+    if (!tipoUI) { await renderSaleTypeSelector(); return; }
     if (tipoUI === 'Viaje' && !modoCompra) { renderModoCompraViajeSelector(); return; }
     const esViaje = tipoUI === 'Viaje';
     // Registro ágil (menos campos obligatorios) solo aplica a compras en
@@ -1733,6 +1750,7 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                 estado_orden:tipoVenta==='Encargo'?'Validando Compra EEUU':'Completado Local',
                 comprado_en_viaje: esViaje,
                 viaje_id: viajeIdVenta,
+                modo_compra: esViaje ? (modoCompra || null) : null,
                 id_seguimiento:'SG-'+Math.floor(Math.random()*1000000),
                 analista_id: auth.getProfile()?.id || null,
                 empresa_id: auth.getEmpresaId()
@@ -1908,6 +1926,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                         </div>
                         <h3 style="margin:0 0 10px 0; font-size:1.2rem; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${producto.nombre_producto}</h3>
                         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                            <span style="font-size:0.72rem; padding:5px 10px; background:var(--success-green); color:#fff; border-radius:8px; font-weight:700;">🔢 Cantidad: ${producto.cantidad_encargada || 1}</span>
                             ${producto.talla?`<span style="font-size:0.72rem; padding:5px 10px; background:var(--primary-red); color:#fff; border-radius:8px; font-weight:700;">Talla ${producto.talla}</span>`:`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Talla: <strong>N/A</strong></span>`}
                             ${producto.genero?`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">Género: <strong>${producto.genero}</strong></span>`:''}
                             ${producto.tienda_cotizacion?`<span style="font-size:0.75rem; padding:6px 12px; background:var(--bg-main); border-radius:8px; border:1px solid var(--border-base);">🏪 ${producto.tienda_cotizacion}</span>`:''}

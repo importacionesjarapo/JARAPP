@@ -553,7 +553,7 @@ export const renderLogistics = async (renderLayout, navigateTo) => {
                     ${prodAsocDetalle?.url_imagen ? `<img src="${prodAsocDetalle.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.65rem;">SIN FOTO</span>'}
                 </div>
                 <div>
-                    <div style="font-weight:800; font-size:1rem;">${prodAsocDetalle?.nombre_producto || (item.venta_id ? 'Sin producto' : 'Stock General')}</div>
+                    <div style="font-weight:800; font-size:1rem;">${prodAsocDetalle?.nombre_producto || (item.venta_id ? 'Sin producto' : 'Stock General')} ${prodAsocDetalle ? `<span style="font-size:0.72rem;font-weight:700;color:var(--success-green);">× ${prodAsocDetalle.cantidad_encargada || 1}</span>` : ''}</div>
                     <div style="font-size:0.8rem; opacity:0.7; margin-top:2px;">${cliDetalle ? `Cliente: <strong style="color:var(--warning-orange);">${cliDetalle.nombre}</strong> · ` : ''}Venta #${item.venta_id ? item.venta_id.toString().slice(-4) : '-'}</div>
                 </div>
             </div>
@@ -847,7 +847,7 @@ export const createLogisticsModal = async (id, navigateTo) => {
                                                 <div style="width:34px; height:34px; border-radius:6px; overflow:hidden; flex-shrink:0; background:var(--input-bg); display:flex; align-items:center; justify-content:center; border:1px solid var(--border-base);">
                                                     ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
                                                 </div>
-                                                <span>${p?.nombre_producto || 'Producto Stock'} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
+                                                <span>${p?.nombre_producto || 'Producto Stock'} ${p ? `<strong style="color:var(--success-green);">× ${p.cantidad_encargada || 1}</strong>` : ''} <span style="opacity:0.5;">(Orden #${it.venta_id?.toString().slice(-4) || '-'})</span></span>
                                             </label>
                                         `;
                                     }).join('');
@@ -1097,7 +1097,8 @@ export const createLogisticsModal = async (id, navigateTo) => {
                </div>
                <div style="flex:1;">
                    <div style="font-weight:700; font-size:1rem; color:var(--text-main);">${pData.nombre_producto || 'Producto Stock General'}</div>
-                   <div style="display:flex; gap:8px; align-items:center; margin-top:4px; font-size:0.75rem;">
+                   <div style="display:flex; gap:8px; align-items:center; margin-top:4px; font-size:0.75rem; flex-wrap:wrap;">
+                       <span style="background:var(--success-green); color:#fff; padding:2px 6px; border-radius:4px; font-weight:700;">🔢 Cant: ${pData.cantidad_encargada || 1}</span>
                        <span style="opacity:0.7;">Tienda/Distribuidor: <strong>${pData.tienda_cotizacion || pData.marca || 'N/A'}</strong></span>
                        ${pData.talla ? `<span style="background:var(--primary-red); color:#fff; padding:2px 6px; border-radius:4px; font-weight:700;">Talla: ${pData.talla} ${pData.genero ? `(${pData.genero})` : ''}</span>` : ''}
                    </div>
@@ -1595,7 +1596,7 @@ window.modalDetalleGuia = async (guiaId) => {
                         ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
                     </div>
                     <div>
-                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
+                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong> ${p ? `<span style="font-size:0.72rem;font-weight:700;color:var(--success-green);">× ${p.cantidad_encargada || 1}</span>` : ''}<br>
                         <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>
                     </div>
                 </div>
@@ -1992,7 +1993,7 @@ window.modalAsociarGuiaExistente = async (logisticaId) => {
                         ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
                     </div>
                     <div>
-                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
+                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong> ${p ? `<span style="font-size:0.72rem;font-weight:700;color:var(--success-green);">× ${p.cantidad_encargada || 1}</span>` : ''}<br>
                         <span style="opacity:0.6;">Venta #${item.venta_id?.toString().slice(-4) || '-'}</span>
                     </div>
                 </div>
@@ -2143,7 +2144,7 @@ window.modalAvanzarGuia = async (guiaId) => {
                         ${p?.url_imagen ? `<img src="${p.url_imagen}" style="width:100%; height:100%; object-fit:cover;">` : '<span style="opacity:0.4; font-size:0.6rem;">📦</span>'}
                     </div>
                     <div style="flex:1;">
-                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong><br>
+                        <strong>${p?.nombre_producto || 'Producto Stock'}</strong> ${p ? `<span style="font-size:0.72rem;font-weight:700;color:var(--success-green);">× ${p.cantidad_encargada || 1}</span>` : ''}<br>
                         <span style="opacity:0.6; font-size:0.75rem;">Venta #${l.venta_id?.toString().slice(-4) || '-'}</span>
                     </div>
                 </label>
