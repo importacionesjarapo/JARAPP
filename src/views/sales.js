@@ -705,6 +705,7 @@ export const renderSales = async (renderLayout, navigateTo) => {
                 'Tipo Venta': v.tipo_venta,
                 'Cliente ID': c ? c.numero_identificacion : v.cliente_id,
                 'Cliente Nombre': c ? c.nombre : 'Desconocido',
+                'Cliente Email': c?.email || '',
                 'Producto SKU': prod ? prod.sku : '',
                 'Producto Nombre': prod ? prod.nombre_producto : '',
                 'Valor Total (COP)': parseFloat(v.valor_total_cop || 0),
@@ -1089,7 +1090,7 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
         if (!dropdown) return;
         const q = (query || '').trim().toLowerCase();
         _clienteSearchResults = (q
-            ? clientsList.filter(c => (c.nombre || '').toLowerCase().includes(q) || (c.numero_identificacion || '').toLowerCase().includes(q))
+            ? clientsList.filter(c => (c.nombre || '').toLowerCase().includes(q) || (c.numero_identificacion || '').toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q))
             : clientsList
         ).slice(0, 8);
         dropdown.dataset.activeIdx = '-1';
@@ -1101,7 +1102,7 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                     <div class="cliente-search-avatar" style="background:${clienteAvatarColor(c.id)};">${clienteInitials(c.nombre)}</div>
                     <div class="cliente-search-info">
                         <div class="cliente-search-nombre">${c.nombre || 'Sin nombre'}</div>
-                        <div class="cliente-search-meta">CC: ${c.numero_identificacion || '—'}${c.whatsapp ? ` · 📱 ${c.whatsapp.split(' | ').pop()}` : ''}</div>
+                        <div class="cliente-search-meta">CC: ${c.numero_identificacion || '—'}${c.whatsapp ? ` · 📱 ${c.whatsapp.split(' | ').pop()}` : ''}${c.email ? ` · ✉️ ${c.email}` : ''}</div>
                     </div>
                 </div>`).join('');
         }
@@ -1198,6 +1199,10 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                                 <div class="form-group">
                                     <label class="form-label">Ciudad</label>
                                     <input type="text" id="inl_cli_ciu" placeholder="Ciudad del cliente">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email (Opcional)</label>
+                                    <input type="email" id="inl_cli_email" placeholder="cliente@correo.com">
                                 </div>
                                 <div class="form-group full-width">
                                     <label class="form-label">Dirección (Opcional)</label>
@@ -1562,8 +1567,9 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                     const kommo = document.getElementById('inl_cli_kommo').value.trim();
                     const dir = document.getElementById('inl_cli_dir').value.trim();
                     const ciu = document.getElementById('inl_cli_ciu').value.trim();
+                    const email = document.getElementById('inl_cli_email').value.trim();
 
-                    const existing = list2.find(c => 
+                    const existing = list2.find(c =>
                         (nid && c.numero_identificacion === nid) || 
                         (kommo && c.numero_lead_kommo && c.numero_lead_kommo.includes(kommo)) || 
                         (wa && c.whatsapp && c.whatsapp.includes(wa))
@@ -1575,7 +1581,8 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                             if (nid && !existing.numero_identificacion) existing.numero_identificacion = nid;
                             if (wa && (!existing.whatsapp || !existing.whatsapp.includes(wa))) existing.whatsapp = existing.whatsapp ? existing.whatsapp + ' | ' + wa : wa;
                             if (kommo && (!existing.numero_lead_kommo || !existing.numero_lead_kommo.includes(kommo))) existing.numero_lead_kommo = existing.numero_lead_kommo ? existing.numero_lead_kommo + ' | ' + kommo : kommo;
-                            
+                            if (email && !existing.email) existing.email = email;
+
                             if (dir) {
                                 const fullDir = `${dir} (${ciu})`;
                                 if (!existing.direccion || !existing.direccion.includes(dir)) {
@@ -1598,7 +1605,7 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                     } else {
                         const newId = Date.now().toString();
                         const fullDir = dir ? `${dir} (${ciu})` : '';
-                        const payload = { id: newId, nombre, numero_identificacion:nid, numero_lead_kommo:kommo, direccion:fullDir, ciudad:ciu, whatsapp:wa, fecha_registro:new Date().toLocaleDateString(), empresa_id: auth.getEmpresaId() };
+                        const payload = { id: newId, nombre, numero_identificacion:nid, numero_lead_kommo:kommo, direccion:fullDir, ciudad:ciu, whatsapp:wa, email, fecha_registro:new Date().toLocaleDateString(), empresa_id: auth.getEmpresaId() };
                         await db.postData('Clientes', payload, 'INSERT');
                         showToast('Cliente creado', 'success');
 
@@ -1972,6 +1979,7 @@ export const openSaleDetailModal = async (ventaId, backAction='') => {
                         <p style="margin:0 0 8px; font-size:1.2rem; font-weight:800; color:var(--text-main);">${cliente.nombre}</p>
                         <p style="margin:0; opacity:0.7; font-size:0.9rem;">Documento: ${cliente.numero_identificacion||'N/A'}</p>
                         <p style="margin:6px 0 0; opacity:0.7; font-size:0.9rem;">WhatsApp: ${cliente.whatsapp||'N/A'}</p>
+                        ${cliente.email ? `<p style="margin:6px 0 0; opacity:0.7; font-size:0.9rem;">Email: ${cliente.email}</p>` : ''}
                         ${v.direccion_envio?`<p style="margin:15px 0 0; color:var(--violet); font-size:0.9rem; font-weight:800; background:var(--violet-dim); padding:10px; border-radius:8px; border-left:4px solid var(--violet);">📍 Envío a: ${v.direccion_envio}</p>`:''}
                     `:'<span style="opacity:0.4;">Cliente no vinculado.</span>'}
                 </div>
