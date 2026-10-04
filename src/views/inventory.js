@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, downloadExcel, renderPagination, paginate } from '../utils.js';
+import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, downloadExcel, readExcelFile, buscarColumna, renderPagination, paginate } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
@@ -496,6 +496,77 @@ export const renderInventory = async (renderLayout, navigateTo) => {
         downloadExcel(dataToExport, `Reporte_Inventario_${_invActiveTab}_${new Date().toISOString().split('T')[0]}`);
     };
 
+    // ── Plantilla e importación masiva de Productos (carga inicial de stock
+    // propio para negocios que ya tienen un inventario antes de usar la app) ──
+    window.descargarPlantillaProductos = () => {
+        const plantilla = [
+            { 'Producto': 'Air Jordan 1 Retro', 'SKU': '555088-101', 'Marca': 'Nike', 'Categoría': 'Tenis', 'Género': 'Hombre', 'Talla': '9US', 'Tienda': 'Nike.com', 'Costo (USD)': 120, 'Precio (COP)': 650000, 'Stock MDE': 2 },
+            { 'Producto': '(Solo este campo es obligatorio)', 'SKU': '(Opcional — se genera uno si se deja vacío)', 'Marca': '(Opcional)', 'Categoría': '(Opcional)', 'Género': '(Opcional)', 'Talla': '(Opcional)', 'Tienda': '(Opcional)', 'Costo (USD)': '(Opcional)', 'Precio (COP)': '(Opcional)', 'Stock MDE': '(Opcional — por defecto 0)' },
+        ];
+        downloadExcel(plantilla, 'Plantilla_Productos', 'Productos');
+    };
+
+    // Columnas esperadas (flexibles en nombre): Producto, SKU, Marca,
+    // Categoría, Género, Talla, Tienda, Costo (USD), Precio (COP), Stock MDE.
+    // Solo "Producto" es obligatoria por fila — igual que el importador de
+    // Clientes (#29). Un producto con el mismo SKU ya existente se omite en
+    // vez de duplicarse.
+    window.importarProductosExcel = async (file) => {
+        if (!file) return;
+        const input = document.getElementById('prod-import-input');
+        try {
+            const filas = await readExcelFile(file);
+            if (!filas.length) { showToast('El archivo no tiene filas para importar.', 'error'); return; }
+
+            const existentes = await db.fetchData('Productos');
+            const listaActual = Array.isArray(existentes) ? existentes : [];
+
+            let creados = 0, omitidos = 0, sinNombre = 0;
+            for (let i = 0; i < filas.length; i++) {
+                const fila = filas[i];
+                const nombre = buscarColumna(fila, 'Producto', 'Nombre', 'Modelo', 'Nombre Producto').toString().trim();
+                if (!nombre) { sinNombre++; continue; }
+
+                const sku = buscarColumna(fila, 'SKU', 'Ref', 'Referencia').toString().trim() || ('IMP-' + (Date.now() + i).toString().slice(-8));
+                const marca = buscarColumna(fila, 'Marca').toString().trim();
+                const categoria = buscarColumna(fila, 'Categoría', 'Categoria').toString().trim() || 'Generico';
+                const genero = buscarColumna(fila, 'Género', 'Genero').toString().trim();
+                const talla = buscarColumna(fila, 'Talla').toString().trim();
+                const tienda = buscarColumna(fila, 'Tienda', 'Origen', 'Tienda/Proveedor').toString().trim();
+                const precioUsd = parseFloat(buscarColumna(fila, 'Costo (USD)', 'Costo USD', 'Precio USD')) || 0;
+                const precioCop = parseFloat(buscarColumna(fila, 'Precio (COP)', 'Precio COP', 'Venta COP')) || 0;
+                const stockMde = parseInt(buscarColumna(fila, 'Stock MDE', 'Stock Medellín', 'Stock Medellin', 'Stock')) || 0;
+
+                const yaExiste = sku && listaActual.some(p => p.sku === sku);
+                if (yaExiste) { omitidos++; continue; }
+
+                const payload = {
+                    id: (Date.now() + i).toString(),
+                    nombre_producto: nombre, sku, marca, categoria, genero, talla,
+                    tienda_cotizacion: tienda,
+                    precio_usd: precioUsd, precio_cop: precioCop,
+                    stock_medellin: stockMde, stock_miami: 0, stock_transito: 0,
+                    url_imagen: '', link_producto: '',
+                    estado_producto: stockMde > 0 ? 'Disponible entrega inmediata' : 'Pendiente de compra',
+                    empresa_id: auth.getEmpresaId(),
+                };
+                await db.postData('Productos', payload, 'INSERT');
+                listaActual.push(payload);
+                creados++;
+            }
+
+            input.value = '';
+            const resumen = `✅ ${creados} producto(s) importado(s)` +
+                (omitidos ? `, ${omitidos} omitido(s) por SKU duplicado` : '') +
+                (sinNombre ? `, ${sinNombre} fila(s) sin nombre omitidas` : '');
+            showToast(resumen, creados ? 'success' : 'info');
+            if (creados) navigateTo('inventory');
+        } catch (err) {
+            input.value = '';
+            showToast('Error al importar: ' + err.message, 'error');
+        }
+    };
+
     const views = [
         { id:'grid',      icon:'⊞', label:'Grid' },
         { id:'tabla',     icon:'▤',  label:'Tabla' },
@@ -520,7 +591,12 @@ export const renderInventory = async (renderLayout, navigateTo) => {
         <div style="display:flex;gap:10px;align-items:center;">
             <input type="text" id="find-prod" placeholder="🔍 Marca, modelo, SKU..." style="max-width:220px;">
             <button class="btn-excel" onclick="window.exportInvExcel()">📥 Excel</button>
-            ${auth.canEdit('inventory') ? `<button class="btn-primary" onclick="window.modalProducto()" style="padding:10px 15px;">+ Producto</button>` : ''}
+            ${auth.canEdit('inventory') ? `
+                <button class="btn-action" onclick="window.descargarPlantillaProductos()">📋 Plantilla</button>
+                <input type="file" id="prod-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarProductosExcel(this.files[0])">
+                <button class="btn-action" onclick="document.getElementById('prod-import-input').click()">📤 Importar Excel</button>
+                <button class="btn-primary" onclick="window.modalProducto()" style="padding:10px 15px;">+ Producto</button>
+            ` : ''}
         </div>
     </div>
 
