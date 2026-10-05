@@ -1144,7 +1144,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
 
                         <div class="form-group" id="pc-stock-section" style="display:${tipoInicial === 'stock' ? '' : 'none'};grid-column:span 2;">
                             <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;">
-                                <input type="checkbox" id="pc-producto-nuevo-chk" onchange="window.toggleProductoNuevoStock(this.checked)">
+                                <input type="checkbox" id="pc-producto-nuevo-chk" onchange="window.toggleProductoNuevoStock(this.checked)" style="width:18px;height:18px;flex-shrink:0;accent-color:var(--primary-red);cursor:pointer;">
                                 <span class="form-label" style="margin:0;">Es un producto nuevo (aún no existe en Inventario)</span>
                             </label>
                             <div id="pc-producto-existente-wrap">
