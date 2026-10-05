@@ -17,6 +17,17 @@ export const getLogisticaFase = (ventaId, logisticaList, fallback = 'Procesando'
 };
 
 /**
+ * Igual que getLogisticaFase, pero para compras de stock propio (sin
+ * venta_id) — busca por producto_id en vez de venta_id.
+ */
+export const getLogisticaFasePorProducto = (productoId, logisticaList, fallback = 'Procesando') => {
+    if (!Array.isArray(logisticaList) || !productoId) return fallback;
+    const reg = logisticaList.find(l => !l.venta_id && l.producto_id?.toString() === productoId.toString());
+    if (!reg || !reg.fase) return fallback;
+    return reg.fase.replace(/^(\d+[\.\-\)]?\s*)/, '').trim();
+};
+
+/**
  * Retorna el color del badge según la fase logística.
  */
 export const getLogisticaColor = (fase) => {

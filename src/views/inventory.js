@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { auth } from '../auth.js';
-import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaColor, downloadExcel, readExcelFile, buscarColumna, renderPagination, paginate } from '../utils.js';
+import { formatUSD, formatCOP, renderError, showToast, uploadImageToSupabase, getLogisticaFase, getLogisticaFasePorProducto, getLogisticaColor, downloadExcel, readExcelFile, buscarColumna, renderPagination, paginate } from '../utils.js';
 import { TablaPro } from '../components/tabla-pro.js';
 
 // ─── Cache ─────────────────────────────────────────────────────────────────────
@@ -16,6 +16,12 @@ const getProductRealStatus = (producto, venta) => {
     if (venta) {
         const fase = getLogisticaFase(venta.id, globalLogisticaCache, producto.estado_producto||'En Proceso');
         return { label: fase, color: getLogisticaColor(fase) };
+    }
+    // Compra de stock propio en trazabilidad (sin cliente): mientras no haya
+    // llegado a Bodega Colombia, mostrar la fase real en vez del estado estático.
+    if (producto.estado_producto !== 'Disponible entrega inmediata') {
+        const faseStock = getLogisticaFasePorProducto(producto.id, globalLogisticaCache, null);
+        if (faseStock) return { label: faseStock, color: getLogisticaColor(faseStock) };
     }
     const st = producto.estado_producto || 'Disponible';
     let color = 'var(--info-blue)';

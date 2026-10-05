@@ -13,6 +13,27 @@ let _logPageByFase = {};
 let _logRppByFase = {};
 const LOG_RPP_DEFAULT = 15;
 
+// Compras de stock propio (sin venta_id) hacen trazabilidad en Logística igual
+// que un encargo, pero no hay cliente que las reciba: al llegar a "5. En Bodega
+// Colombia" ya están listas para venderse, así que ahí se suma la cantidad
+// comprada al stock de Medellín y el producto queda disponible.
+const actualizarStockProductoDesdeLogistica = async (item) => {
+    if (!item || item.venta_id || !item.producto_id) return;
+    try {
+        const productos = await db.fetchData('Productos');
+        const prod = (Array.isArray(productos) ? productos : []).find(p => p.id?.toString() === item.producto_id.toString());
+        if (!prod) return;
+        const cantidad = parseInt(item.cantidad) || 1;
+        await db.postData('Productos', {
+            id: prod.id,
+            stock_medellin: (parseInt(prod.stock_medellin) || 0) + cantidad,
+            estado_producto: 'Disponible entrega inmediata'
+        }, 'UPDATE');
+    } catch (e) {
+        console.warn('[Logistica] No se pudo actualizar el stock del producto:', e.message);
+    }
+};
+
 // Mapa de fase interna -> fase visible en el portal de clientes. Compartido entre
 // el guardado normal del formulario y la asociación retroactiva a guía existente.
 const MAPA_FASE_PORTAL = {
@@ -1408,6 +1429,13 @@ export const createLogisticsModal = async (id, navigateTo) => {
             const res = await db.postData('Logistica', payload, mode);
             if(res.error) throw new Error(res.error);
 
+            // Stock propio que llega a Bodega Colombia: suma al inventario
+            // disponible. Solo en la transición hacia la fase 5 (no en cada
+            // guardado posterior ya estando en esa fase) para no duplicar stock.
+            if (nuevaFase.startsWith('5.') && data.fase !== nuevaFase && !payload.venta_id && payload.producto_id) {
+                await actualizarStockProductoDesdeLogistica(payload);
+            }
+
             // Actualizar otros productos consolidados
             if (newGuiaId && consolidateIds.length > 0) {
                 btn.innerHTML = `<i class="loader"></i> Consolidando ${consolidateIds.length} productos...`;
@@ -2232,13 +2260,18 @@ window.confirmarAvanceGuia = async (guiaId) => {
             let hist = [];
             try { hist = JSON.parse(item.historial || '[]'); } catch(e) {}
             hist.push({ fase: '5. En Bodega Colombia', fecha: fechaAhora, notas: 'Recibido en Bodega Colombia (recepción masiva de guía)' });
-            await db.postData('Logistica', {
+            const yaEstabaEnFase5 = item.fase === '5. En Bodega Colombia';
+            const itemActualizado = {
                 ...item,
                 fase: '5. En Bodega Colombia',
                 col_bodega_fecha: fechaArribo,
                 historial: JSON.stringify(hist),
                 fecha_actualizacion: new Date().toISOString()
-            }, 'UPDATE');
+            };
+            await db.postData('Logistica', itemActualizado, 'UPDATE');
+            if (!yaEstabaEnFase5 && !item.venta_id && item.producto_id) {
+                await actualizarStockProductoDesdeLogistica(itemActualizado);
+            }
         }
 
         for (const { itemId, nota } of conNovedad) {

@@ -662,7 +662,15 @@ export const renderPurchases = async (renderLayout, navigateTo) => {
     if (_s || _e) { applyPurFilter(); }
 
     // Attach global functions
-    window.modalCompra = (ventaId = null, queueRestante = []) => createPurchaseModal(navigateTo, ventaId, queueRestante);
+    // Sin ventaId y sin tipo forzado (ej. botón "+ Registrar Compra"): primero
+    // se pregunta si es una compra para cliente (encargo) o para stock propio.
+    // Con ventaId (ej. desde la alerta de pendientes) se va directo al
+    // formulario como encargo, sin pasar por el selector.
+    window.modalCompra = (ventaId = null, queueRestante = [], tipoForzado = null) => {
+        if (!ventaId && !tipoForzado) { renderPurchaseTypeSelector(navigateTo); return; }
+        return createPurchaseModal(navigateTo, ventaId, queueRestante, tipoForzado || (ventaId ? 'encargo' : null));
+    };
+    window.modalCompraSelector = () => renderPurchaseTypeSelector(navigateTo);
 
     window.setPurPendingGroupBy = (criterio) => {
         _purPendingGroupBy = criterio;
@@ -907,13 +915,54 @@ function attachGroupToggles() {
     });
 }
 
+// ─── Selector de Tipo de Compra (pantalla previa al formulario) ────────────────
+// La mayoría de las compras siguen siendo encargos de clientes, pero también
+// hay compras de stock propio (sin cliente) para tener inventario disponible
+// en Colombia. Esta pantalla deja claro desde el inicio a cuál de los dos
+// casos corresponde el registro, igual que el selector de tipo de venta.
+const PURCHASE_TYPE_CARDS = [
+    { tipo:'encargo', icon:'👤', color:'var(--brand-magenta)', titulo:'Compra para Cliente (Encargo)', desc:'Compra vinculada a un encargo ya cotizado/vendido a un cliente. Hace trazabilidad hasta la entrega final.' },
+    { tipo:'stock',   icon:'📦', color:'var(--success-green)', titulo:'Compra para Stock Propio', desc:'Compra de producto sin cliente asignado, para tener disponible en inventario. Hace trazabilidad hasta Bodega Colombia.' },
+];
+
+const renderPurchaseTypeSelector = (navigateTo) => {
+    const container = document.getElementById('modal-container');
+    const content = document.getElementById('modal-content');
+    content.innerHTML = `
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h2>Nueva Compra</h2>
+                <button class="modal-close-btn" onclick="window.closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <p style="opacity:0.6;font-size:0.85rem;margin:0 0 1.5rem;">¿Qué tipo de compra vas a registrar?</p>
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1.2rem;">
+                    ${PURCHASE_TYPE_CARDS.map(c => `
+                    <button type="button" onclick="window.modalCompra(null, [], '${c.tipo}')"
+                        style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:2rem 1.2rem;background:var(--surface-1);border:2px solid var(--border-base);border-radius:18px;cursor:pointer;font-family:inherit;transition:all .15s ease;"
+                        onmouseover="this.style.borderColor='${c.color}';this.style.transform='translateY(-3px)';"
+                        onmouseout="this.style.borderColor='var(--border-base)';this.style.transform='translateY(0)';">
+                        <div style="font-size:2.6rem;line-height:1;">${c.icon}</div>
+                        <h3 style="margin:0;font-size:1rem;font-weight:800;color:${c.color};">${c.titulo}</h3>
+                        <p style="margin:0;font-size:0.78rem;opacity:0.65;line-height:1.5;">${c.desc}</p>
+                    </button>`).join('')}
+                </div>
+            </div>
+        </div>`;
+    container.style.display = 'flex';
+};
+
 // ─── Create Purchase Modal (unchanged logic, improved UI) ──────────────────────
-export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, queueRestante = []) => {
-    const [ventas, productos, comprasExistentes] = await Promise.all([
+export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, queueRestante = [], tipoForzado = null) => {
+    const [ventas, productos, comprasExistentes, configuracion] = await Promise.all([
         db.fetchData('Ventas'),
         db.fetchData('Productos'),
         db.fetchData('Compras'),
+        db.fetchData('Configuracion'),
     ]);
+    const tipoInicial = tipoForzado || 'encargo';
+    const getConfigList = (key) => Array.isArray(configuracion) ? configuracion.filter(c => c.clave === key).map(c => c.valor) : [];
+    const mrcsConfig = getConfigList('Marca'), catsConfig = getConfigList('Categoria'), gensConfig = getConfigList('Genero'), tndsConfig = getConfigList('Tienda');
 
     const encargos = (ventas || []).filter(v => v.tipo_venta === 'Encargo');
 
@@ -1067,13 +1116,21 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                     <div class="form-grid-2" style="margin-bottom: 2rem; background: var(--surface-1); padding: 2rem; border-radius: 16px; border: 1px solid var(--border-base);">
                         <div class="form-group">
                             <label class="form-label">Tipo de Compra *</label>
-                            <select id="pc-tipo" onchange="window.togglePurchaseType()" required>
-                                <option value="encargo">Encargo (Vinculado a Cliente)</option>
-                                <option value="stock">Stock Propio (Sin cliente)</option>
-                            </select>
+                            ${tipoForzado ? `
+                                <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface-2);border:1px solid var(--glass-border);border-radius:10px;">
+                                    <strong style="font-size:0.9rem;">${tipoForzado === 'stock' ? '📦 Stock Propio (Sin cliente)' : '👤 Encargo (Vinculado a Cliente)'}</strong>
+                                    <button type="button" class="btn-action" style="margin-left:auto;font-size:0.72rem;padding:4px 10px;" onclick="window.closeModal();window.modalCompraSelector()">Cambiar</button>
+                                </div>
+                                <input type="hidden" id="pc-tipo" value="${tipoForzado}">
+                            ` : `
+                                <select id="pc-tipo" onchange="window.togglePurchaseType()" required>
+                                    <option value="encargo" ${tipoInicial === 'encargo' ? 'selected' : ''}>Encargo (Vinculado a Cliente)</option>
+                                    <option value="stock" ${tipoInicial === 'stock' ? 'selected' : ''}>Stock Propio (Sin cliente)</option>
+                                </select>
+                            `}
                         </div>
-                        
-                        <div class="form-group" id="pc-encargo-section">
+
+                        <div class="form-group" id="pc-encargo-section" style="display:${tipoInicial === 'encargo' ? '' : 'none'};">
                             <label class="form-label">Orden de Encargo *</label>
                             <select id="pc-venta-select" onchange="window.updateEncargoBanner(); window.updateViajeBanner();">
                                 <option value="">-- Seleccionar Encargo --</option>
@@ -1085,12 +1142,60 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                             </select>
                         </div>
 
-                        <div class="form-group" id="pc-stock-section" style="display:none;">
-                            <label class="form-label">Producto Vinculado *</label>
-                            <select id="pc-producto-select">
-                                <option value="">-- Sin Producto --</option>
-                                ${(productos || []).map(p => `<option value="${p.id}">${p.marca} ${p.nombre_producto}</option>`).join('')}
-                            </select>
+                        <div class="form-group" id="pc-stock-section" style="display:${tipoInicial === 'stock' ? '' : 'none'};grid-column:span 2;">
+                            <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;">
+                                <input type="checkbox" id="pc-producto-nuevo-chk" onchange="window.toggleProductoNuevoStock(this.checked)">
+                                <span class="form-label" style="margin:0;">Es un producto nuevo (aún no existe en Inventario)</span>
+                            </label>
+                            <div id="pc-producto-existente-wrap">
+                                <label class="form-label">Producto Vinculado *</label>
+                                <select id="pc-producto-select">
+                                    <option value="">-- Sin Producto --</option>
+                                    ${(productos || []).map(p => `<option value="${p.id}">${p.marca} ${p.nombre_producto}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div id="pc-producto-nuevo-wrap" style="display:none;">
+                                <div class="form-grid-3">
+                                    <div class="form-group">
+                                        <label class="form-label">Nombre del Producto *</label>
+                                        <input type="text" id="pc-prod-nombre" placeholder="Ej. Air Jordan 1 Retro">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Marca</label>
+                                        <select id="pc-prod-marca">
+                                            <option value="">Seleccione...</option>
+                                            ${mrcsConfig.map(m => `<option value="${m}">${m}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Categoría</label>
+                                        <select id="pc-prod-categoria">
+                                            <option value="">Seleccione...</option>
+                                            ${catsConfig.map(c => `<option value="${c}">${c}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Género</label>
+                                        <select id="pc-prod-genero">
+                                            <option value="">Seleccione...</option>
+                                            ${gensConfig.map(g => `<option value="${g}">${g}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Talla (Opcional)</label>
+                                        <input type="text" id="pc-prod-talla" placeholder="Ej: 9US / M">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Precio Venta (COP) *</label>
+                                        <input type="number" id="pc-prod-precio-cop" placeholder="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top:12px;">
+                                <label class="form-label">Cantidad Comprada *</label>
+                                <input type="number" id="pc-stock-cantidad" value="1" min="1" style="max-width:140px;">
+                                <p style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Se suma al stock de Medellín cuando el seguimiento llegue a Bodega Colombia.</p>
+                            </div>
                         </div>
                     </div>
 
@@ -1186,6 +1291,13 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
         const showing = el.style.display !== 'none';
         el.style.display = showing ? 'none' : 'block';
         if (btn) btn.textContent = showing ? '▸ Campos Adicionales' : '▾ Campos Adicionales';
+    };
+
+    window.toggleProductoNuevoStock = (activo) => {
+        const wrapExistente = document.getElementById('pc-producto-existente-wrap');
+        const wrapNuevo = document.getElementById('pc-producto-nuevo-wrap');
+        if (wrapExistente) wrapExistente.style.display = activo ? 'none' : '';
+        if (wrapNuevo) wrapNuevo.style.display = activo ? '' : 'none';
     };
 
     window.togglePurchaseType = () => {
@@ -1318,7 +1430,15 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
         const codFact = document.getElementById('pc-codigo-factura')?.value || '';
         const estado = document.getElementById('pc-estado').value;
         const ventaId = tipo === 'encargo' ? document.getElementById('pc-venta-select').value : null;
-        const productoId = tipo === 'stock' ? document.getElementById('pc-producto-select').value : null;
+        const productoNuevoActivo = tipo === 'stock' && document.getElementById('pc-producto-nuevo-chk')?.checked;
+        let productoId = tipo === 'stock' && !productoNuevoActivo ? document.getElementById('pc-producto-select').value : null;
+        const stockCantidad = tipo === 'stock' ? (parseInt(document.getElementById('pc-stock-cantidad')?.value) || 0) : 0;
+        const prodNuevoNombre = productoNuevoActivo ? document.getElementById('pc-prod-nombre').value.trim() : '';
+        const prodNuevoMarca = productoNuevoActivo ? document.getElementById('pc-prod-marca').value : '';
+        const prodNuevoCategoria = productoNuevoActivo ? document.getElementById('pc-prod-categoria').value : '';
+        const prodNuevoGenero = productoNuevoActivo ? document.getElementById('pc-prod-genero').value : '';
+        const prodNuevoTalla = productoNuevoActivo ? document.getElementById('pc-prod-talla').value.trim() : '';
+        const prodNuevoPrecioCop = productoNuevoActivo ? parseFloat(document.getElementById('pc-prod-precio-cop').value) : 0;
 
         const errEl = document.getElementById('pc-error');
         if (!proveedor || isNaN(costo) || costo <= 0 || !fechaComp || (!numFact && !esViajeCompra)) {
@@ -1330,6 +1450,24 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
             errEl.textContent = 'Selecciona el encargo vinculado.';
             errEl.style.display = '';
             return;
+        }
+        if (tipo === 'stock') {
+            if (!stockCantidad || stockCantidad <= 0) {
+                errEl.textContent = 'Indica la cantidad comprada.';
+                errEl.style.display = '';
+                return;
+            }
+            if (productoNuevoActivo) {
+                if (!prodNuevoNombre || isNaN(prodNuevoPrecioCop) || prodNuevoPrecioCop <= 0) {
+                    errEl.textContent = 'Completa el nombre y precio de venta del producto nuevo.';
+                    errEl.style.display = '';
+                    return;
+                }
+            } else if (!productoId) {
+                errEl.textContent = 'Selecciona el producto vinculado o márcalo como producto nuevo.';
+                errEl.style.display = '';
+                return;
+            }
         }
         errEl.style.display = 'none';
 
@@ -1343,6 +1481,31 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                 btn.textContent = 'Subiendo comprobante...';
             }
             const comprobanteUrl = compFile ? await uploadImageToSupabase(compFile, 'comprobantes') : "";
+
+            // Compra de stock para un producto que aún no existe en Inventario:
+            // se crea primero el Producto (sin stock todavía — solo se suma al
+            // llegar a Bodega Colombia) y se usa su id como producto_id.
+            if (tipo === 'stock' && productoNuevoActivo) {
+                const nuevoProductoId = Date.now().toString() + 'PROD';
+                await db.postData('Productos', {
+                    id: nuevoProductoId,
+                    nombre_producto: prodNuevoNombre,
+                    sku: 'IMP-' + Date.now().toString().slice(-8),
+                    marca: prodNuevoMarca,
+                    categoria: prodNuevoCategoria || 'Generico',
+                    genero: prodNuevoGenero,
+                    talla: prodNuevoTalla,
+                    tienda_cotizacion: proveedor,
+                    precio_usd: costo,
+                    precio_cop: prodNuevoPrecioCop,
+                    stock_medellin: 0,
+                    stock_miami: 0,
+                    stock_transito: 0,
+                    estado_producto: 'Pendiente de compra',
+                    empresa_id: auth.getEmpresaId()
+                }, 'INSERT');
+                productoId = nuevoProductoId;
+            }
 
             // A qué viaje (si aplica) queda vinculada esta compra:
             // - Encargo cuya venta se registró como "En Viaje USA": hereda el
@@ -1400,16 +1563,23 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
 
             if (tipo === 'encargo' && ventaId) {
                 await db.postData('Ventas', { id: ventaId, estado_orden: 'Comprado en tienda EEUU' }, 'UPDATE');
-                
-                // --- Registro Automático en Logística ---
+            }
+
+            // --- Registro Automático en Logística ---
+            // Encargo: trazabilidad hasta la entrega final al cliente.
+            // Stock (sin cliente): misma trazabilidad, pero solo hasta que
+            // llegue a Bodega Colombia — ahí se suma al inventario disponible.
+            if ((tipo === 'encargo' && ventaId) || (tipo === 'stock' && productoId)) {
                 const logisticaList = await db.fetchData('Logistica');
                 const listLog = Array.isArray(logisticaList) ? logisticaList : [];
-                const yaEnLogistica = listLog.some(l => l.venta_id?.toString() === ventaId.toString());
-                
+                const yaEnLogistica = tipo === 'encargo'
+                    ? listLog.some(l => l.venta_id?.toString() === ventaId.toString())
+                    : false; // cada compra de stock es su propio envío de seguimiento
+
                 if (!yaEnLogistica) {
                     const payloadLogistica = {
                         id: Date.now().toString() + 'LOG',
-                        venta_id: ventaId,
+                        venta_id: tipo === 'encargo' ? ventaId : null,
                         compra_id: payload.id,
                         fase: '1. Comprado (Esperando Tracking Local USA)',
                         ubicacion: 'USA',
@@ -1421,6 +1591,10 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                         fecha_actualizacion: new Date().toISOString(),
                         empresa_id: auth.getEmpresaId()
                     };
+                    if (tipo === 'stock') {
+                        payloadLogistica.producto_id = productoId;
+                        payloadLogistica.cantidad = stockCantidad;
+                    }
                     await db.postData('Logistica', payloadLogistica, 'INSERT');
                 }
             }
