@@ -453,12 +453,23 @@ export const renderClients = async (renderLayout, navigateTo) => {
         downloadExcel(dataToExport, `Reporte_Clientes_${new Date().toISOString().split('T')[0]}`);
     };
 
+    // ── Plantilla e importación masiva de Clientes (carga inicial de la base
+    // de contactos para negocios que ya tienen sus clientes antes de usar
+    // la app) ────────────────────────────────────────────────────────────
+    window.descargarPlantillaClientes = () => {
+        const plantilla = [
+            { 'Nombre': 'Juan Pérez', 'Identificación': '123456789', 'WhatsApp': '3001234567', 'Email': 'juan@correo.com', 'Ciudad': 'Medellín', 'Dirección': 'Calle 10 # 20-30' },
+            { 'Nombre': '(Solo este campo es obligatorio)', 'Identificación': '(Opcional)', 'WhatsApp': '(Opcional)', 'Email': '(Opcional)', 'Ciudad': '(Opcional)', 'Dirección': '(Opcional)' },
+        ];
+        downloadExcel(plantilla, 'Plantilla_Clientes', 'Clientes');
+    };
+
     // ── Importar clientes desde Excel (#29) ─────────────────────────────────
     // Columnas esperadas (flexibles en nombre): Nombre, Identificación,
-    // WhatsApp, Ciudad, Dirección. Solo "Nombre" es obligatoria por fila.
-    // Un cliente ya existente (mismo número de identificación o WhatsApp) se
-    // omite en vez de duplicarse — igual que la detección de duplicados del
-    // formulario manual de arriba.
+    // WhatsApp, Email, Ciudad, Dirección. Solo "Nombre" es obligatoria por
+    // fila. Un cliente ya existente (mismo número de identificación o
+    // WhatsApp) se omite en vez de duplicarse — igual que la detección de
+    // duplicados del formulario manual de arriba.
     window.importarClientesExcel = async (file) => {
         if (!file) return;
         const input = document.getElementById('cli-import-input');
@@ -662,6 +673,7 @@ export const renderClients = async (renderLayout, navigateTo) => {
         <div style="display:flex;gap:10px;align-items:center;">
             <button class="btn-excel" onclick="window.exportCliExcel()">📥 Excel</button>
             ${auth.canEdit('clients') ? `
+                <button class="btn-action" onclick="window.descargarPlantillaClientes()">📋 Plantilla</button>
                 <input type="file" id="cli-import-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importarClientesExcel(this.files[0])">
                 <button class="btn-action" onclick="document.getElementById('cli-import-input').click()">📤 Importar Excel</button>
                 <button class="btn-primary" onclick="window.modalCliente()">+ Nuevo Cliente</button>
