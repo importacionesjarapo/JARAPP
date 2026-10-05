@@ -45,7 +45,7 @@ const renderInvKPI = (list) => {
 
     let kpis = [
         { icon:'📦', value: list.length,              label:'Total Productos',     color:'var(--info-blue)' },
-        { icon:'✅', value: disponibles,               label:'Disponibles MDE',    color:'var(--success-green)' },
+        { icon:'✅', value: disponibles,               label:'Disponibles Colombia',    color:'var(--success-green)' },
         { icon:'✈️', value: transito,                  label:'En Tránsito/Encargo',color:'var(--warning-orange)' },
         { icon:'💰', value: formatCOP(valorCatalogo), label:'Valor Catálogo',     color:'var(--brand-green)' },
         { icon:'🏷️', value: marcas,                    label:'Marcas Únicas',      color:'var(--primary-red)' },
@@ -73,7 +73,7 @@ window.openInventoryKPI = (kpiName) => {
     
     if (kpiName === 'Total Productos') {
         subtitle = 'Todos los productos registrados en el catálogo.';
-    } else if (kpiName === 'Disponibles MDE') {
+    } else if (kpiName === 'Disponibles Colombia') {
         productosFiltrados = productosFiltrados.filter(p => p.estado_producto === 'Disponible entrega inmediata');
         subtitle = 'Productos listos para entrega inmediata en tu bodega local.';
     } else if (kpiName === 'En Tránsito/Encargo') {
@@ -171,7 +171,7 @@ const renderViewGrid = (list) => `
                     </div>
                 </div>
                 <div style="background:var(--glass-hover);padding:8px;border-radius:8px;font-size:0.72rem;display:flex;justify-content:space-between;margin-bottom:10px;">
-                    <span>MDE: ${p.stock_medellin}</span><span style="opacity:0.4;">USA: ${p.stock_miami}</span>
+                    <span>Colombia: ${p.stock_medellin}</span><span style="opacity:0.4;">USA: ${p.stock_miami}</span>
                 </div>
                 <div style="display:flex;gap:8px;">
                     <button class="btn-action" onclick="window.modalViewProduct('${p.id}')">👁️ Detalles</button>
@@ -218,7 +218,7 @@ function _montarTablaInventario() {
           } },
         { key: 'talla', label: 'Talla', width: '80px', render: (v) => v || '<span style="opacity:0.3">—</span>' },
         { key: 'genero', label: 'Género', width: '90px', render: (v) => v || '<span style="opacity:0.3">—</span>' },
-        { key: 'stock_medellin', label: 'Stock MDE', width: '95px',
+        { key: 'stock_medellin', label: 'Stock Colombia', width: '95px',
           render: (v) => `<span class="cell-number" style="color:${parseInt(v)>0?'var(--success-green)':'var(--primary-red)'};">${v??'0'}</span>` },
         { key: 'stock_miami', label: 'Stock USA', width: '95px',
           render: (v) => `<span style="opacity:0.65;">${v??'—'}</span>` },
@@ -493,7 +493,7 @@ export const renderInventory = async (renderLayout, navigateTo) => {
                 'Talla': p.talla || '',
                 'Género': p.genero || '',
                 'Estado/Fase': statusLabel,
-                'Stock MDE': p.stock_medellin || 0,
+                'Stock Colombia': p.stock_medellin || 0,
                 'Stock USA': p.stock_miami || 0,
                 'Costo (USD)': parseFloat(p.precio_usd || 0),
                 'Precio (COP)': parseFloat(p.precio_cop || 0)
@@ -506,14 +506,14 @@ export const renderInventory = async (renderLayout, navigateTo) => {
     // propio para negocios que ya tienen un inventario antes de usar la app) ──
     window.descargarPlantillaProductos = () => {
         const plantilla = [
-            { 'Producto': 'Air Jordan 1 Retro', 'SKU': '555088-101', 'Marca': 'Nike', 'Categoría': 'Tenis', 'Género': 'Hombre', 'Talla': '9US', 'Tienda': 'Nike.com', 'Costo (USD)': 120, 'Precio (COP)': 650000, 'Stock MDE': 2 },
-            { 'Producto': '(Solo este campo es obligatorio)', 'SKU': '(Opcional — se genera uno si se deja vacío)', 'Marca': '(Opcional)', 'Categoría': '(Opcional)', 'Género': '(Opcional)', 'Talla': '(Opcional)', 'Tienda': '(Opcional)', 'Costo (USD)': '(Opcional)', 'Precio (COP)': '(Opcional)', 'Stock MDE': '(Opcional — por defecto 0)' },
+            { 'Producto': 'Air Jordan 1 Retro', 'SKU': '555088-101', 'Marca': 'Nike', 'Categoría': 'Tenis', 'Género': 'Hombre', 'Talla': '9US', 'Tienda': 'Nike.com', 'Costo (USD)': 120, 'Precio (COP)': 650000, 'Stock Colombia': 2 },
+            { 'Producto': '(Solo este campo es obligatorio)', 'SKU': '(Opcional — se genera uno si se deja vacío)', 'Marca': '(Opcional)', 'Categoría': '(Opcional)', 'Género': '(Opcional)', 'Talla': '(Opcional)', 'Tienda': '(Opcional)', 'Costo (USD)': '(Opcional)', 'Precio (COP)': '(Opcional)', 'Stock Colombia': '(Opcional — por defecto 0)' },
         ];
         downloadExcel(plantilla, 'Plantilla_Productos', 'Productos');
     };
 
     // Columnas esperadas (flexibles en nombre): Producto, SKU, Marca,
-    // Categoría, Género, Talla, Tienda, Costo (USD), Precio (COP), Stock MDE.
+    // Categoría, Género, Talla, Tienda, Costo (USD), Precio (COP), Stock Colombia.
     // Solo "Producto" es obligatoria por fila — igual que el importador de
     // Clientes (#29). Un producto con el mismo SKU ya existente se omite en
     // vez de duplicarse.
@@ -541,7 +541,7 @@ export const renderInventory = async (renderLayout, navigateTo) => {
                 const tienda = buscarColumna(fila, 'Tienda', 'Origen', 'Tienda/Proveedor').toString().trim();
                 const precioUsd = parseFloat(buscarColumna(fila, 'Costo (USD)', 'Costo USD', 'Precio USD')) || 0;
                 const precioCop = parseFloat(buscarColumna(fila, 'Precio (COP)', 'Precio COP', 'Venta COP')) || 0;
-                const stockMde = parseInt(buscarColumna(fila, 'Stock MDE', 'Stock Medellín', 'Stock Medellin', 'Stock')) || 0;
+                const stockMde = parseInt(buscarColumna(fila, 'Stock Colombia', 'Stock Medellín', 'Stock Medellin', 'Stock')) || 0;
 
                 const yaExiste = sku && listaActual.some(p => p.sku === sku);
                 if (yaExiste) { omitidos++; continue; }
@@ -611,7 +611,7 @@ export const renderInventory = async (renderLayout, navigateTo) => {
     <!-- Sub-tabs: Disponibles / Tránsito -->
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.8rem;margin-bottom:1rem;">
         <div style="display:flex;gap:10px;">
-            <button id="inv-tab-disponibles" class="pv-tab${_invActiveTab==='disponibles'?' active':''}" onclick="window.switchInvTab('disponibles')">📦 Disponibles (MDE)</button>
+            <button id="inv-tab-disponibles" class="pv-tab${_invActiveTab==='disponibles'?' active':''}" onclick="window.switchInvTab('disponibles')">📦 Disponibles (Colombia)</button>
             <button id="inv-tab-otros" class="pv-tab${_invActiveTab==='otros'?' active':''}" onclick="window.switchInvTab('otros')">✈️ En Tránsito / Encargos</button>
         </div>
         <div class="purchase-view-switcher">
@@ -757,7 +757,7 @@ window.modalViewProduct = (id) => {
 
             <div class="form-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:1.5rem;">
                 <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; flex-direction:column;">
-                    <span style="font-size:0.75rem; opacity:0.6; margin-bottom:4px;">📍 Stock MDE</span>
+                    <span style="font-size:0.75rem; opacity:0.6; margin-bottom:4px;">📍 Stock Colombia</span>
                     <strong style="font-size:1.1rem;">${p.stock_medellin || '0'} Ud(s)</strong>
                 </div>
                 <div style="background:var(--input-bg); padding:1rem; border-radius:12px; border:1px solid var(--glass-border); display:flex; flex-direction:column;">
@@ -892,7 +892,7 @@ export const createProductModal = async (id, navigateTo) => {
                         <input type="number" step="0.01" name="pusd" value="${data.precio_usd}" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Stock MDE Física</label>
+                        <label class="form-label">Stock Colombia Física</label>
                         <input type="number" name="smde" value="${data.stock_medellin}" required>
                     </div>
                     <div class="form-group" style="grid-column: span 3;">

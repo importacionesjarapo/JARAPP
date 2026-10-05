@@ -458,7 +458,7 @@ export const renderClients = async (renderLayout, navigateTo) => {
     // la app) ────────────────────────────────────────────────────────────
     window.descargarPlantillaClientes = () => {
         const plantilla = [
-            { 'Nombre': 'Juan Pérez', 'Identificación': '123456789', 'WhatsApp': '3001234567', 'Email': 'juan@correo.com', 'Ciudad': 'Medellín', 'Dirección': 'Calle 10 # 20-30' },
+            { 'Nombre': 'Juan Pérez', 'Identificación': '123456789', 'WhatsApp': '3001234567', 'Email': 'juan@correo.com', 'Ciudad': 'Bogotá', 'Dirección': 'Calle 10 # 20-30' },
             { 'Nombre': '(Solo este campo es obligatorio)', 'Identificación': '(Opcional)', 'WhatsApp': '(Opcional)', 'Email': '(Opcional)', 'Ciudad': '(Opcional)', 'Dirección': '(Opcional)' },
         ];
         downloadExcel(plantilla, 'Plantilla_Clientes', 'Clientes');

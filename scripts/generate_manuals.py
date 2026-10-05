@@ -500,7 +500,7 @@ def build_funcional():
          'Info',
          'Revisar cotizaciones pendientes que puedan verse afectadas'],
         ['Stock en cero',
-         'Productos activos con stock = 0 en Medellín',
+         'Productos activos con stock = 0 en bodega local',
          'Warning',
          'Actualizar inventario o marcar el producto como no disponible'],
         ['Fase 1 sin tracking',
@@ -523,7 +523,7 @@ def build_funcional():
                         'Se actualiza automáticamente cada día desde open.er-api.com.'),
         ('Encargo',     'Venta de un producto que aún no está en stock. Se compra especialmente '
                         'para el cliente. Requiere anticipo mínimo del 35%.'),
-        ('Stock Local', 'Producto disponible físicamente en Medellín para entrega inmediata sin '
+        ('Stock Local', 'Producto disponible físicamente en bodega local para entrega inmediata sin '
                         'necesidad de importarlo.'),
         ('Cartera',     'Saldo total pendiente de cobro de todas las ventas activas que tienen '
                         'saldo sin pagar.'),
@@ -564,7 +564,7 @@ def build_funcional():
         'Registrar el anticipo en Ventas — mínimo 35% para apartar el encargo',
         'Crear orden de Compra USA con producto, talla, color y proveedor',
         'Crear Seguimiento logístico y actualizar las fases conforme avanza',
-        'Al llegar a Medellín (Fase 5), coordinar entrega y actualizar la fase',
+        'Al llegar a la bodega local (Fase 5), coordinar entrega y actualizar la fase',
         'Marcar como Entregado (Fase 7) y registrar el saldo final del cliente',
     ]
     for i, paso in enumerate(flujo_venta, 1):

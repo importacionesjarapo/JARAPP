@@ -16,7 +16,7 @@ const LOG_RPP_DEFAULT = 15;
 // Compras de stock propio (sin venta_id) hacen trazabilidad en Logística igual
 // que un encargo, pero no hay cliente que las reciba: al llegar a "5. En Bodega
 // Colombia" ya están listas para venderse, así que ahí se suma la cantidad
-// comprada al stock de Medellín y el producto queda disponible.
+// comprada al stock local y el producto queda disponible.
 const actualizarStockProductoDesdeLogistica = async (item) => {
     if (!item || item.venta_id || !item.producto_id) return;
     try {
@@ -43,7 +43,7 @@ const MAPA_FASE_PORTAL = {
   '4. En Camino a Colombia':                    { num: 4, nombre: 'En camino a Colombia' },
   '5. En Aduana Colombia':                      { num: 5, nombre: 'En aduana / trámites' },
   '6. Entregado a Cliente Final':               { num: 9, nombre: 'Entregado' },
-  '7. En Bodega Medellín':                      { num: 6, nombre: 'Llegó a la bodega local' },
+  '7. En Bodega Local':                         { num: 6, nombre: 'Llegó a la bodega local' },
   '8. Notificado al Cliente':                   { num: 7, nombre: 'Pedido confirmado al cliente' },
   '9. Enviado Interno Colombia':                { num: 8, nombre: 'Enviado' },
 };

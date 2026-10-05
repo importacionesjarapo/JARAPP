@@ -1194,7 +1194,7 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                             <div class="form-group" style="margin-top:12px;">
                                 <label class="form-label">Cantidad Comprada *</label>
                                 <input type="number" id="pc-stock-cantidad" value="1" min="1" style="max-width:140px;">
-                                <p style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Se suma al stock de Medellín cuando el seguimiento llegue a Bodega Colombia.</p>
+                                <p style="font-size:0.7rem;opacity:0.5;margin-top:4px;">Se suma al stock local cuando el seguimiento llegue a Bodega Colombia.</p>
                             </div>
                         </div>
                     </div>
