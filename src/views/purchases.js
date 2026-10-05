@@ -966,6 +966,50 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
 
     const encargos = (ventas || []).filter(v => v.tipo_venta === 'Encargo');
 
+    // Buscador inteligente de "Producto Vinculado" (Stock Propio): con
+    // decenas/cientos de productos ya registrados, un <select> plano obliga a
+    // desplazarse uno por uno. Mismo patrón de autocomplete que el buscador
+    // de clientes, pero con coincidencia por palabras (cada palabra escrita
+    // debe aparecer en algún lado del nombre/marca/SKU, en cualquier orden).
+    const normalizarBusqueda = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const textoBusquedaProducto = (p) => normalizarBusqueda(`${p.nombre_producto||''} ${p.marca||''} ${p.sku||''} ${p.categoria||''} ${p.talla||''}`);
+    let _pcProductoSearchResults = [];
+    const renderPcProductoDropdown = (query) => {
+        const dropdown = document.getElementById('pc-producto-search-dropdown');
+        if (!dropdown) return;
+        const palabras = normalizarBusqueda(query).split(/\s+/).filter(Boolean);
+        _pcProductoSearchResults = (palabras.length
+            ? (productos || []).filter(p => { const t = textoBusquedaProducto(p); return palabras.every(w => t.includes(w)); })
+            : (productos || [])
+        ).slice(0, 8);
+        dropdown.dataset.activeIdx = '-1';
+        if (!_pcProductoSearchResults.length) {
+            dropdown.innerHTML = `<div class="cliente-search-empty">Sin resultados${query ? ` para "${query}"` : ''}.<br>Marca "Es un producto nuevo" si todavía no existe.</div>`;
+        } else {
+            dropdown.innerHTML = _pcProductoSearchResults.map((p, i) => `
+                <div class="cliente-search-item" data-idx="${i}" onmousedown="window._seleccionarProductoStockBusqueda(${i})">
+                    <div class="cliente-search-avatar" style="background:var(--surface-3);overflow:hidden;">
+                        ${p.url_imagen ? `<img src="${p.url_imagen}" style="width:100%;height:100%;object-fit:cover;">` : '📦'}
+                    </div>
+                    <div class="cliente-search-info">
+                        <div class="cliente-search-nombre">${p.marca ? `${p.marca} — ` : ''}${p.nombre_producto || 'Sin nombre'}</div>
+                        <div class="cliente-search-meta">SKU: ${p.sku || '—'} · Stock Colombia: ${p.stock_medellin || 0} · Stock USA: ${p.stock_miami || 0}</div>
+                    </div>
+                </div>`).join('');
+        }
+        dropdown.style.display = 'block';
+    };
+    window._seleccionarProductoStockBusqueda = (idx) => {
+        const p = _pcProductoSearchResults[idx];
+        if (!p) return;
+        const txt = document.getElementById('pc-producto-search-text');
+        const hid = document.getElementById('pc-producto-select');
+        if (txt) txt.value = `${p.marca ? `${p.marca} — ` : ''}${p.nombre_producto || ''}`;
+        if (hid) hid.value = p.id;
+        const dropdown = document.getElementById('pc-producto-search-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+    };
+
     // Si hay un viaje activo en el módulo Viaje USA, las compras de Stock se
     // vinculan automáticamente a él. Las compras de un Encargo, en cambio,
     // heredan el viaje de la venta que las originó (si esa venta se registró
@@ -1149,10 +1193,11 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
                             </label>
                             <div id="pc-producto-existente-wrap">
                                 <label class="form-label">Producto Vinculado *</label>
-                                <select id="pc-producto-select">
-                                    <option value="">-- Sin Producto --</option>
-                                    ${(productos || []).map(p => `<option value="${p.id}">${p.marca} ${p.nombre_producto}</option>`).join('')}
-                                </select>
+                                <div class="cliente-search-wrap">
+                                    <input type="text" id="pc-producto-search-text" class="cliente-search-input" placeholder="Buscar por nombre, marca o SKU..." autocomplete="off">
+                                    <div id="pc-producto-search-dropdown" class="cliente-search-dropdown" style="display:none;"></div>
+                                </div>
+                                <input type="hidden" id="pc-producto-select" value="">
                             </div>
                             <div id="pc-producto-nuevo-wrap" style="display:none;">
                                 <div class="form-grid-3">
@@ -1282,7 +1327,35 @@ export const createPurchaseModal = async (navigateTo, ventaIdPrefill = null, que
         </div>`;
     container.style.display = 'flex';
 
-    setTimeout(() => { attachComprobanteInput('comp-purchase-file'); window.updateViajeBanner(); }, 100);
+    setTimeout(() => {
+        attachComprobanteInput('comp-purchase-file');
+        window.updateViajeBanner();
+
+        const pInp = document.getElementById('pc-producto-search-text');
+        const pHid = document.getElementById('pc-producto-select');
+        if (pInp) {
+            pInp.addEventListener('input', (e) => { pHid.value = ''; renderPcProductoDropdown(e.target.value); });
+            pInp.addEventListener('focus', () => renderPcProductoDropdown(pHid.value ? '' : pInp.value));
+            pInp.addEventListener('blur', () => {
+                setTimeout(() => { const dd = document.getElementById('pc-producto-search-dropdown'); if (dd) dd.style.display = 'none'; }, 150);
+            });
+            pInp.addEventListener('keydown', (e) => {
+                const dropdown = document.getElementById('pc-producto-search-dropdown');
+                if (!dropdown || dropdown.style.display === 'none') return;
+                const items = dropdown.querySelectorAll('.cliente-search-item');
+                if (!items.length) return;
+                let idx = parseInt(dropdown.dataset.activeIdx || '-1');
+                if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+                else if (e.key === 'Enter') { if (idx >= 0) { e.preventDefault(); window._seleccionarProductoStockBusqueda(idx); } return; }
+                else if (e.key === 'Escape') { dropdown.style.display = 'none'; return; }
+                else return;
+                dropdown.dataset.activeIdx = String(idx);
+                items.forEach((el, i) => el.classList.toggle('active', i === idx));
+                items[idx]?.scrollIntoView({ block: 'nearest' });
+            });
+        }
+    }, 100);
 
     window.toggleSeccionCamposAdicionalesCompra = () => {
         const el = document.getElementById('pc-seccion-campos-adicionales');
