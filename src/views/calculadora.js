@@ -97,7 +97,10 @@ export function sumarGastosAdministrativos(config) {
 // cuál de las dos esté configurada, para poder mostrar las dos en la vista
 // de la calculadora.
 function calcular(config, mode, valorUsd, trm, conDomicilio) {
-  const conf = config.categorias[mode] || config.categorias.general;
+  // 'general' puede no existir si el admin editó la Matriz de Pesos y
+  // Ganancias y la borró/renombró — se cae a la primera categoría
+  // disponible en vez de asumir una clave fija que quizá ya no existe.
+  const conf = config.categorias[mode] || config.categorias.general || Object.values(config.categorias)[0] || {};
   const nUsd = parseFloat(valorUsd) || 0;
   const nTrm = parseFloat(trm) || 0;
   const peso = parseFloat(conf.peso) || 0;
@@ -212,9 +215,12 @@ export const renderCalculadora = async (renderLayout, navigateTo) => {
     _history = JSON.parse(localStorage.getItem('CALC_HISTORY') || '[]');
   } catch { _history = []; }
 
-  // Restaurar modo activo guardado
-  _activeMode = localStorage.getItem('CALC_MODE') || 'calzado';
-  if (!_config.categorias[_activeMode]) _activeMode = 'calzado';
+  // Restaurar modo activo guardado — si esa categoría ya no existe (se
+  // borró/renombró desde Admin → Calculadora), cae a la primera disponible
+  // en vez de asumir que 'calzado' sigue existiendo.
+  const primeraCategoria = Object.keys(_config.categorias)[0] || 'calzado';
+  _activeMode = localStorage.getItem('CALC_MODE') || primeraCategoria;
+  if (!_config.categorias[_activeMode]) _activeMode = primeraCategoria;
 
   renderCalcView();
 };

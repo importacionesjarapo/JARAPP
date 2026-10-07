@@ -10,6 +10,22 @@ import { showToast } from '../utils.js';
 
 let _adminActiveTab = 'usuarios'; // 'usuarios' | 'calculadora' | 'correo'
 let _conceptosDraft = null; // borrador en memoria de "conceptosAdmin" mientras se edita la pestaña Calculadora (#15)
+let _categoriasDraft = null; // borrador en memoria de "categorias" (Matriz de Pesos y Ganancias) mientras se edita
+
+// Iconos disponibles para una categoría nueva (nombres de lucide-icons, los
+// mismos que ya usa la Calculadora para pintar el selector de categoría).
+const ICONOS_CATEGORIA = [
+  'footprints', 'mountain', 'baby', 'pill', 'shirt', 'layers', 'sliders',
+  'package', 'watch', 'glasses', 'gem', 'gift', 'dumbbell', 'smartphone',
+  'headphones', 'sparkles', 'star', 'tag', 'home', 'briefcase'
+];
+
+// Deriva una clave interna estable a partir del nombre visible de la
+// categoría (ej. "Electrónicos" → "electronicos") — Calculadora/Cotizador
+// usan esta clave para guardar el modo activo e indexar config.categorias.
+const slugifyCategoria = (label) => (label || '').toString().trim().toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'categoria';
 
 export const renderAdmin = async (renderLayout, navigateTo) => {
   renderLayout(`<div class="admin-loading"><div class="loader"></div><p>Cargando panel administrativo...</p></div>`);
@@ -285,6 +301,56 @@ function buildConceptosAdminRows() {
   `;
 }
 
+/** Filas editables de _categoriasDraft — mismo patrón que buildConceptosAdminRows:
+ * inputs sin controlar (no re-renderizan en cada tecla) para no perder el foco;
+ * solo agregar/quitar filas dispara render. */
+function buildCategoriasRows() {
+  if (!_categoriasDraft.length) {
+    return `<tr><td colspan="7" style="text-align:center;padding:1.2rem;color:var(--text-faint);font-size:0.8rem;">Sin categorías configuradas — agrega al menos una.</td></tr>`;
+  }
+  return _categoriasDraft.map((cat, i) => {
+    const esPct = cat.gananciaTipo === 'porcentaje';
+    return `
+    <tr>
+      <td>
+        <input type="text" id="calc-cat-label-${i}" value="${cat.label || ''}" placeholder="Ej: Electrónicos"
+          style="width:130px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;">
+      </td>
+      <td class="text-center">
+        <select id="calc-cat-icon-${i}" style="background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 8px;border-radius:8px;outline:none;">
+          ${ICONOS_CATEGORIA.map(ic => `<option value="${ic}" ${(cat.icon || 'package') === ic ? 'selected' : ''}>${ic}</option>`).join('')}
+        </select>
+      </td>
+      <td class="text-center">
+        <input type="number" id="calc-cat-peso-${i}" value="${cat.peso || 0}"
+          style="width:80px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
+      </td>
+      <td class="text-center">
+        <label class="admin-toggle-wrap" style="justify-content:center;">
+          <input type="checkbox" id="calc-cat-tipo-${i}" ${esPct ? 'checked' : ''} onchange="window.toggleGananciaTipo(${i}, this.checked)" />
+          <span class="admin-toggle-slider"></span>
+          <span class="admin-toggle-label" id="calc-cat-tipo-label-${i}">${esPct ? 'Porcentaje' : 'Fijo'}</span>
+        </label>
+      </td>
+      <td class="text-center">
+        <input type="number" id="calc-cat-gan-${i}" value="${cat.ganancia || 0}" ${esPct ? 'disabled' : ''}
+          style="width:120px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? 'opacity:0.4;' : ''}">
+      </td>
+      <td class="text-center">
+        <input type="number" id="calc-cat-pct-${i}" value="${cat.gananciaPct || 0}" step="0.1" ${esPct ? '' : 'disabled'}
+          style="width:90px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? '' : 'opacity:0.4;'}">
+      </td>
+      <td class="text-center">
+        <button type="button" class="categoria-admin-del-btn" data-idx="${i}" title="Eliminar categoría"
+          style="width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;
+            background:rgba(230,57,70,0.1);border:1px solid rgba(230,57,70,0.25);color:var(--primary-red);
+            border-radius:10px;cursor:pointer;font-size:0.95rem;transition:background 0.15s;"
+          onmouseover="this.style.background='rgba(230,57,70,0.2)'" onmouseout="this.style.background='rgba(230,57,70,0.1)'">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
 function buildCalcAdminPanel(config) {
   if (!config) return `<div class="admin-error-banner">⚠ No se pudo cargar la configuración.</div>`;
   const refTrm = parseFloat(localStorage.getItem('CALC_TRM') || '4200');
@@ -293,6 +359,7 @@ function buildCalcAdminPanel(config) {
   // agregar/quitar filas no pierde lo que el usuario ya escribió en las
   // demás mientras no le dé "Guardar".
   if (!_conceptosDraft) _conceptosDraft = (config.conceptosAdmin || []).map(c => ({ ...c }));
+  if (!_categoriasDraft) _categoriasDraft = Object.entries(config.categorias || {}).map(([key, cat]) => ({ key, ...cat }));
   const totalGastosAdmin = sumarGastosAdministrativos({ conceptosAdmin: _conceptosDraft });
 
   return `
@@ -439,49 +506,25 @@ function buildCalcAdminPanel(config) {
 
       <!-- Matriz categorías -->
       <div class="glass-card" style="padding:0;overflow:hidden;">
-        <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border-base);">
-          <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);">3. Matriz de Pesos y Ganancias</h3>
+        <div style="padding:1.2rem 1.5rem;border-bottom:1px solid var(--border-base);display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+          <h3 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-faint);margin:0;">3. Matriz de Pesos y Ganancias</h3>
+          <button type="button" id="categoria-admin-add-btn" class="btn-action">+ Agregar categoría</button>
         </div>
-        <p style="font-size:0.72rem;color:var(--text-faint);padding:0 1.5rem;margin:-0.6rem 0 1rem;">Para cada categoría, elige si la ganancia se calcula como un valor fijo en pesos o como un porcentaje sobre el costo total ya cargado (tax, comisión, logística, domicilio y gastos administrativos).</p>
+        <p style="font-size:0.72rem;color:var(--text-faint);padding:0 1.5rem;margin:0.8rem 0 1rem;">Para cada categoría, elige si la ganancia se calcula como un valor fijo en pesos o como un porcentaje sobre el costo total ya cargado (tax, comisión, logística, domicilio y gastos administrativos). Estas categorías se heredan automáticamente en la Calculadora y el Cotizador.</p>
         <div class="table-wrapper" style="border-radius:0;border:none;box-shadow:none;">
           <table class="data-table">
             <thead>
               <tr>
                 <th>Categoría</th>
+                <th class="text-center">Icono</th>
                 <th class="text-center">Peso (Lbs)</th>
                 <th class="text-center">Tipo de Ganancia</th>
                 <th class="text-center">Ganancia (COP)</th>
                 <th class="text-center">Ganancia (%)</th>
+                <th class="text-center">Acciones</th>
               </tr>
             </thead>
-            <tbody>
-              ${Object.entries(config.categorias).map(([key, cat]) => {
-                const esPct = cat.gananciaTipo === 'porcentaje';
-                return `
-                <tr>
-                  <td><span style="font-weight:700;">${cat.label}</span></td>
-                  <td class="text-center">
-                    <input type="number" id="calc-cat-peso-${key}" value="${cat.peso || 0}"
-                      style="width:80px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;">
-                  </td>
-                  <td class="text-center">
-                    <label class="admin-toggle-wrap" style="justify-content:center;">
-                      <input type="checkbox" id="calc-cat-tipo-${key}" ${esPct ? 'checked' : ''} onchange="window.toggleGananciaTipo('${key}', this.checked)" />
-                      <span class="admin-toggle-slider"></span>
-                      <span class="admin-toggle-label" id="calc-cat-tipo-label-${key}">${esPct ? 'Porcentaje' : 'Fijo'}</span>
-                    </label>
-                  </td>
-                  <td class="text-center">
-                    <input type="number" id="calc-cat-gan-${key}" value="${cat.ganancia || 0}" ${esPct ? 'disabled' : ''}
-                      style="width:120px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? 'opacity:0.4;' : ''}">
-                  </td>
-                  <td class="text-center">
-                    <input type="number" id="calc-cat-pct-${key}" value="${cat.gananciaPct || 0}" step="0.1" ${esPct ? '' : 'disabled'}
-                      style="width:90px;background:var(--input-bg);border:1px solid var(--glass-border);color:var(--text-main);padding:6px 10px;border-radius:8px;font-weight:700;outline:none;text-align:center;${esPct ? '' : 'opacity:0.4;'}">
-                  </td>
-                </tr>
-              `;}).join('')}
-            </tbody>
+            <tbody id="categorias-admin-tbody">${buildCategoriasRows()}</tbody>
           </table>
         </div>
       </div>
@@ -627,6 +670,38 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
     rerenderConceptos();
   });
 
+  // ── Matriz de Pesos y Ganancias (#categorías): agregar/quitar filas ──
+  // Mismo patrón que los conceptos administrativos de arriba.
+  const syncCategoriasDraftFromDOM = () => {
+    _categoriasDraft.forEach((c, i) => {
+      c.label       = document.getElementById(`calc-cat-label-${i}`)?.value ?? c.label;
+      c.icon        = document.getElementById(`calc-cat-icon-${i}`)?.value ?? c.icon;
+      c.peso        = parseFloat(document.getElementById(`calc-cat-peso-${i}`)?.value) || 0;
+      c.ganancia    = parseFloat(document.getElementById(`calc-cat-gan-${i}`)?.value) || 0;
+      c.gananciaPct = parseFloat(document.getElementById(`calc-cat-pct-${i}`)?.value) || 0;
+      c.gananciaTipo = document.getElementById(`calc-cat-tipo-${i}`)?.checked ? 'porcentaje' : 'fijo';
+    });
+  };
+  const rerenderCategorias = () => {
+    document.getElementById('categorias-admin-tbody').innerHTML = buildCategoriasRows();
+    bindCategoriasRowEvents();
+  };
+  function bindCategoriasRowEvents() {
+    document.querySelectorAll('.categoria-admin-del-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        syncCategoriasDraftFromDOM();
+        _categoriasDraft.splice(parseInt(btn.dataset.idx, 10), 1);
+        rerenderCategorias();
+      });
+    });
+  }
+  bindCategoriasRowEvents();
+  document.getElementById('categoria-admin-add-btn')?.addEventListener('click', () => {
+    syncCategoriasDraftFromDOM();
+    _categoriasDraft.push({ key: null, label: '', icon: 'package', peso: 1, ganancia: 0, gananciaPct: 15, gananciaTipo: 'fijo' });
+    rerenderCategorias();
+  });
+
   // ── Guardar config calculadora ──────────────────────────────
   document.getElementById('calc-cfg-save-btn')?.addEventListener('click', async () => {
     const btn = document.getElementById('calc-cfg-save-btn');
@@ -634,6 +709,36 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
     btn.textContent = 'Guardando...';
     try {
       syncConceptosDraftFromDOM();
+      syncCategoriasDraftFromDOM();
+
+      // Categorías con nombre vacío se descartan (fila agregada y no
+      // completada). Las claves se derivan del nombre, preservando la clave
+      // original de las que ya existían (para no romper el modo activo
+      // guardado en localStorage) y resolviendo colisiones si dos nombres
+      // nuevos generan la misma clave.
+      const categoriasValidas = _categoriasDraft.filter(c => (c.label || '').trim());
+      if (!categoriasValidas.length) {
+        showToast('Debes tener al menos una categoría en la matriz.', 'error');
+        btn.disabled = false;
+        btn.textContent = '💾 Guardar Configuración';
+        return;
+      }
+      const categoriasPorClave = {};
+      const clavesUsadas = new Set();
+      categoriasValidas.forEach(c => {
+        let clave = c.key || slugifyCategoria(c.label);
+        while (clavesUsadas.has(clave)) clave += '_2';
+        clavesUsadas.add(clave);
+        categoriasPorClave[clave] = {
+          label: c.label.trim(),
+          icon: c.icon || 'package',
+          peso: c.peso || 0,
+          ganancia: c.ganancia || 0,
+          gananciaPct: c.gananciaPct || 0,
+          gananciaTipo: c.gananciaTipo === 'porcentaje' ? 'porcentaje' : 'fijo',
+        };
+      });
+
       const valorLibraUsd = parseFloat(document.getElementById('calc-cfg-valorLibraUsd')?.value) || 0;
       const refTrm        = parseFloat(document.getElementById('calc-cfg-refTrm')?.value) || 4200;
       const newConfig = {
@@ -645,20 +750,11 @@ function bindAdminEvents(users, navigateTo, renderLayout, calcConfig, correoConf
         costoDomicilio: parseFloat(document.getElementById('calc-cfg-costoDomicilio')?.value) || 0,
         mostrarGanancia: ['pesos', 'porcentaje', 'ambas'].find(k => document.getElementById(`calc-mostrar-ganancia-${k}`)?.checked) || 'pesos',
         conceptosAdmin: _conceptosDraft.filter(c => c.nombre.trim()),
-        categorias: {}
+        categorias: categoriasPorClave
       };
-      Object.keys(calcConfig.categorias).forEach(key => {
-        const esPct = document.getElementById(`calc-cat-tipo-${key}`)?.checked || false;
-        newConfig.categorias[key] = {
-          ...calcConfig.categorias[key],
-          peso:         parseFloat(document.getElementById(`calc-cat-peso-${key}`)?.value) || 0,
-          ganancia:     parseFloat(document.getElementById(`calc-cat-gan-${key}`)?.value) || 0,
-          gananciaPct:  parseFloat(document.getElementById(`calc-cat-pct-${key}`)?.value) || 0,
-          gananciaTipo: esPct ? 'porcentaje' : 'fijo',
-        };
-      });
       await saveCalcConfig(newConfig);
       _conceptosDraft = null; // fuerza recargar desde lo recién guardado
+      _categoriasDraft = null;
       showToast('✅ Configuración de calculadora guardada exitosamente', 'success');
       setTimeout(() => renderAdmin(renderLayout, navigateTo), 800);
     } catch (err) {

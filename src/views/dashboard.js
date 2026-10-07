@@ -430,7 +430,13 @@ const _renderResumen = () => {
   const FASE_LABELS = { entregado:'Entregado', bodega_col:'Bodega Colombia', aduana:'Aduana', bodega_usa:'Bodega USA', transito:'En Tránsito', comprado:'Comprado' };
   const FASE_COLORS = { entregado: CC.ingresos, bodega_col: CC.margen, aduana: CC.utilidad, bodega_usa: CC.alerta, transito: '#2DD4BF', comprado: CC.gastosOp };
 
-  const logsActivos = data.logistica
+  // Stock propio (sin cliente) no tiene fase "Entregado" — su trazabilidad
+  // termina en Bodega Colombia, momento en que ya quedó sumado al inventario.
+  // Se excluye de los indicadores de servicio al cliente (OTD, retrasados)
+  // una vez ahí, para no quedar marcado como "retrasado" para siempre.
+  const logisticaClientes = data.logistica.filter(l => !(!l.venta_id && mapFaseSimple(l.fase) === 'bodega_col'));
+
+  const logsActivos = logisticaClientes
     .filter(l => mapFaseSimple(l.fase) !== 'entregado')
     .map(l => ({ ...l, _fase: mapFaseSimple(l.fase), _dias: diasDesdeUpd(l) }))
     .sort((a, b) => b._dias - a._dias)
@@ -525,14 +531,14 @@ const _renderResumen = () => {
   }).length;
   const clientesMora = data.ventas.filter(v => parseFloat(v.saldo_pendiente||0) > 0).map(v => v.cliente_id).filter((id, i, arr) => arr.indexOf(id) === i).length;
   const ordenesActivasCompras = data.compras.filter(c => !['Entregado','Completado'].includes(c.estado)).length;
-  const logsTotal    = data.logistica.length || 1;
-  const logsEntregados = data.logistica.filter(l => mapFaseSimple(l.fase) === 'entregado').length;
-  const logsRetrasados = data.logistica.filter(l => {
+  const logsTotal    = logisticaClientes.length || 1;
+  const logsEntregados = logisticaClientes.filter(l => mapFaseSimple(l.fase) === 'entregado').length;
+  const logsRetrasados = logisticaClientes.filter(l => {
     if (mapFaseSimple(l.fase) === 'entregado') return false;
     return diasDesdeUpd(l) > umbralRetraso;
   }).length;
-  const logsTransito = data.logistica.filter(l => ['transito','comprado'].includes(mapFaseSimple(l.fase))).length;
-  const logsBodega   = data.logistica.filter(l => ['bodega_usa','bodega_col'].includes(mapFaseSimple(l.fase))).length;
+  const logsTransito = logisticaClientes.filter(l => ['transito','comprado'].includes(mapFaseSimple(l.fase))).length;
+  const logsBodega   = logisticaClientes.filter(l => ['bodega_usa','bodega_col'].includes(mapFaseSimple(l.fase))).length;
   const skusBajoStock = data.productos.filter(p => {
     const minimo = parseFloat(p.punto_reorden || p.stock_minimo || 0);
     if (minimo <= 0) return false; // sin punto de reorden definido → no alertar
@@ -1937,13 +1943,17 @@ const _calcReportData = async (rptId, filtered, raw, u, metas) => {
         if (f.includes('2') || f.toLowerCase().includes('tránsito') || f.toLowerCase().includes('tienda')) return 'En Tránsito';
         return 'Comprado';
       };
+      // Stock propio (sin cliente) termina su trazabilidad en Bodega Colombia
+      // — se excluye de este reporte de servicio al cliente una vez ahí, para
+      // no quedar contado como "activo"/"retrasado" para siempre.
+      const logisticaClientesL1 = raw.logistica.filter(l => !(!l.venta_id && mapFase(l.fase) === 'Bodega Colombia'));
       const faseCount = {};
-      raw.logistica.forEach(l => { const f = mapFase(l.fase); faseCount[f] = (faseCount[f]||0) + 1; });
+      logisticaClientesL1.forEach(l => { const f = mapFase(l.fase); faseCount[f] = (faseCount[f]||0) + 1; });
       const faseColors = { 'Entregado':CC.ingresos,'Bodega Colombia':CC.margen,'Aduana':CC.utilidad,'Bodega USA':CC.alerta,'En Tránsito':'#2DD4BF','Comprado':CC.gastosOp };
-      const activos = raw.logistica.filter(l => mapFase(l.fase) !== 'Entregado').length;
-      const retrLen = raw.logistica.filter(l => { if(mapFase(l.fase) === 'Entregado') return false; const d = u.parseDate(l.updated_at||l.fecha_registro); return d && (Date.now()-d)/86400000 > getMeta('dias_retraso_envio_critico',7); }).length;
-      const totLog  = raw.logistica.length || 1;
-      const otd     = Math.round((raw.logistica.filter(l => mapFase(l.fase) === 'Entregado').length / totLog) * 100);
+      const activos = logisticaClientesL1.filter(l => mapFase(l.fase) !== 'Entregado').length;
+      const retrLen = logisticaClientesL1.filter(l => { if(mapFase(l.fase) === 'Entregado') return false; const d = u.parseDate(l.updated_at||l.fecha_registro); return d && (Date.now()-d)/86400000 > getMeta('dias_retraso_envio_critico',7); }).length;
+      const totLog  = logisticaClientesL1.length || 1;
+      const otd     = Math.round((logisticaClientesL1.filter(l => mapFase(l.fase) === 'Entregado').length / totLog) * 100);
 
       return {
         kpis: [
@@ -1958,7 +1968,7 @@ const _calcReportData = async (rptId, filtered, raw, u, metas) => {
         chartOptions: {},
         tabla: {
           cols: ['ID Envío','Venta','Cliente','Fase Actual','Días sin actualización'],
-          rows: raw.logistica.filter(l => mapFase(l.fase) !== 'Entregado').slice(0,30).map(l => {
+          rows: logisticaClientesL1.filter(l => mapFase(l.fase) !== 'Entregado').slice(0,30).map(l => {
             const v = raw.ventas.find(x => x.id?.toString() === l.venta_id?.toString());
             const d = u.parseDate(l.updated_at||l.fecha_registro);
             const dias = d ? Math.floor((Date.now()-d)/86400000) : '—';

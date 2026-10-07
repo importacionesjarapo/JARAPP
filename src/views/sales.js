@@ -1130,6 +1130,94 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
     };
     window.seleccionarClienteBusqueda = (idx) => window._seleccionarClienteEnFormulario(_clienteSearchResults[idx]);
 
+    // ── Buscador de "¿Ya existe en Inventario?" para Encargo/Viaje ─────────
+    // Cada encargo/compra en viaje crea su propia ficha de Producto (talla,
+    // cantidad y precio son de ese pedido puntual), pero si ya se vendió
+    // antes la misma referencia no hay por qué repetir nombre ni volver a
+    // subir la misma foto — este buscador (mismo patrón que el de clientes)
+    // los copia al formulario y deja talla/tienda/precio libres para editar.
+    const normalizarBusquedaProdEnc = (s) => (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const textoBusquedaProductoEnc = (p) => normalizarBusquedaProdEnc(`${p.nombre_producto||''} ${p.marca||''} ${p.sku||''} ${p.categoria||''}`);
+    let _encProductoSearchResults = [];
+    const renderEncProductoDropdown = (query) => {
+        const dropdown = document.getElementById('enc-producto-search-dropdown');
+        if (!dropdown) return;
+        const palabras = normalizarBusquedaProdEnc(query).split(/\s+/).filter(Boolean);
+        _encProductoSearchResults = (palabras.length
+            ? (productsList || []).filter(p => { const t = textoBusquedaProductoEnc(p); return palabras.every(w => t.includes(w)); })
+            : (productsList || [])
+        ).slice(0, 8);
+        dropdown.dataset.activeIdx = '-1';
+        if (!_encProductoSearchResults.length) {
+            dropdown.innerHTML = `<div class="cliente-search-empty">Sin resultados${query ? ` para "${query}"` : ''}.<br>Sigue y completa los datos como producto nuevo.</div>`;
+        } else {
+            dropdown.innerHTML = _encProductoSearchResults.map((p, i) => `
+                <div class="cliente-search-item" data-idx="${i}" onmousedown="window._seleccionarProductoEncBusqueda(${i})">
+                    <div class="cliente-search-avatar" style="background:var(--surface-3);overflow:hidden;">
+                        ${p.url_imagen ? `<img src="${p.url_imagen}" style="width:100%;height:100%;object-fit:cover;">` : '📦'}
+                    </div>
+                    <div class="cliente-search-info">
+                        <div class="cliente-search-nombre">${p.marca ? `${p.marca} — ` : ''}${p.nombre_producto || 'Sin nombre'}</div>
+                        <div class="cliente-search-meta">SKU: ${p.sku || '—'} · ${p.categoria || 'Sin categoría'}</div>
+                    </div>
+                </div>`).join('');
+        }
+        dropdown.style.display = 'block';
+    };
+    window._seleccionarProductoEncBusqueda = (idx) => {
+        const p = _encProductoSearchResults[idx];
+        if (!p) return;
+        const nombreInp = document.getElementById('enc_nombre'); if (nombreInp) nombreInp.value = p.nombre_producto || '';
+        const marcaSel = document.getElementById('enc_marca'); if (marcaSel) marcaSel.value = p.marca || '';
+        const tipoSel = document.getElementById('enc_tipo'); if (tipoSel) tipoSel.value = p.categoria || '';
+        const generoSel = document.getElementById('enc_genero'); if (generoSel) generoSel.value = p.genero || '';
+        const urlHid = document.getElementById('enc_url'); if (urlHid) urlHid.value = p.url_imagen || '';
+        const preview = document.getElementById('enc-img-preview');
+        if (preview) preview.innerHTML = p.url_imagen ? `<img src="${p.url_imagen}" style="width:100%;height:100%;object-fit:cover;">` : '<span style="font-size:0.6rem;opacity:0.4;">FOTO</span>';
+        const searchTxt = document.getElementById('enc-producto-search-text'); if (searchTxt) searchTxt.value = `${p.marca ? `${p.marca} — ` : ''}${p.nombre_producto || ''}`;
+        const dropdown = document.getElementById('enc-producto-search-dropdown'); if (dropdown) dropdown.style.display = 'none';
+        showToast('Nombre y foto copiados — ajusta talla, tienda y precio para este pedido.', 'info');
+    };
+
+    // ── Buscador de producto físico para venta Stock (reemplaza el
+    // datalist nativo por el mismo autocomplete de palabras) ──────────────
+    const productosStockDisponibles = (productsList || []).filter(p => p.estado_producto === 'Disponible entrega inmediata' && parseInt(p.stock_medellin) > 0);
+    let _stockProductoSearchResults = [];
+    const renderStockProductoDropdown = (query) => {
+        const dropdown = document.getElementById('sel-producto-dropdown');
+        if (!dropdown) return;
+        const palabras = normalizarBusquedaProdEnc(query).split(/\s+/).filter(Boolean);
+        _stockProductoSearchResults = (palabras.length
+            ? productosStockDisponibles.filter(p => { const t = textoBusquedaProductoEnc(p); return palabras.every(w => t.includes(w)); })
+            : productosStockDisponibles
+        ).slice(0, 8);
+        dropdown.dataset.activeIdx = '-1';
+        if (!_stockProductoSearchResults.length) {
+            dropdown.innerHTML = `<div class="cliente-search-empty">Sin resultados${query ? ` para "${query}"` : ''}.</div>`;
+        } else {
+            dropdown.innerHTML = _stockProductoSearchResults.map((p, i) => `
+                <div class="cliente-search-item" data-idx="${i}" onmousedown="window._seleccionarProductoStockVenta(${i})">
+                    <div class="cliente-search-avatar" style="background:var(--surface-3);overflow:hidden;">
+                        ${p.url_imagen ? `<img src="${p.url_imagen}" style="width:100%;height:100%;object-fit:cover;">` : '📦'}
+                    </div>
+                    <div class="cliente-search-info">
+                        <div class="cliente-search-nombre">${p.marca ? `${p.marca} — ` : ''}${p.nombre_producto || 'Sin nombre'}</div>
+                        <div class="cliente-search-meta">SKU: ${p.sku || '—'} · ${formatCOP(p.precio_cop)} · Disp: ${p.stock_medellin}</div>
+                    </div>
+                </div>`).join('');
+        }
+        dropdown.style.display = 'block';
+    };
+    window._seleccionarProductoStockVenta = (idx) => {
+        const p = _stockProductoSearchResults[idx];
+        if (!p) return;
+        const txt = document.getElementById('sel-producto-text'); if (txt) txt.value = `${p.marca ? `${p.marca} — ` : ''}${p.nombre_producto || ''}`;
+        const hid = document.getElementById('sel-producto-id'); if (hid) hid.value = p.id;
+        const vT = document.getElementById('sale-total'), vA = document.getElementById('sale-abono');
+        if (p.precio_cop && vT && vA) { vT.value = p.precio_cop; vA.value = p.precio_cop; window._refreshSaleSaldo?.(); }
+        const dropdown = document.getElementById('sel-producto-dropdown'); if (dropdown) dropdown.style.display = 'none';
+    };
+
     content.innerHTML = `
         <div class="modal-content modal-wide">
             <div class="modal-header">
@@ -1235,10 +1323,10 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
 
                     <div id="section-stock" class="form-group full-width" style="display:${tipoUI==='Stock'?'block':'none'};">
                         <label class="form-label">Seleccionar Producto Físico</label>
-                        <input type="text" list="dl-productos" id="sel-producto-text" placeholder="Escribe nombre o SKU..." ${tipoUI==='Stock'?'required':''} autocomplete="off">
-                        <datalist id="dl-productos">
-                            ${productsList.filter(p=>p.estado_producto==='Disponible entrega inmediata'&&parseInt(p.stock_medellin)>0).map(p=>`<option data-id="${p.id}" data-price="${p.precio_cop}" value="${p.nombre_producto} | SKU: ${p.sku} | COP ${formatCOP(p.precio_cop)} [Disp: ${p.stock_medellin}]"></option>`).join('')}
-                        </datalist>
+                        <div class="cliente-search-wrap">
+                            <input type="text" id="sel-producto-text" class="cliente-search-input" placeholder="Buscar por nombre, marca o SKU..." ${tipoUI==='Stock'?'required':''} autocomplete="off">
+                            <div id="sel-producto-dropdown" class="cliente-search-dropdown" style="display:none;"></div>
+                        </div>
                         <input type="hidden" name="producto_id" id="sel-producto-id" ${tipoUI==='Stock'?'required':''}>
                     </div>
 
@@ -1250,6 +1338,13 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                     </div>
                     ${viajeBannerHTML}
                     <div class="form-grid-3">
+                        <div class="form-group full-width">
+                            <label class="form-label">¿Ya existe en Inventario? <span style="opacity:0.5;font-weight:400;font-size:0.75rem;">(opcional — copia nombre y foto para no duplicarlos, tú ajustas talla/precio de este pedido)</span></label>
+                            <div class="cliente-search-wrap">
+                                <input type="text" id="enc-producto-search-text" class="cliente-search-input" placeholder="Buscar por nombre, marca o SKU..." autocomplete="off">
+                                <div id="enc-producto-search-dropdown" class="cliente-search-dropdown" style="display:none;"></div>
+                            </div>
+                        </div>
                         <div class="form-group full-width">
                             <label class="form-label">Nombre / Modelo Exacto <span style="color:var(--primary-red);">*</span></label>
                             <input type="text" id="enc_nombre" placeholder="Ej. Jordan 4 Retro University Blue" required>
@@ -1523,7 +1618,53 @@ export const createSaleModal = async (navigateTo, tipoUI, modoCompra) => {
                 else hintGan.style.display='none';
             }
         };
-        if(pSel) pSel.addEventListener('input',(e)=>{ pHide.value=''; document.querySelectorAll('#dl-productos option').forEach(o=>{ if(o.value===e.target.value){pHide.value=o.getAttribute('data-id'); const pr=o.getAttribute('data-price'); const vT=document.getElementById('sale-total'),vA=document.getElementById('sale-abono'); if(pr && vT && vA){vT.value=pr;vA.value=pr;updS();}} }); });
+        window._refreshSaleSaldo = updS;
+        if (pSel) {
+            pSel.addEventListener('input', (e) => { pHide.value = ''; renderStockProductoDropdown(e.target.value); });
+            pSel.addEventListener('focus', () => renderStockProductoDropdown(pHide.value ? '' : pSel.value));
+            pSel.addEventListener('blur', () => {
+                setTimeout(() => { const dd = document.getElementById('sel-producto-dropdown'); if (dd) dd.style.display = 'none'; }, 150);
+            });
+            pSel.addEventListener('keydown', (e) => {
+                const dropdown = document.getElementById('sel-producto-dropdown');
+                if (!dropdown || dropdown.style.display === 'none') return;
+                const items = dropdown.querySelectorAll('.cliente-search-item');
+                if (!items.length) return;
+                let idx = parseInt(dropdown.dataset.activeIdx || '-1');
+                if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+                else if (e.key === 'Enter') { if (idx >= 0) { e.preventDefault(); window._seleccionarProductoStockVenta(idx); } return; }
+                else if (e.key === 'Escape') { dropdown.style.display = 'none'; return; }
+                else return;
+                dropdown.dataset.activeIdx = String(idx);
+                items.forEach((el, i) => el.classList.toggle('active', i === idx));
+                items[idx]?.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        const encPInp = document.getElementById('enc-producto-search-text');
+        if (encPInp) {
+            encPInp.addEventListener('input', (e) => renderEncProductoDropdown(e.target.value));
+            encPInp.addEventListener('focus', () => renderEncProductoDropdown(encPInp.value));
+            encPInp.addEventListener('blur', () => {
+                setTimeout(() => { const dd = document.getElementById('enc-producto-search-dropdown'); if (dd) dd.style.display = 'none'; }, 150);
+            });
+            encPInp.addEventListener('keydown', (e) => {
+                const dropdown = document.getElementById('enc-producto-search-dropdown');
+                if (!dropdown || dropdown.style.display === 'none') return;
+                const items = dropdown.querySelectorAll('.cliente-search-item');
+                if (!items.length) return;
+                let idx = parseInt(dropdown.dataset.activeIdx || '-1');
+                if (e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx + 1, items.length - 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx - 1, 0); }
+                else if (e.key === 'Enter') { if (idx >= 0) { e.preventDefault(); window._seleccionarProductoEncBusqueda(idx); } return; }
+                else if (e.key === 'Escape') { dropdown.style.display = 'none'; return; }
+                else return;
+                dropdown.dataset.activeIdx = String(idx);
+                items.forEach((el, i) => el.classList.toggle('active', i === idx));
+                items[idx]?.scrollIntoView({ block: 'nearest' });
+            });
+        }
         // Delegación en el <form>: cubre también los campos que "Cantidad"/
         // "Valor de Venta"/"Ganancia Calculada" que se agreguen después de
         // montado el modal (registro ágil de Viaje USA).

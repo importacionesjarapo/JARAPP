@@ -85,7 +85,7 @@ class Database {
         productosRaw: productos,
         clientesRaw: clientes,
         logisticaRaw: logistica,
-        ventasPendientesSaldo: ventas.filter(v => v.estado_orden === 'Recibido bodega Medellín' && parseInt(v.saldo_pendiente || "0") > 0)
+        ventasPendientesSaldo: ventas.filter(v => v.estado_orden === 'Recibido bodega local' && parseInt(v.saldo_pendiente || "0") > 0)
       };
     } catch (err) {
       return { error: err.message };
